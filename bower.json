@@ -1,0 +1,30 @@
+{
+	"name": "NeutriumJS.convert",
+	"version": "1.0.0",
+	"homepage": "https://github.com/NativeDynamics/NeutriumJS.convert",
+	"authors": [
+		"Trevor Walker <@cubicleWar>"
+	],
+	"main": "dist/NeutriumJS.convert.min.js",
+	"private": false,
+	"description": "The NeutriumJS unit conversion module.",
+	"license": "CC-BY-4.0",
+	"main" : [
+		"dist/NeutriumJS.convert.min.js"
+	],
+	"ignore": [
+		"**/.*",
+		"node_modules",
+		"bower_components",
+		"test",
+		"tests"
+	],
+	"moduleType": [
+		"amd",
+		"globals",
+		"node"
+	],
+	"dependencies": {
+		"neutriumjs-utilities": "*"
+	}
+}
