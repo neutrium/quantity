@@ -13,10 +13,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 (function (root, factory) {
     "use strict";
 
-	if(typeof define === "function" && define.amd) 
+	if(typeof define === "function" && define.amd)
 	{
 		define('NeutriumJS/Qty', ['NeutriumJS/utilities/nestedMap'], factory);
-	} 
+	}
 	else if (typeof exports === "object")
 	{
 		module.exports = factory(require('NeutriumJS.utilities.nestedMap'));
@@ -28,7 +28,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 	}
 }(this, function(NestedMap) {
 	"use strict";
-	
+
 	var PREFIXES = {
 			"<googol>"	: [["googol"], 1e100],
 			"<kibi>"	: [["Ki","Kibi","kibi"], Math.pow(2,10)],
@@ -136,7 +136,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 				units: {
 					"<byte>" :[["B","byte"], 1.0],
 					"<bit>" :[["b","bit"], 0.125],
-					"<nibble>" :[["nibble"], 0.5],					
+					"<nibble>" :[["nibble"], 0.5],
 				}
 			},
 			electricalConductance: {
@@ -293,7 +293,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 					"<ton-metric>"	: [["t", "tonne"], 1000],
 					"<ton-long>"	: [["tnl","tonl"], 1016.0469088],
 					"<ton-short>"	: [["tn","ton", "tons"], 907.18474],
-				}	
+				}
 			},
 			power: {
 				numerator: ["<kilogram>","<meter>","<meter>"],
@@ -315,7 +315,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 					"<bar>" 	: [["bar","bars"], 100000],
 					"<barye>" 	: [["barye"], 0.1],
 					"<cmh2o>" 	: [["cmH2O"], 98.0638],
-					"<cmHg>" 	: [["cmH2O"], 1333.223874],
+					"<cmHg>" 	: [["cmHg"], 1333.223874],
 					"<inh2o>"	: [["inH2O"], 249.082052],
 					"<inHg>" 	: [["inHg"], 3386.3881472],
 					"<mmh2o>" 	: [["mmH2O"], 9.80665],
@@ -468,7 +468,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		UNIT_VALUES = {},
 		UNIT_MAP = {},
 		OUTPUT_MAP = {};
-	
+
 	// Regular expressions
 	var SIGN = "[+-]",
 		INTEGER = "\\d+",
@@ -490,43 +490,43 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		UNIT_MATCH,
 		UNIT_MATCH_REGEX,
 		UNIT_TEST_REGEX;
-		
+
 	// Initalise the module
 	(function() {
 		var definition = null;
-	
+
 		for(var prefix in PREFIXES)
 		{
 			definition = PREFIXES[prefix];
 			PREFIX_VALUES[prefix] = definition[1];
 			OUTPUT_MAP[prefix] = definition[0][0];
-			
+
 			for(var i = 0; i < definition[0].length; i++)
 			{
 				PREFIX_MAP[definition[0][i]] = prefix;
 			}
 		}
-	
+
 		for(var categoryDef in UNITS)
 		{
 			var category = UNITS[categoryDef];
-			
+
 			for(var unitDef in category.units)
 			{
 				definition = category.units[unitDef];
-			
+
 				UNIT_VALUES[unitDef] = {
 					scalar: definition[1],
 					numerator: category.numerator,
 					denominator: category.denominator,
 					category: categoryDef
 				};
-				
+
 				for(var j = 0; j < definition[0].length; j++)
 				{
 					UNIT_MAP[definition[0][j]] = unitDef;
 				}
-				
+
 				// Might not need output map
 				OUTPUT_MAP[unitDef] = definition[0][0];
 			}
@@ -535,30 +535,30 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		PREFIX_REGEX = Object.keys(PREFIX_MAP).sort(function(a, b) {
 			return b.length - a.length;
 		}).join("|");
-		
+
 		UNIT_REGEX = Object.keys(UNIT_MAP).sort(function(a, b) {
 			return b.length - a.length;
 		}).join("|").replace(/(\(|\))/g, '\\$1');
-	
+
 		//Minimal boundary regex to support units with Unicode characters. \b only works for ASCII
 		UNIT_MATCH = "(" + PREFIX_REGEX + ")??(" + UNIT_REGEX + ")(?:" + BOUNDARY_REGEX + ")";
 		UNIT_MATCH_REGEX = new RegExp(UNIT_MATCH, "g"); // g flag for multiple occurences
 		//UNIT_TEST_REGEX = new RegExp("^\\s*(" + UNIT_MATCH + "\\s*\\*?\\s*)+$");
 		UNIT_TEST_REGEX = new RegExp("^\\s*(" + UNIT_MATCH + "\\s*(\\.?|\\*?)\\s*)+$");	// Try also to get . as in kg.s as kg*s
 	})();
-	
+
 	//
 	// Define the Qty object
 	//
 	function Qty(initValue)
 	{
 		assertValidInitializationValueType(initValue);
-		
+
 		if(!(isQty(this)))
 		{
 			return new Qty(initValue);
 		}
-		
+
 		this.scalar = null;
 		this.baseScalar = null;
 		this.signature = null;
@@ -582,14 +582,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		{
 			throw new Exception("Cannot divide with temperatures");
 		}
-		
+
 		if(this.numerator.join("*").indexOf("temp") >= 0)
 		{
 			if(this.numerator.length > 1)
 			{
 				throw new Exception("Cannot multiply by temperatures");
 			}
-			
+
 			if(!compareArray(this.denominator, UNITY_ARRAY))
 			{
 				throw new Exception("Cannot divide with temperatures");
@@ -604,7 +604,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 			throw new Exception("Temperatures must not be less than absolute zero");
 		}
 	}
-	
+
 	Qty.prototype = {
 		//
 		// Converts to other compatible units.
@@ -622,36 +622,36 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		// weight.to("lb"); // => Qty("55.11556554621939 lbs");
 		// weight.to(Qty("3 g")); // => Qty("25000 g"); // scalar of passed Qty is ignored
 		//
-		to : function(other) 
+		to : function(other)
 		{
 			var cached, target;
-	
+
 			if(!other)
 			{
 				return this;
 			}
-	
+
 			if(!isString(other))
 			{
 				return this.to(other.units());
 			}
-	
+
 			cached = this._conversionCache[other];
-			
+
 			if(cached)
 			{
 				return cached;
 			}
-	
+
 			// Instantiating target to normalize units
 			target = new Qty(other);
-			
+
 			if(target.units() === this.units())
 			{
 				return this;
 			}
-	
-			if(!this.isCompatible(target)) 
+
+			if(!this.isCompatible(target))
 			{
 				if(this.isInverse(target))
 				{
@@ -662,7 +662,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 					throwIncompatibleUnits();
 				}
 			}
-			else 
+			else
 			{
 				if(target.isTemperature())
 				{
@@ -683,12 +683,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 					});
 				}
 			}
-	
+
 			this._conversionCache[other] = target;
-			
+
 			return target;
 		},
-		
+
 		//
 		// check to see if units are compatible, but not the scalar part
 		// this check is done by comparing signatures for performance reasons
@@ -698,23 +698,23 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		//if you want to do a regexp on the unit string do this ...
 		// unit.units =~ /regexp/
 		//
-		isCompatible : function(other) 
+		isCompatible : function(other)
 		{
 			if(isString(other))
 			{
 				return this.isCompatible(new Qty(other));
 			}
-	
+
 			if(!(isQty(other)))
 			{
 				return false;
 			}
-	
+
 			if(other.signature !== undefined)
 			{
 				return this.signature === other.signature;
 			}
-			else 
+			else
 			{
 				return false;
 			}
@@ -722,59 +722,59 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 		// convert to base SI units
 		// results of the conversion are cached so subsequent calls to this will be fast
-		toBase : function() 
+		toBase : function()
 		{
 			if(this.isBase())
 			{
 				return this;
 			}
-	
+
 			if(this.isTemperature())
 			{
 				return toTempK(this);
 			}
-	
+
 			var cached = baseUnitCache[this.units()];
-			
+
 			if(!cached)
 			{
 				cached = toBaseUnits(this.numerator, this.denominator);
 				baseUnitCache[this.units()] = cached;
 			}
-			
+
 			return cached.mul(this.scalar);
 		},
-		
-		isBase : function() 
+
+		isBase : function()
 		{
 			if(this._isBase !== undefined)
 			{
 				return this._isBase;
 			}
-			
+
 			if(this.isDegrees() && this.numerator[0].match(/<(kelvin|temp-K)>/))
 			{
 				this._isBase = true;
 				return this._isBase;
 			}
-	
+
 			this.numerator.concat(this.denominator).forEach(function(item) {
 				if(item !== UNITY && BASE_UNITS.indexOf(item) === -1 )
 				{
 					this._isBase = false;
 				}
 			}, this);
-			
+
 			if(this._isBase === false)
 			{
 				return this._isBase;
 			}
-			
+
 			this._isBase = true;
-			
+
 			return this._isBase;
 		},
-		
+
 		// Returns a Qty that is the inverse of this Qty,
 		inverse : function()
 		{
@@ -782,48 +782,48 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 			{
 				throw new Exception("Cannot divide with temperatures");
 			}
-			
+
 			if(this.scalar === 0)
 			{
 				throw new Exception("Divide by zero");
 			}
-			
+
 			return new Qty({
 				scalar: 1/this.scalar,
 				numerator: this.denominator,
 				denominator: this.numerator
 			});
 		},
-		
+
 		isInverse : function(other)
 		{
 			return this.inverse().isCompatible(other);
 		},
-		
+
 		units : function()
 		{
 			if(this._units !== undefined)
 			{
 				return this._units;
 			}
-	
+
 			var numIsUnity = compareArray(this.numerator, UNITY_ARRAY),
 				denIsUnity = compareArray(this.denominator, UNITY_ARRAY);
-			
+
 			if(numIsUnity && denIsUnity)
 			{
 				this._units = "";
 				return this._units;
 			}
-	
+
 			var numUnits = stringifyUnits(this.numerator),
 				denUnits = stringifyUnits(this.denominator);
-			
+
 			this._units = numUnits + (denIsUnity ? "":("/" + denUnits));
-			
+
 			return this._units;
 		},
-	
+
 		isDegrees : function()
 		{
 			// signature may not have been calculated yet
@@ -832,19 +832,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 					compareArray(this.denominator, UNITY_ARRAY) &&
 					(this.numerator[0].match(/<temp-[CFRK]>/) || this.numerator[0].match(/<(kelvin|celsius|rankine|fahrenheit)>/));
 		},
-	
+
 		isTemperature : function()
 		{
 			return this.isDegrees() && this.numerator[0].match(/<temp-[CFRK]>/);
 		},
-		
+
 		// returns true if no associated units
 	    // false, even if the units are "unitless" like 'radians, each, etc'
 	    isUnitless : function()
 		{
 			return compareArray(this.numerator, UNITY_ARRAY) && compareArray(this.denominator, UNITY_ARRAY);
 	    },
-		
+
 		//
 		// Mathematical operations on quantities
 		//
@@ -854,12 +854,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 			{
 				other = new Qty(other);
 			}
-	
+
 			if(!this.isCompatible(other))
 			{
 				throwIncompatibleUnits();
 			}
-	
+
 			if(this.isTemperature() && other.isTemperature())
 			{
 				throw new Exception("Cannot add two temperatures");
@@ -872,26 +872,26 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 			{
 				return addTempDegrees(other,this);
 			}
-	
+
 			return new Qty({
 				scalar: this.scalar + other.to(this).scalar,
 				numerator: this.numerator,
 				denominator: this.denominator
 			});
 		},
-		
+
 		sub : function(other)
 		{
 			if(isString(other))
 			{
 				other = new Qty(other);
 			}
-	
+
 			if(!this.isCompatible(other))
 			{
 				throwIncompatibleUnits();
 			}
-	
+
 			if(this.isTemperature() && other.isTemperature())
 			{
 				return subtractTemperatures(this,other);
@@ -904,14 +904,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 			{
 				throw new Exception("Cannot subtract a temperature from a differential degree unit");
 			}
-	
+
 			return new Qty({
 				scalar: this.scalar - other.to(this).scalar,
 				numerator: this.numerator,
 				denominator: this.denominator
 			});
 		},
-		
+
 		mul : function(other)
 		{
 			if(isNumber(other))
@@ -926,52 +926,52 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 			{
 				other = new Qty(other);
 			}
-	
+
 			if((this.isTemperature()||other.isTemperature()) && !(this.isUnitless()||other.isUnitless()))
 			{
 				throw new Exception("Cannot multiply by temperatures");
 			}
-	
+
 			// Quantities should be multiplied with same units if compatible, with base units else
 			var op1 = this,
 				op2 = other;
-	
+
 			// so as not to confuse results, multiplication and division between temperature degrees will maintain original unit info in num/den
 			// multiplication and division between deg[CFRK] can never factor each other out, only themselves: "degK*degC/degC^2" == "degK/degC"
 			if(op1.isCompatible(op2) && op1.signature !== 400)
 			{
 				op2 = op2.to(op1);
 			}
-			
+
 			var numden = cleanTerms(op1.numerator.concat(op2.numerator), op1.denominator.concat(op2.denominator));
-			
+
 			return new Qty({
 				scalar: op1.scalar*op2.scalar,
 				numerator: numden[0],
 				denominator: numden[1]
 			});
 		},
-		
+
 		div : function(other) {
 			if(isNumber(other))
 			{
-				if(other === 0) 
+				if(other === 0)
 				{
 					throw new Exception("Divide by zero");
 				}
-				
+
 				return new Qty({"scalar": this.scalar / other, "numerator": this.numerator, "denominator": this.denominator});
 			}
 			else if(isString(other))
 			{
 				other = new Qty(other);
 			}
-	
+
 			if(other.scalar === 0)
 			{
 				throw new Exception("Divide by zero");
 			}
-	
+
 			if(other.isTemperature())
 			{
 				throw new Exception("Cannot divide with temperatures");
@@ -980,27 +980,27 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 			{
 				throw new Exception("Cannot divide with temperatures");
 			}
-	
+
 			// Quantities should be multiplied with same units if compatible, with base units else
 			var op1 = this,
 				op2 = other;
-	
+
 			// so as not to confuse results, multiplication and division between temperature degrees will maintain original unit info in num/den
 			// multiplication and division between deg[CFRK] can never factor each other out, only themselves: "degK*degC/degC^2" == "degK/degC"
 			if(op1.isCompatible(op2) && op1.signature !== 400)
 			{
 				op2 = op2.to(op1);
 			}
-			
+
 			var numden = cleanTerms(op1.numerator.concat(op2.denominator), op1.denominator.concat(op2.numerator));
-	
+
 			return new Qty({
 				scalar: op1.scalar / op2.scalar,
 				numerator: numden[0],
 				denominator: numden[1]
 			});
 		},
-		
+
 		// Comparative functions
 		// Compare two Qty objects. Throws an exception if they are not of compatible types.
 	    // Comparisons are done based on the value of the quantity in base SI units.
@@ -1014,18 +1014,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 	    //     Qty("10ohm").inverse().compareTo("10S") == -1
 	    //
 	    //   If including inverses in the sort is needed, I suggest writing: Qty.sort(qtyArray,units)
-	    compareTo: function(other) 
+	    compareTo: function(other)
 		{
 			if(isString(other))
 			{
 				return this.compareTo(new Qty(other));
 			}
-			
+
 			if(!this.isCompatible(other))
 			{
 				throwIncompatibleUnits();
 			}
-			
+
 			if(this.baseScalar < other.baseScalar)
 			{
 				return -1;
@@ -1039,32 +1039,32 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 				return 1;
 			}
 		},
-		
+
 		eq: function(other)
 		{
 			return this.compareTo(other) === 0;
 		},
-		
+
 		lt: function(other)
 		{
 			return this.compareTo(other) === -1;
 		},
-		
+
 		lte: function(other)
 		{
 			return this.eq(other) || this.lt(other);
 		},
-		
+
 		gt: function(other)
 		{
 			return this.compareTo(other) === 1;
 		},
-		
+
 		gte: function(other)
 		{
 			return this.eq(other) || this.gt(other);
 		},
-		
+
 		// Return true if quantities and units match
 		// Unit("100 cm").same(Unit("100 cm"))  # => true
 		// Unit("100 cm").same(Unit("1 m"))     # => false
@@ -1073,8 +1073,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 			return (this.scalar === other.scalar) && (this.units() === other.units());
 		}
 	};
-	
-	
+
+
 	// Parse a string into a unit object.
 	// Typical formats like :
 	// "5.6 kg*m/s^2"
@@ -1091,61 +1091,61 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 	{
 
 		val = (val + '').trim();
-		
+
 		if (val.length === 0)
 		{
 			throw new Exception("Unit not recognized");
 		}
 
 		var result = QTY_STRING_REGEX.exec(val);
-		
+
 		if(!result)
 		{
 			throw new Exception(val + ": Quantity not recognized");
 		}
 
 		var scalarMatch = result[1];
-		
-		if(scalarMatch) 
+
+		if(scalarMatch)
 		{
 			// Allow whitespaces between sign and scalar for loose parsing
 			scalarMatch = scalarMatch.replace(/\s/g, "");
 			this.scalar = parseFloat(scalarMatch);
 		}
-		else 
+		else
 		{
 			this.scalar = 1;
 		}
-		
+
 		var top = result[2],
 			bottom = result[3],
 			n, x, nx;
 
 		// TODO DRY me
-		while((result = TOP_REGEX.exec(top))) 
+		while((result = TOP_REGEX.exec(top)))
 		{
 			n = parseFloat(result[2]);
 
-			if(isNaN(n)) 
+			if(isNaN(n))
 			{
 				// Prevents infinite loops
 				throw new Exception("Unit exponent is not a number");
 			}
-			
+
 			// Disallow unrecognized unit even if exponent is 0
-			if(n === 0 && !UNIT_TEST_REGEX.test(result[1])) 
+			if(n === 0 && !UNIT_TEST_REGEX.test(result[1]))
 			{
 				throw new Exception("Unit not recognized");
 			}
 
 			x = result[1] + " ";
 			nx = "";
-			
-			for(var i = 0; i < Math.abs(n) ; i++) 
+
+			for(var i = 0; i < Math.abs(n) ; i++)
 			{
 				nx += x;
 			}
-			
+
 			if(n >= 0)
 			{
 				top = top.replace(result[0], nx);
@@ -1156,26 +1156,26 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 				top = top.replace(result[0], "");
 			}
 		}
-		
+
 		while((result = BOTTOM_REGEX.exec(bottom)))
 		{
 			n = parseFloat(result[2]);
 
-			if(isNaN(n)) 
+			if(isNaN(n))
 			{
 				// Prevents infinite loops
 				throw new Exception("Unit exponent is not a number");
 			}
-		
+
 			// Disallow unrecognized unit even if exponent is 0
 			if(n === 0 && !UNIT_TEST_REGEX.test(result[1]))
 			{
 				throw new Exception("Unit not recognized");
 			}
-			
+
 			x = result[1] + " ";
 			nx = "";
-			
+
 			for(var j = 0; j < n ; j++)
 			{
 				nx += x;
@@ -1188,13 +1188,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		{
 			this.numerator = parseUnits(top.trim());
 		}
-		
+
 		if(bottom)
 		{
 			this.denominator = parseUnits(bottom.trim());
 		}
 	};
-  
+
 	//
 	// Parses and converts units string to normalized unit array.
 	// Result is cached to speed up next calls.
@@ -1212,13 +1212,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 			cached = parsedUnitsCache[units],
 			unitMatch,
 			normalizedUnits = [];
-		
+
 		if(cached)
 		{
 			return cached;
 		}
 
-		// Strip out 
+		// Strip out
 		units = units.replace(/(\.|\*)/g, ' ');
 
 		// Scan
@@ -1240,7 +1240,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		normalizedUnits = normalizedUnits.reduce(function(a,b) {
 			return a.concat(b);
 		}, []);
-		
+
 		normalizedUnits = normalizedUnits.filter(function(item) {
 			return item;
 		});
@@ -1248,28 +1248,28 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		parsedUnitsCache[cacheKey] = normalizedUnits;
 
 		return normalizedUnits;
-		
+
 	}
-	
+
 	function toBaseUnits (numerator,denominator)
 	{
 		var num = [],
 			den = [],
 			q = 1,
 			unit;
-		
+
 		for(var i = 0; i < numerator.length; i++)
 		{
 			unit = numerator[i];
-			
+
 			if(PREFIX_VALUES[unit])
 			{
 				q *= PREFIX_VALUES[unit];
 			}
-			else 
+			else
 			{
 				unit = UNIT_VALUES[unit];
-				
+
 				if(unit)
 				{
 					q *= unit.scalar;
@@ -1278,7 +1278,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 					{
 						num.push(unit.numerator);
 					}
-					
+
 					if(unit.denominator)
 					{
 						den.push(unit.denominator);
@@ -1286,11 +1286,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 				}
 			}
 		}
-		
+
 		for(var j = 0; j < denominator.length; j++)
 		{
 			unit = denominator[j];
-			
+
 			if(PREFIX_VALUES[unit])
 			{
 				q /= PREFIX_VALUES[unit];
@@ -1298,7 +1298,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 			else
 			{
 				unit = UNIT_VALUES[unit];
-				
+
 				if(unit)
 				{
 					q /= unit.scalar;
@@ -1307,7 +1307,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 					{
 						den.push(unit.numerator);
 					}
-					
+
 					if(unit.denominator)
 					{
 						num.push(unit.denominator);
@@ -1315,12 +1315,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 				}
 			}
 		}
-		
+
 		// Flatten
 		num = num.reduce(function(a,b) {
 			return a.concat(b);
 		}, []);
-		
+
 		den = den.reduce(function(a,b) {
 			return a.concat(b);
 		}, []);
@@ -1331,40 +1331,40 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 			denominator: den
 		});
 	}
-	
+
 	// Temperature handling functions
-	
+
 	function toTemp(src,dst)
 	{
 		var dstUnits = dst.units(),
 			dstScalar;
-	
+
 		switch(dstUnits)
 		{
-			case "tempK": 
+			case "tempK":
 				dstScalar = src.baseScalar; break;
-			case "tempC": 
+			case "tempC":
 				dstScalar = src.baseScalar - 273.15; break;
-			case "tempF": 
+			case "tempF":
 				dstScalar = (src.baseScalar * 9/5) - 459.67; break;
-			case "tempR": 
+			case "tempR":
 				dstScalar = src.baseScalar * 9/5; break;
 			default:
 				throw new QtyError("Unknown type for temp conversion to: " + dstUnits);
 		}
-		
+
 		return new Qty({
 			scalar: dstScalar,
 			numerator: dst.numerator,
 			denominator: dst.denominator
 		});
 	}
-	
+
 	function toTempK(qty)
 	{
 		var units = qty.units(),
 			q;
-			
+
 		if(units.match(/(deg)[CFRK]/))
 		{
 			q = qty.baseScalar;
@@ -1381,7 +1381,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 					throw new QtyError("Unknown type for temp conversion from: " + units);
 			}
 		}
-	
+
 		return new Qty({
 			scalar: q,
 			numerator: ["<temp-K>"],
@@ -1394,29 +1394,29 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		var srcDegK = toDegK(src),
 			dstUnits = dst.units(),
 			dstScalar;
-		
+
 		switch(dstUnits)
 		{
 			case "degK": dstScalar = srcDegK.scalar; break;
 			case "degC": dstScalar = srcDegK.scalar; break;
 			case "degF": dstScalar = srcDegK.scalar * 9/5; break;
 			case "degR": dstScalar = srcDegK.scalar * 9/5; break;
-			default: 
+			default:
 				throw new Exception("Unknown type for degree conversion to: " + dstUnits);
 		}
-		
+
 		return new Qty({
 			scalar: dstScalar,
 			numerator: dst.numerator,
 			denominator: dst.denominator
 		});
 	}
-	
+
 	function toDegK(qty)
 	{
 		var units = qty.units(),
 			q;
-			
+
 		if(units.match(/(deg)[CFRK]/))
 		{
 			q = qty.baseScalar;
@@ -1432,7 +1432,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 				default: throw new Exception("Unknown type for temp conversion from: " + units);
 			}
 		}
-		
+
 		return new Qty({
 			scalar: q,
 			numerator: ["<kelvin>"],
@@ -1446,7 +1446,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		var lhsUnits = lhs.units(),
 			rhsConverted = rhs.to(lhsUnits);
 			dstDegrees = new Qty(getDegreeUnits(lhsUnits));
-			
+
 		return new Qty({
 			scalar: lhs.scalar - rhsConverted.scalar,
 			numerator: dstDegrees.numerator,
@@ -1457,31 +1457,31 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 	function subtractTempDegrees(temp,deg)
 	{
 		var tempDegrees = deg.to(getDegreeUnits(temp.units()));
-		
+
 		return new Qty({
 			scalar: temp.scalar - tempDegrees.scalar,
 			numerator: temp.numerator,
 			denominator: temp.denominator
 		});
 	}
-	
+
 	function addTempDegrees(temp,deg)
 	{
 		var tempDegrees = deg.to(getDegreeUnits(temp.units()));
-		
+
 		return new Qty({
 			scalar: temp.scalar + tempDegrees.scalar,
 			numerator: temp.numerator,
 			denominator: temp.denominator
 		});
 	}
-	
+
 	// converts temp[CKFR] to deg[CKFR]
 	function getDegreeUnits(units)
 	{
 		var degrees = 'CKFR',
 			unit = units.slice(-1);
-			
+
 		if(degrees.indexOf(unit) !== -1)
 		{
 			return 'deg' + unit;
@@ -1491,17 +1491,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 			throw new Exception("Unknown type for temp conversion from: " + units);
 		}
 	}
-	
+
 	var updateBaseScalar = function()
 	{
 		if(this.baseScalar)
 		{
 			return this.baseScalar;
 		}
-		
+
 		if(this.isBase())
 		{
-			
+
 			this.baseScalar = this.scalar;
 			this.signature = unitSignature.call(this);
 		}
@@ -1512,7 +1512,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 			this.signature = base.signature;
 		}
 	};
-	
+
 	//
 	// Calculates the unit signature id for use in comparing compatible units and simplification
 	// the signature is based on a simple classification of units and is based on the following publication
@@ -1528,7 +1528,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		{
 			return this.signature;
 		}
-		
+
 		var vector = unitSignatureVector.call(this);
 
 		for(var i = 0; i < vector.length; i++)
@@ -1549,12 +1549,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 		var vector = new Array(SIGNATURE_VECTOR.length),
 			r, n;
-		
+
 		for(var i = 0; i < vector.length; i++)
 		{
 			vector[i] = 0;
 		}
-		
+
 		// Numerator - ["<kilogram>","<meter>"]
 		for(var j = 0; j < this.numerator.length; j++)
 		{
@@ -1576,21 +1576,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 			if((r = UNIT_VALUES[this.denominator[k]]))
 			{
 				n = SIGNATURE_VECTOR.indexOf(r.category);
-				
+
 				if(n >= 0)
 				{
 					vector[n] = vector[n] - 1;
 				}
 			}
 		}
-		
+
 		return vector;
 	};
-  
+
 	//
 	// Utility Functions
 	//
-  
+
 	//
 	// Tests if a value is a string
 	//
@@ -1602,13 +1602,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 	{
 		return typeof value === "string" || value instanceof String;
 	}
-	
+
 	function compareArray(array1, array2)
 	{
 		if (array2.length !== array1.length) {
 			return false;
 		}
-		
+
 		for (var i = 0; i < array1.length; i++)
 		{
 			if (array2[i].compareArray)
@@ -1618,7 +1618,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 					return false;
 				}
 			}
-			
+
 			if (array2[i] !== array1[i])
 			{
 				return false;
@@ -1626,7 +1626,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		}
 		return true;
 	}
-	
+
 	//
 	// Returns a string representing a normalized unit array
 	//
@@ -1636,13 +1636,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 	function stringifyUnits(units)
 	{
 		var stringified = stringifiedUnitsCache.get(units);
-		
+
 		if(stringified) {
 			return stringified;
 		}
 
 		var isUnity = compareArray(units, UNITY_ARRAY);
-		
+
 		if(isUnity)
 		{
 			stringified = "1";
@@ -1657,13 +1657,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 		return stringified;
 	}
-	
+
 	// this turns ['s','m','s'] into ['s2','m']
 	function simplify (units) {
 		function reduce(acc, unit)
 		{
 			var unitCounter = acc[unit];
-			
+
 			if(!unitCounter)
 			{
 				acc.push(unitCounter = acc[unit] = [unit, 0]);
@@ -1673,7 +1673,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 			return acc;
 		}
-	
+
 		var unitCounts = units.reduce(reduce, []);
 
 		return unitCounts.map(function(unitCount) {
@@ -1684,12 +1684,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 	function getOutputNames(units)
 	{
 		var unitNames = [], token, tokenNext;
-		
+
 		for(var i = 0; i < units.length; i++)
 		{
 			token = units[i];
 			tokenNext = units[i+1];
-			
+
 			if(PREFIX_VALUES[token])
 			{
 				unitNames.push(OUTPUT_MAP[token] + OUTPUT_MAP[tokenNext]);
@@ -1702,16 +1702,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 		}
 		return unitNames;
 	}
-  
-	function cleanTerms(num, den) 
+
+	function cleanTerms(num, den)
 	{
 		num = num.filter(function(val) {return val !== UNITY;});
 		den = den.filter(function(val) {return val !== UNITY;});
-		
+
 		var combined = {},
 			k;
-		
-		for(var i = 0; i < num.length; i++) 
+
+		for(var i = 0; i < num.length; i++)
 		{
 			if(PREFIX_VALUES[num[i]])
 			{
@@ -1722,7 +1722,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 			{
 				k = num[i];
 			}
-			
+
 			if(k && k !== UNITY) {
 				if(combined[k])
 				{
@@ -1734,7 +1734,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 				}
 			}
 		}
-		
+
 		for(var j = 0; j < den.length; j++)
 		{
 			if(PREFIX_VALUES[den[j]])
@@ -1746,7 +1746,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 			{
 				k = den[j];
 			}
-			
+
 			if(k && k !== UNITY)
 			{
 				if(combined[k])
@@ -1759,17 +1759,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 				}
 			}
 		}
-		
+
 		num = [];
 		den = [];
-		
-		for(var prop in combined) 
+
+		for(var prop in combined)
 		{
 			if(combined.hasOwnProperty(prop))
 			{
 				var item = combined[prop],
 					n;
-				
+
 				if(item[0] > 0)
 				{
 					for(n = 0; n < item[0]; n++)
@@ -1786,36 +1786,36 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 				}
 			}
 		}
-		
+
 		if(num.length === 0)
 		{
 			num = UNITY_ARRAY;
 		}
-		
+
 		if(den.length === 0)
 		{
 			den = UNITY_ARRAY;
 		}
-		
+
 		// Flatten
 		num = num.reduce(function(a,b) {
 			return a.concat(b);
 		}, []);
-		
+
 		den = den.reduce(function(a,b) {
 			return a.concat(b);
 		}, []);
-		
+
 		return [num, den];
 	}
-  
+
 	//
 	// Prefer stricter Number.isFinite if currently supported.
 	// To be dropped when ES6 is finalized. Obsolete browsers will
 	// have to use ES6 polyfills.
 	//
 	var isFinite = Number.isFinite || window.isFinite;
-  
+
 	//
 	// Tests if a value is a number
 	//
@@ -1840,7 +1840,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 	{
 		return value instanceof Qty;
 	}
-  
+
 	//
 	// Tests if a value is a Qty definition object
 	//
@@ -1852,7 +1852,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 	{
 		return value && typeof value === "object" && value.hasOwnProperty("scalar");
 	}
-  
+
 	//
 	// Asserts initialization value type is valid
 	//
@@ -1867,7 +1867,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 			throw new Exception("Only strings, numbers or quantities accepted as initialization values");
 		}
 	}
-  
+
 	/*
 	* Throws incompatible units error
 	*
@@ -1877,12 +1877,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 	{
 		throw new Exception("Incompatible units");
 	}
-  
+
   	function Exception(message)
 	{
 		this.name = 'NeutriumJS/Convert Exception';
 		this.message = message;
 	}
-  
+
 	return Qty;
 }));
