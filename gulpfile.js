@@ -4,7 +4,7 @@ var concat = require('gulp-concat');
 var jshint = require('gulp-jshint');
 
 var source = [
-  './bower_components/neutriumjs-utilities/src/NeutriumJS.nestedMap.js',
+  './node_modules/neutriumjs.utilities/src/NeutriumJS.nestedMap.js',
   './src/NeutriumJS.convert.js'
 ]
 

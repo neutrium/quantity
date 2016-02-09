@@ -1,6 +1,6 @@
 {
   "name": "neutriumjs.convert",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "The NeutriumJS unit conversion module.",
   "license": "CC-BY-4.0",
   "author:": {
@@ -20,5 +20,8 @@
     "gulp-concat": "^2.6.0",
     "gulp-jshint": "^1.11.2",
     "gulp-uglify": "^1.2.0"
+  },
+  "dependencies": {
+    "neutriumjs.utilities": "^1.0.0"
   }
 }

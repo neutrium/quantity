@@ -1,6 +1,6 @@
 {
 	"name": "NeutriumJS.convert",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"homepage": "https://github.com/NativeDynamics/NeutriumJS.convert",
 	"authors": [
 		"Trevor Walker <@cubicleWar>"
@@ -23,8 +23,5 @@
 		"amd",
 		"globals",
 		"node"
-	],
-	"dependencies": {
-		"neutriumjs-utilities": "*"
-	}
+	]
 }
