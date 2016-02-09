@@ -16,9 +16,15 @@ NeutriumJS.convert depends on the NeutriumJS.utilities.NestedMap module. However
 
 ### Installing
 
+#### NPM
+
+You can install NeutriumJS.convert using npm.
+
+	npm install neutriumjs.convert --save
+
 #### Bower.io
 
-You can install NeutriumJS.convert using bower.
+If you prefer bower you can install NeutriumJS.convert as follows:
 
 	bower install neutriumjs-convert
 
