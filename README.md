@@ -1,8 +1,8 @@
-# NeutriumJS.Quantity
+# Neutrium.Quantity
 
-NeutriumJS.Quantity is the unit conversion module of the [Neutrium](https://neutrium.net) engineering library.
+Neutrium.Quantity is the unit conversion module of the [Neutrium](https://neutrium.net) engineering library.
 
-NeutriumJS.Quantity is an adaption of the [JS-quantities](https://github.com/gentooboontoo/js-quantities) library.
+Neutrium.Quantity is an adaption of the [JS-quantities](https://github.com/gentooboontoo/js-quantities) library.
 
 ## Breaking Changes in Version 2
 

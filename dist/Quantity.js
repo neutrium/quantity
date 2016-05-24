@@ -19,6 +19,7 @@ var Quantity = (function () {
     //  Allows construction as either new Quantity("3 m") or new Quantity(3, "m")
     //
     function Quantity(initValue, initUnits) {
+        this.conversionCache = {};
         this.numerator = Quantity.UNITY_ARRAY;
         this.denominator = Quantity.UNITY_ARRAY;
         // Need the definition object its used throughout -> make interface
@@ -124,7 +125,7 @@ var Quantity = (function () {
         if (!isString(other)) {
             return this.to(other.units());
         }
-        cached = Quantity.conversionCache[other];
+        cached = this.conversionCache[other];
         if (cached) {
             return cached;
         }
@@ -157,7 +158,7 @@ var Quantity = (function () {
                 });
             }
         }
-        Quantity.conversionCache[other] = target;
+        this.conversionCache[other] = target;
         return target;
     };
     //
@@ -1383,7 +1384,6 @@ var Quantity = (function () {
     Quantity.parsedUnitsCache = {};
     Quantity.baseUnitCache = {};
     Quantity.stringifiedUnitsCache = new utilities_1.NestedMap();
-    Quantity.conversionCache = {};
     Quantity.PREFIX_VALUES = {};
     Quantity.PREFIX_MAP = {};
     Quantity.UNIT_VALUES = {};

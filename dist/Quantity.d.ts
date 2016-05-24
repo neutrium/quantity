@@ -9,7 +9,7 @@ export declare class Quantity {
     private static parsedUnitsCache;
     private static baseUnitCache;
     private static stringifiedUnitsCache;
-    private static conversionCache;
+    private conversionCache;
     private static PREFIX_VALUES;
     private static PREFIX_MAP;
     private static UNIT_VALUES;

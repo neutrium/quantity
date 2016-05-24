@@ -453,7 +453,7 @@ export class Quantity
 	private static parsedUnitsCache = {};
 	private static baseUnitCache = {};
 	private static stringifiedUnitsCache = new NestedMap();
-    private static conversionCache : any = {};
+    private conversionCache : any = {};
 	private static PREFIX_VALUES = {};
 	private static PREFIX_MAP = {};
 	private static UNIT_VALUES = {};
@@ -643,7 +643,7 @@ export class Quantity
             return this.to(other.units());
         }
 
-        cached = Quantity.conversionCache[other];
+        cached = this.conversionCache[other];
 
         if (cached)
         {
@@ -682,6 +682,7 @@ export class Quantity
             else
             {
                 let q = this.baseScalar/target.baseScalar;
+
                 target = new Quantity({
                     scalar: q,
                     numerator: target.numerator,
@@ -690,7 +691,7 @@ export class Quantity
             }
         }
 
-        Quantity.conversionCache[other] = target;
+        this.conversionCache[other] = target;
 
         return target;
     }
