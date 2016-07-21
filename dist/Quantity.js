@@ -13,7 +13,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 /// <reference path="../typings/globals/decimal.js/index.d.ts" />
 var utilities_1 = require("@neutrium/utilities");
 var DefinitionObject_1 = require("./DefinitionObject");
-//import Decimal = decimal.Decimal;
 var Decimal = require('decimal.js');
 var isNumber = utilities_1.typeguards.isNumber;
 var isString = utilities_1.typeguards.isString;
@@ -344,11 +343,6 @@ var Quantity = (function () {
     };
     Quantity.prototype.div = function (other) {
         if (isNumber(other) || other instanceof Decimal) {
-            /*
-            if (other === 0)
-            {
-                throw new Error("Divide by zero");
-            }*/
             return new Quantity({
                 "scalar": this.scalar.div(other),
                 "numerator": this.numerator,
@@ -357,9 +351,6 @@ var Quantity = (function () {
         }
         else if (!DefinitionObject_1.isQuantityDefinition(other)) {
             other = new Quantity(other);
-        }
-        if (other.scalar.eq(0)) {
-            throw new Error("Divide by zero");
         }
         if (other.isTemperature()) {
             throw new Error("Cannot divide with temperatures");
@@ -944,12 +935,6 @@ var Quantity = (function () {
         }, []);
         return [num, den];
     };
-    //
-    // Prefer stricter Number.isFinite if currently supported.
-    // To be dropped when ES6 is finalized. Obsolete browsers will
-    // have to use ES6 polyfills.
-    //
-    //var isFinite = Number.isFinite || window.isFinite;
     /*
     * Throws incompatible units error
     *
@@ -1231,7 +1216,7 @@ var Quantity = (function () {
             units: {
                 "<watt>": [["W", "watt", "watts"], 1.0],
                 "<horsepower>": [["Hp", "hp", "horsepower"], 745.699872],
-                "<horsepower-electric>": [["Hp(e)", "hp(e)", "horsepower-e", "hp(electric)"], 746],
+                "<horsepower-electric>": [["Hp(e)", "hp(e)", "hp(electric)"], 746],
                 "<horsepower-metric>": [["Hp(m)", "hp(m)", "Hp(m)"], 735.49875]
             }
         },
@@ -1362,7 +1347,7 @@ var Quantity = (function () {
                 "<drum-metric-petroleum>": [["drum(mp)"], 0.2],
                 "<drum-us-petroleum>": [["drum(usp)"], 0.208197648],
                 "<fluid-ounce>": [["floz", "fluid-ounce", "fluid-ounces"], 2.84130625e-5],
-                "<fluid-ounce-us>": [["oz(usl)", "floz(us)"], 2.95735296e-5],
+                "<fluid-ounce-us>": [["oz(usf)", "floz(us)"], 2.95735296e-5],
                 "<gallon-uk>": [["gal", "gal(imp)", "gal(uk)"], 0.00454609],
                 "<gallon-us-dry>": [["gal(usd)", "gal(us dry)"], 0.004404884],
                 "<gallon-us-liquid>": [["gal(us)", "gal(usl)", "gal(us fl)"], 0.003785412],
