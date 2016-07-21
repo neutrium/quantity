@@ -1,6 +1,6 @@
 export interface IQuantityDefinition
 {
-    scalar : number;
+    scalar : decimal.Decimal;
     numerator ?: string[];
     denominator ?: string[];
 }

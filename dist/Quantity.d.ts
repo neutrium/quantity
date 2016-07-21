@@ -1,3 +1,15 @@
+/// <reference path="../typings/globals/decimal.js/index.d.ts" />
+/*!
+Copyright © 2006-2007 Kevin C. Olbrich
+Copyright © 2010-2013 LIM SAS (http://lim.eu) - Julien Sanchez
+Copyright © 2016 Native Dynamics (nativedynamics.com.au) - Trevor Walker
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 import { IQuantityDefinition } from "./DefinitionObject";
 export declare class Quantity {
     private static PREFIXES;
@@ -35,15 +47,15 @@ export declare class Quantity {
     private static UNIT_MATCH_REGEX;
     private static UNIT_TEST_REGEX;
     initValue: any;
-    scalar: number;
+    scalar: decimal.Decimal;
     numerator: string[];
     denominator: string[];
-    baseScalar: number;
+    baseScalar: decimal.Decimal;
     signature: number;
     private _isBase;
     private _units;
     static initialize(): void;
-    constructor(initValue: string | number | IQuantityDefinition, initUnits?: string);
+    constructor(initValue: string | number | decimal.Decimal | IQuantityDefinition, initUnits?: string);
     clone(): Quantity;
     to(other: any): any;
     isCompatible(other: any): any;

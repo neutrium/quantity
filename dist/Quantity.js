@@ -1,4 +1,3 @@
-"use strict";
 /*!
 Copyright © 2006-2007 Kevin C. Olbrich
 Copyright © 2010-2013 LIM SAS (http://lim.eu) - Julien Sanchez
@@ -10,8 +9,12 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+"use strict";
+/// <reference path="../typings/globals/decimal.js/index.d.ts" />
 var utilities_1 = require("@neutrium/utilities");
 var DefinitionObject_1 = require("./DefinitionObject");
+//import Decimal = decimal.Decimal;
+var Decimal = require('decimal.js');
 var isNumber = utilities_1.typeguards.isNumber;
 var isString = utilities_1.typeguards.isString;
 var Quantity = (function () {
@@ -30,7 +33,7 @@ var Quantity = (function () {
         }
         else if (initUnits) {
             this.parse.call(this, initUnits);
-            this.scalar = parseFloat(initValue);
+            this.scalar = new Decimal(initValue);
         }
         else {
             this.parse.call(this, initValue);
@@ -49,7 +52,7 @@ var Quantity = (function () {
         }
         this.initValue = initValue;
         this.updateBaseScalar.call(this);
-        if (this.isTemperature() && this.baseScalar < 0) {
+        if (this.isTemperature() && this.baseScalar.lt(0)) {
             throw new Error("Temperatures must not be less than absolute zero");
         }
     }
@@ -150,7 +153,7 @@ var Quantity = (function () {
                 target = this.toDegrees(this, target);
             }
             else {
-                var q = this.baseScalar / target.baseScalar;
+                var q = this.baseScalar.div(target.baseScalar);
                 target = new Quantity({
                     scalar: q,
                     numerator: target.numerator,
@@ -224,11 +227,11 @@ var Quantity = (function () {
         if (this.isTemperature()) {
             throw new Error("Cannot divide with temperatures");
         }
-        if (this.scalar === 0) {
+        if (this.scalar.eq(0)) {
             throw new Error("Divide by zero");
         }
         return new Quantity({
-            scalar: 1 / this.scalar,
+            scalar: new Decimal(1).div(this.scalar),
             numerator: this.denominator,
             denominator: this.numerator
         });
@@ -268,7 +271,7 @@ var Quantity = (function () {
     // Mathematical operations on quantities
     //
     Quantity.prototype.add = function (other) {
-        if (isString(other)) {
+        if (!DefinitionObject_1.isQuantityDefinition(other)) {
             other = new Quantity(other);
         }
         if (!this.isCompatible(other)) {
@@ -284,13 +287,13 @@ var Quantity = (function () {
             return this.addTempDegrees(other, this);
         }
         return new Quantity({
-            scalar: this.scalar + other.to(this).scalar,
+            scalar: this.scalar.plus(other.to(this).scalar),
             numerator: this.numerator,
             denominator: this.denominator
         });
     };
     Quantity.prototype.sub = function (other) {
-        if (isString(other)) {
+        if (!DefinitionObject_1.isQuantityDefinition(other)) {
             other = new Quantity(other);
         }
         if (!this.isCompatible(other)) {
@@ -306,20 +309,20 @@ var Quantity = (function () {
             throw new Error("Cannot subtract a temperature from a differential degree unit");
         }
         return new Quantity({
-            scalar: this.scalar - other.to(this).scalar,
+            scalar: this.scalar.minus(other.to(this).scalar),
             numerator: this.numerator,
             denominator: this.denominator
         });
     };
     Quantity.prototype.mul = function (other) {
-        if (isNumber(other)) {
+        if (isNumber(other) || other instanceof Decimal) {
             return new Quantity({
-                scalar: this.scalar * other,
+                scalar: this.scalar.times(other),
                 numerator: this.numerator,
                 denominator: this.denominator
             });
         }
-        else if (isString(other)) {
+        else if (!DefinitionObject_1.isQuantityDefinition(other)) {
             other = new Quantity(other);
         }
         if ((this.isTemperature() || other.isTemperature()) && !(this.isUnitless() || other.isUnitless())) {
@@ -334,26 +337,28 @@ var Quantity = (function () {
         }
         var numden = this.cleanTerms(op1.numerator.concat(op2.numerator), op1.denominator.concat(op2.denominator));
         return new Quantity({
-            scalar: op1.scalar * op2.scalar,
+            scalar: op1.scalar.times(op2.scalar),
             numerator: numden[0],
             denominator: numden[1]
         });
     };
     Quantity.prototype.div = function (other) {
-        if (isNumber(other)) {
-            if (other === 0) {
+        if (isNumber(other) || other instanceof Decimal) {
+            /*
+            if (other === 0)
+            {
                 throw new Error("Divide by zero");
-            }
+            }*/
             return new Quantity({
-                "scalar": this.scalar / other,
+                "scalar": this.scalar.div(other),
                 "numerator": this.numerator,
                 "denominator": this.denominator
             });
         }
-        else if (isString(other)) {
+        else if (!DefinitionObject_1.isQuantityDefinition(other)) {
             other = new Quantity(other);
         }
-        if (other.scalar === 0) {
+        if (other.scalar.eq(0)) {
             throw new Error("Divide by zero");
         }
         if (other.isTemperature()) {
@@ -371,7 +376,7 @@ var Quantity = (function () {
         }
         var numden = this.cleanTerms(op1.numerator.concat(op2.denominator), op1.denominator.concat(op2.numerator));
         return new Quantity({
-            scalar: op1.scalar / op2.scalar,
+            scalar: op1.scalar.div(op2.scalar),
             numerator: numden[0],
             denominator: numden[1]
         });
@@ -396,13 +401,13 @@ var Quantity = (function () {
         if (!this.isCompatible(other)) {
             this.throwIncompatibleUnits();
         }
-        if (this.baseScalar < other.baseScalar) {
+        if (this.baseScalar.lt(other.baseScalar)) {
             return -1;
         }
-        else if (this.baseScalar === other.baseScalar) {
+        else if (this.baseScalar.eq(other.baseScalar)) {
             return 0;
         }
-        else if (this.baseScalar > other.baseScalar) {
+        else if (this.baseScalar.gt(other.baseScalar)) {
             return 1;
         }
     };
@@ -425,7 +430,7 @@ var Quantity = (function () {
     // Quantity("100 cm").same(Quantity("100 cm"))  # => true
     // Quantity("100 cm").same(Quantity("1 m"))     # => false
     Quantity.prototype.same = function (other) {
-        return (this.scalar === other.scalar) && (this.units() === other.units());
+        return this.scalar.eq(other.scalar) && (this.units() === other.units());
     };
     // Parse a string into a unit object.
     // Typical formats like :
@@ -452,10 +457,10 @@ var Quantity = (function () {
         if (scalarMatch) {
             // Allow whitespaces between sign and scalar for loose parsing
             scalarMatch = scalarMatch.replace(/\s/g, "");
-            this.scalar = parseFloat(scalarMatch);
+            this.scalar = new Decimal(scalarMatch);
         }
         else {
-            this.scalar = 1;
+            this.scalar = new Decimal(1);
         }
         var top = result[2], bottom = result[3], n, x, nx;
         // TODO DRY me
@@ -506,6 +511,7 @@ var Quantity = (function () {
         if (bottom) {
             this.denominator = Quantity.parseUnits(bottom.trim());
         }
+        console.log(this);
     };
     ;
     //
@@ -547,16 +553,16 @@ var Quantity = (function () {
         return normalizedUnits;
     };
     Quantity.prototype.toBaseUnits = function (numerator, denominator) {
-        var num = [], den = [], q = 1, unit;
+        var num = [], den = [], q = new Decimal(1), unit;
         for (var i = 0; i < numerator.length; i++) {
             unit = numerator[i];
             if (Quantity.PREFIX_VALUES[unit]) {
-                q *= Quantity.PREFIX_VALUES[unit];
+                q = q.times(Quantity.PREFIX_VALUES[unit]);
             }
             else {
                 unit = Quantity.UNIT_VALUES[unit];
                 if (unit) {
-                    q *= unit.scalar;
+                    q = q.times(unit.scalar);
                     if (unit.numerator) {
                         num.push(unit.numerator);
                     }
@@ -569,12 +575,12 @@ var Quantity = (function () {
         for (var j = 0; j < denominator.length; j++) {
             unit = denominator[j];
             if (Quantity.PREFIX_VALUES[unit]) {
-                q /= Quantity.PREFIX_VALUES[unit];
+                q = q.div(Quantity.PREFIX_VALUES[unit]);
             }
             else {
                 unit = Quantity.UNIT_VALUES[unit];
                 if (unit) {
-                    q /= unit.scalar;
+                    q = q.div(unit.scalar);
                     if (unit.numerator) {
                         den.push(unit.numerator);
                     }
@@ -605,13 +611,13 @@ var Quantity = (function () {
                 dstScalar = src.baseScalar;
                 break;
             case "tempC":
-                dstScalar = src.baseScalar - 273.15;
+                dstScalar = src.baseScalar.minus(273.15);
                 break;
             case "tempF":
-                dstScalar = (src.baseScalar * 9 / 5) - 459.67;
+                dstScalar = src.baseScalar.times(9 / 5).minus(459.67);
                 break;
             case "tempR":
-                dstScalar = src.baseScalar * 9 / 5;
+                dstScalar = src.baseScalar.times(9 / 5);
                 break;
             default:
                 throw new Error("Unknown type for temp conversion to: " + dstUnits);
@@ -633,13 +639,13 @@ var Quantity = (function () {
                     q = qty.scalar;
                     break;
                 case "tempC":
-                    q = qty.scalar + 273.15;
+                    q = qty.scalar.plus(273.15);
                     break;
                 case "tempF":
-                    q = (qty.scalar + 459.67) * 5 / 9;
+                    q = qty.scalar.plus(459.67).times(5 / 9);
                     break;
                 case "tempR":
-                    q = qty.scalar * 5 / 9;
+                    q = qty.scalar.times(5 / 9);
                     break;
                 default:
                     throw new Error("Unknown type for temp conversion from: " + units);
@@ -661,10 +667,10 @@ var Quantity = (function () {
                 dstScalar = srcDegK.scalar;
                 break;
             case "degF":
-                dstScalar = srcDegK.scalar * 9 / 5;
+                dstScalar = srcDegK.scalar.times(9 / 5);
                 break;
             case "degR":
-                dstScalar = srcDegK.scalar * 9 / 5;
+                dstScalar = srcDegK.scalar.times(9 / 5);
                 break;
             default:
                 throw new Error("Unknown type for degree conversion to: " + dstUnits);
@@ -689,10 +695,10 @@ var Quantity = (function () {
                     q = qty.scalar;
                     break;
                 case "tempF":
-                    q = qty.scalar * 5 / 9;
+                    q = qty.scalar.times(5 / 9);
                     break;
                 case "tempR":
-                    q = qty.scalar * 5 / 9;
+                    q = qty.scalar.times(5 / 9);
                     break;
                 default: throw new Error("Unknown type for temp conversion from: " + units);
             }
@@ -706,7 +712,7 @@ var Quantity = (function () {
     Quantity.prototype.subtractTemperatures = function (lhs, rhs) {
         var lhsUnits = lhs.units(), rhsConverted = rhs.to(lhsUnits), dstDegrees = new Quantity(this.getDegreeUnits(lhsUnits));
         return new Quantity({
-            scalar: lhs.scalar - rhsConverted.scalar,
+            scalar: lhs.scalar.minus(rhsConverted.scalar),
             numerator: dstDegrees.numerator,
             denominator: dstDegrees.denominator
         });
@@ -714,7 +720,7 @@ var Quantity = (function () {
     Quantity.prototype.subtractTempDegrees = function (temp, deg) {
         var tempDegrees = deg.to(this.getDegreeUnits(temp.units()));
         return new Quantity({
-            scalar: temp.scalar - tempDegrees.scalar,
+            scalar: temp.scalar.minus(tempDegrees.scalar),
             numerator: temp.numerator,
             denominator: temp.denominator
         });
@@ -722,7 +728,7 @@ var Quantity = (function () {
     Quantity.prototype.addTempDegrees = function (temp, deg) {
         var tempDegrees = deg.to(this.getDegreeUnits(temp.units()));
         return new Quantity({
-            scalar: temp.scalar + tempDegrees.scalar,
+            scalar: temp.scalar.plus(tempDegrees.scalar),
             numerator: temp.numerator,
             denominator: temp.denominator
         });

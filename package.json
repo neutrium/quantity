@@ -5,9 +5,9 @@
   "typings": "dist/index",
   "description": "The NeutriumJS unit conversion module.",
   "keywords": [
-      "neutrium",
-      "unit",
-      "conversion"
+    "neutrium",
+    "unit",
+    "conversion"
   ],
   "license": "CC-BY-4.0",
   "author:": "Trevor Walker <trevorw@neutrium.net> (https://neutrium.net)",
@@ -20,15 +20,17 @@
     "url": "https://github.com/neutrium/quantity.git"
   },
   "bugs": {
-    "url" : "https://github.com/neutrium/quantity/issues"
+    "url": "https://github.com/neutrium/quantity/issues"
   },
   "dependencies": {
-    "@neutrium/utilities": "^2.0.0"
+    "@neutrium/utilities": "^2.0.0",
+    "decimal.js": "^6.0.0"
   },
   "scripts": {
-      "clean": "rm -r ./dist/*",
-      "tsc": "tsc",
-      "build": "npm run tsc",
-      "prepublish": "npm run clean && npm run build"
+    "clean": "rm -r ./dist/*",
+    "tsc": "tsc",
+    "build": "npm run tsc",
+    "prepublish": "npm run clean && npm run build",
+    "postinstall": "typings install"
   }
 }

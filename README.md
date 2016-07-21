@@ -2,7 +2,13 @@
 
 Neutrium.Quantity is the unit conversion module of the [Neutrium](https://neutrium.net) engineering library.
 
-Neutrium.Quantity is an adaption of the [JS-quantities](https://github.com/gentooboontoo/js-quantities) library.
+Neutrium.Quantity started its life as a fork of the [JS-quantities](https://github.com/gentooboontoo/js-quantities) library.
+
+## Breaking Changes in Version 3
+
+Version of this library introduces one breaking change:
+
+- Number representation within a unit now uses to [Decimal.js](https://github.com/MikeMcl/decimal.js/) to improve accuracy of mathematical operations and range of scalar representation.
 
 ## Breaking Changes in Version 2
 
@@ -15,7 +21,7 @@ Version 2 of this library introduces many breaking changes. Here are the most si
 
 ## How does it differ from JS-quantities?
 
-NeutriumJS.Quantity features an extended unit set and as of version 2.0.0 is ready for use in Typescript projects. Additionally several auxilary functions such as formatting have been removed to allow better focus on unit conversion (these may be added back at a latter date as separate modules.
+NeutriumJS.Quantity features an extended unit set and as of version 2.0.0 is ready for use in Typescript projects. Additionally several auxilary functions such as formatting have been removed to allow better focus on unit conversion (these may be added back at a latter date as separate modules).
 
 ## Getting Started
 
@@ -74,12 +80,14 @@ Quantities can be created using simply specifying the unit string as follows:
 
     qtyCopy = new Quantity('1m).clone();          // quantity could be copied when used as initialising value
 
-### General Conventions
+### Unit Naming Conventions
 
 - Units are generally in lower case unless there is a solid precedence for capitalisation.
 - Currently the singular form of the unit is generally preferred (e.g. litre rather than litres).
+- Use brackets when clarifying between units that have the same name, e.g. long tonne and short tonne will have abbreviations ton(l) and ton(s).
+- Where a unit is a volume and a weight, the volume unit gets a bracket (f), e.g. mass ounce "oz", fluid ounce "oz(f)"
 - Where a unit has several localisations (e.g. US, UK or Imperial gallon) the variants will be differentiated by appending the localisation to the unit name. For example gal(us), gal(uk) or gal(imp).
-- Where a unit has both dry and fluid/liquid variants a d or l is added to the unit respectively. Dry and liquid variants are typically used in conjunction with US localised variants. In these cases you would add the d or l to the localisation, for example a US fluid gallon would be represented as gal(usl).
+- Where a unit has both dry and fluid/liquid variants a d or l is added to the unit respectively i.e. gal(d). Dry and liquid variants are typically used in conjunction with US localised variants. In these cases you would add the d or l to the localisation, for example a US fluid gallon would be represented as gal(usl).
 
 ### Conversion
 
@@ -94,7 +102,9 @@ You can also convert a quantity to a common set of base units:
 You can access the scalar component of the quantity:
 
     qty = Quantity('10 m');
-    qty.scalar;                             // 10
+    qty.scalar;                             // Decimal(10)
+
+The scalar component is a [Decimal](https://github.com/MikeMcl/decimal.js/) object which provides a range of operators. See the [Decimal.js documentation](http://mikemcl.github.io/decimal.js/) for more info.
 
 ### Comparison
 
@@ -127,9 +137,9 @@ Available operators include:
 
 - add(other): Add - other can be string or quantity. other should be unit compatible.
 - sub(other): Subtract - other can be string or quantity. other should be unit compatible.
-- mul(other): Multiply - other can be string, number or quantity.
-- div(other): Divide - other can be string, number or quantity.
-- inverse() : Inverse - inverse the unit set and scalar value (with no special special unit checking)
+- mul(other): Multiply - other can be string, Decimal, number or quantity.
+- div(other): Divide - other can be string, Decimal, number or quantity.
+- inverse() : Inverse - inverse the unit set and scalar value (with no special special unit checking).
 
 ### Temperatures
 
@@ -165,6 +175,7 @@ NeutriumJS is free software, but you can support the developers by [donating her
 |:-------:|:------|
 | 1.0.0	  | Initial Release |
 | 2.0.0   | Rename package, switch to Typescript and convert to npm module |
+| 3.0.0   | Switch to using decimal.js to store the quantity scalar |
 
 ## License
 

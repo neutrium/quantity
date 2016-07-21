@@ -1,0 +1,5 @@
+{
+  "globalDependencies": {
+    "decimal.js": "registry:dt/decimal.js#0.0.0+20160317120654"
+  }
+}
