@@ -10,11 +10,9 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-/// <reference path="../typings/globals/decimal.js/index.d.ts" />
-
 import {NestedMap, typeguards, compareArray} from "@neutrium/utilities";
 import {IQuantityDefinition, isQuantityDefinition} from "./DefinitionObject";
-import * as Decimal from 'decimal.js';
+import {Decimal} from '@neutrium/math';
 
 let isNumber = typeguards.isNumber;
 let isString = typeguards.isString;
@@ -280,15 +278,20 @@ export class Quantity
                 "<dram>"		: [["dram","drams","dr"], 0.0017718452],
                 "<gram>"		: [["g","gram","grams","gramme","grammes"], 1e-3],
                 "<grain>"		: [["grain","grains","gr"], 6.479891E-5],
-                "<pound>"		: [["lbs","lb","pound","pounds","#"], 0.45359237],
-                "<pound-troy>"	: [["lbt"], 0.3732417],
+                "<hundredweight-short>" : [["cwt(s)"], 45.359237],
+                "<hundredweight-long>" : [["cwt(l)"], 50.80234544],
                 "<ounce>"		: [["oz","ounce","ounces"], 0.0283495231],
                 "<ounce-troy>"	: [["ozt"], 0.031103477],
+                "<pennyweight>" : [["dwt"], 0.00155517384],
+                "<pound>"		: [["lbs","lb","pound","pounds","#"], 0.45359237],
+                "<pound-troy>"	: [["lbt"], 0.3732417],
+                "<quarter-short>" : [["qr(s)"], 11.33980925],
+                "<quarter-long>" : [["qr(l)"], 12.70058636],
                 "<slug>" 		: [["slug","slugs"], 14.5939029],
                 "<stone>" 		: [["stone","stones","st"],6.35029318],
                 "<ton-metric>"	: [["t", "tonne"], 1000],
-                "<ton-long>"	: [["tnl","tonl"], 1016.0469088],
-                "<ton-short>"	: [["tn","ton", "tons"], 907.18474],
+                "<ton-long>"	: [["tnl","ton(l)", "tonl"], 1016.0469088],
+                "<ton-short>"	: [["tn","ton", "ton(s)", "tons"], 907.18474],
             }
         },
         power: {
@@ -424,11 +427,11 @@ export class Quantity
                 "<cup-imperial>" 		: [["cup(imp)"], 2.84130625e-4],
                 "<cup-us-customary>"	: [["cup(usc)"], 2.365882365e-4],
                 "<cup-us-legal>"		: [["cup(usl)"], 0.00024],
-                "<dram>"				: [["dr(f)","dram(f)"], 3.6966911953E-06],
+                "<dram-fluid>"			: [["dr(f)","dram(f)"], 3.6966911953E-06],
                 "<drum-metric-petroleum>": [["drum(mp)"], 0.2],
                 "<drum-us-petroleum>"	: [["drum(usp)"], 0.208197648],
                 "<fluid-ounce>"			: [["floz","fluid-ounce","fluid-ounces"], 2.84130625e-5],
-                "<fluid-ounce-us>"		: [["oz(usf)", "floz(us)"], 2.95735296e-5],
+                "<fluid-ounce-us>"		: [["oz(usl)", "oz(usf)", "floz(us)"], 2.95735296e-5],
                 "<gallon-uk>"			: [["gal", "gal(imp)", "gal(uk)"], 0.00454609],
                 "<gallon-us-dry>"		: [["gal(usd)","gal(us dry)"], 0.004404884],
                 "<gallon-us-liquid>"	: [["gal(us)", "gal(usl)","gal(us fl)"], 0.003785412],
@@ -490,10 +493,10 @@ export class Quantity
 
     // Instance variables
     initValue : any;
-    scalar : decimal.Decimal;
+    scalar : Decimal;
     numerator = Quantity.UNITY_ARRAY;
     denominator = Quantity.UNITY_ARRAY;
-    baseScalar : decimal.Decimal;
+    baseScalar : Decimal;
     signature : number;
     private _isBase : boolean;
     private _units : string;
@@ -557,7 +560,7 @@ export class Quantity
     //
     //  Allows construction as either new Quantity("3 m") or new Quantity(3, "m")
     //
-	constructor(initValue : string | number | decimal.Decimal | IQuantityDefinition, initUnits? : string)
+	constructor(initValue : string | number | Decimal | IQuantityDefinition, initUnits? : string)
 	{
         // Need the definition object its used throughout -> make interface
         if (isQuantityDefinition(initValue))
@@ -887,7 +890,7 @@ export class Quantity
         }
 
         return new Quantity({
-            scalar: this.scalar.plus(other.to(this).scalar),
+            scalar: this.scalar.add(other.to(this).scalar),
             numerator: this.numerator,
             denominator: this.denominator
         });
@@ -919,7 +922,7 @@ export class Quantity
         }
 
         return new Quantity({
-            scalar: this.scalar.minus(other.to(this).scalar),
+            scalar: this.scalar.sub(other.to(this).scalar),
             numerator: this.numerator,
             denominator: this.denominator
         });
@@ -930,7 +933,7 @@ export class Quantity
         if (isNumber(other) || other instanceof Decimal)
         {
             return new Quantity({
-                scalar: this.scalar.times(other),
+                scalar: this.scalar.mul(other),
                 numerator: this.numerator,
                 denominator: this.denominator
             });
@@ -959,7 +962,7 @@ export class Quantity
         let numden = this.cleanTerms(op1.numerator.concat(op2.numerator), op1.denominator.concat(op2.denominator));
 
         return new Quantity({
-            scalar: op1.scalar.times(op2.scalar),
+            scalar: op1.scalar.mul(op2.scalar),
             numerator: numden[0],
             denominator: numden[1]
         });
@@ -1273,7 +1276,7 @@ export class Quantity
 
 			if (Quantity.PREFIX_VALUES[unit])
 			{
-				q = q.times(Quantity.PREFIX_VALUES[unit]);
+				q = q.mul(Quantity.PREFIX_VALUES[unit]);
 			}
 			else
 			{
@@ -1281,7 +1284,7 @@ export class Quantity
 
 				if (unit)
 				{
-					q = q.times(unit.scalar);
+					q = q.mul(unit.scalar);
 
 					if (unit.numerator)
 					{
@@ -1353,11 +1356,11 @@ export class Quantity
 			case "tempK":
 				dstScalar = src.baseScalar; break;
 			case "tempC":
-				dstScalar = src.baseScalar.minus(273.15); break;
+				dstScalar = src.baseScalar.sub(273.15); break;
 			case "tempF":
-				dstScalar = src.baseScalar.times(9/5).minus(459.67); break;
+				dstScalar = src.baseScalar.mul(9/5).sub(459.67); break;
 			case "tempR":
-				dstScalar = src.baseScalar.times(9/5); break;
+				dstScalar = src.baseScalar.mul(9/5); break;
 			default:
 				throw new Error("Unknown type for temp conversion to: " + dstUnits);
 		}
@@ -1372,7 +1375,7 @@ export class Quantity
 	private toTempK(qty: Quantity) : Quantity
 	{
 		let units = qty.units(),
-			q : decimal.Decimal;
+			q : Decimal;
 
 		if (units.match(/(deg)[CFRK]/))
 		{
@@ -1383,9 +1386,9 @@ export class Quantity
 			switch(units)
 			{
 				case "tempK": q = qty.scalar; break;
-				case "tempC": q = qty.scalar.plus(273.15); break;
-				case "tempF": q = qty.scalar.plus(459.67).times(5/9); break;
-				case "tempR": q = qty.scalar.times(5/9); break;
+				case "tempC": q = qty.scalar.add(273.15); break;
+				case "tempF": q = qty.scalar.add(459.67).mul(5/9); break;
+				case "tempR": q = qty.scalar.mul(5/9); break;
 				default:
 					throw new Error("Unknown type for temp conversion from: " + units);
 			}
@@ -1408,8 +1411,8 @@ export class Quantity
 		{
 			case "degK": dstScalar = srcDegK.scalar; break;
 			case "degC": dstScalar = srcDegK.scalar; break;
-			case "degF": dstScalar = srcDegK.scalar.times(9/5); break;
-			case "degR": dstScalar = srcDegK.scalar.times(9/5); break;
+			case "degF": dstScalar = srcDegK.scalar.mul(9/5); break;
+			case "degR": dstScalar = srcDegK.scalar.mul(9/5); break;
 			default:
 				throw new Error("Unknown type for degree conversion to: " + dstUnits);
 		}
@@ -1436,8 +1439,8 @@ export class Quantity
 			{
 				case "tempK": q = qty.scalar; break;
 				case "tempC": q = qty.scalar; break;
-				case "tempF": q = qty.scalar.times(5/9); break;
-				case "tempR": q = qty.scalar.times(5/9); break;
+				case "tempF": q = qty.scalar.mul(5/9); break;
+				case "tempR": q = qty.scalar.mul(5/9); break;
 				default: throw new Error("Unknown type for temp conversion from: " + units);
 			}
 		}
@@ -1457,7 +1460,7 @@ export class Quantity
 			dstDegrees = new Quantity(this.getDegreeUnits(lhsUnits));
 
 		return new Quantity({
-			scalar: lhs.scalar.minus(rhsConverted.scalar),
+			scalar: lhs.scalar.sub(rhsConverted.scalar),
 			numerator: dstDegrees.numerator,
 			denominator: dstDegrees.denominator
 		});
@@ -1468,7 +1471,7 @@ export class Quantity
 		let tempDegrees = deg.to(this.getDegreeUnits(temp.units()));
 
 		return new Quantity({
-			scalar: temp.scalar.minus(tempDegrees.scalar),
+			scalar: temp.scalar.sub(tempDegrees.scalar),
 			numerator: temp.numerator,
 			denominator: temp.denominator
 		});
@@ -1479,7 +1482,7 @@ export class Quantity
 		let tempDegrees = deg.to(this.getDegreeUnits(temp.units()));
 
 		return new Quantity({
-			scalar: temp.scalar.plus(tempDegrees.scalar),
+			scalar: temp.scalar.add(tempDegrees.scalar),
 			numerator: temp.numerator,
 			denominator: temp.denominator
 		});

@@ -1,5 +1,6 @@
+import { Decimal } from '@neutrium/math';
 export interface IQuantityDefinition {
-    scalar: decimal.Decimal;
+    scalar: Decimal;
     numerator?: string[];
     denominator?: string[];
 }

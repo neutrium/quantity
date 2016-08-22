@@ -10,10 +10,9 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 "use strict";
-/// <reference path="../typings/globals/decimal.js/index.d.ts" />
 var utilities_1 = require("@neutrium/utilities");
 var DefinitionObject_1 = require("./DefinitionObject");
-var Decimal = require('decimal.js');
+var math_1 = require('@neutrium/math');
 var isNumber = utilities_1.typeguards.isNumber;
 var isString = utilities_1.typeguards.isString;
 var Quantity = (function () {
@@ -32,7 +31,7 @@ var Quantity = (function () {
         }
         else if (initUnits) {
             this.parse.call(this, initUnits);
-            this.scalar = new Decimal(initValue);
+            this.scalar = new math_1.Decimal(initValue);
         }
         else {
             this.parse.call(this, initValue);
@@ -230,7 +229,7 @@ var Quantity = (function () {
             throw new Error("Divide by zero");
         }
         return new Quantity({
-            scalar: new Decimal(1).div(this.scalar),
+            scalar: new math_1.Decimal(1).div(this.scalar),
             numerator: this.denominator,
             denominator: this.numerator
         });
@@ -286,7 +285,7 @@ var Quantity = (function () {
             return this.addTempDegrees(other, this);
         }
         return new Quantity({
-            scalar: this.scalar.plus(other.to(this).scalar),
+            scalar: this.scalar.add(other.to(this).scalar),
             numerator: this.numerator,
             denominator: this.denominator
         });
@@ -308,15 +307,15 @@ var Quantity = (function () {
             throw new Error("Cannot subtract a temperature from a differential degree unit");
         }
         return new Quantity({
-            scalar: this.scalar.minus(other.to(this).scalar),
+            scalar: this.scalar.sub(other.to(this).scalar),
             numerator: this.numerator,
             denominator: this.denominator
         });
     };
     Quantity.prototype.mul = function (other) {
-        if (isNumber(other) || other instanceof Decimal) {
+        if (isNumber(other) || other instanceof math_1.Decimal) {
             return new Quantity({
-                scalar: this.scalar.times(other),
+                scalar: this.scalar.mul(other),
                 numerator: this.numerator,
                 denominator: this.denominator
             });
@@ -336,13 +335,13 @@ var Quantity = (function () {
         }
         var numden = this.cleanTerms(op1.numerator.concat(op2.numerator), op1.denominator.concat(op2.denominator));
         return new Quantity({
-            scalar: op1.scalar.times(op2.scalar),
+            scalar: op1.scalar.mul(op2.scalar),
             numerator: numden[0],
             denominator: numden[1]
         });
     };
     Quantity.prototype.div = function (other) {
-        if (isNumber(other) || other instanceof Decimal) {
+        if (isNumber(other) || other instanceof math_1.Decimal) {
             return new Quantity({
                 "scalar": this.scalar.div(other),
                 "numerator": this.numerator,
@@ -448,10 +447,10 @@ var Quantity = (function () {
         if (scalarMatch) {
             // Allow whitespaces between sign and scalar for loose parsing
             scalarMatch = scalarMatch.replace(/\s/g, "");
-            this.scalar = new Decimal(scalarMatch);
+            this.scalar = new math_1.Decimal(scalarMatch);
         }
         else {
-            this.scalar = new Decimal(1);
+            this.scalar = new math_1.Decimal(1);
         }
         var top = result[2], bottom = result[3], n, x, nx;
         // TODO DRY me
@@ -544,16 +543,16 @@ var Quantity = (function () {
         return normalizedUnits;
     };
     Quantity.prototype.toBaseUnits = function (numerator, denominator) {
-        var num = [], den = [], q = new Decimal(1), unit;
+        var num = [], den = [], q = new math_1.Decimal(1), unit;
         for (var i = 0; i < numerator.length; i++) {
             unit = numerator[i];
             if (Quantity.PREFIX_VALUES[unit]) {
-                q = q.times(Quantity.PREFIX_VALUES[unit]);
+                q = q.mul(Quantity.PREFIX_VALUES[unit]);
             }
             else {
                 unit = Quantity.UNIT_VALUES[unit];
                 if (unit) {
-                    q = q.times(unit.scalar);
+                    q = q.mul(unit.scalar);
                     if (unit.numerator) {
                         num.push(unit.numerator);
                     }
@@ -602,13 +601,13 @@ var Quantity = (function () {
                 dstScalar = src.baseScalar;
                 break;
             case "tempC":
-                dstScalar = src.baseScalar.minus(273.15);
+                dstScalar = src.baseScalar.sub(273.15);
                 break;
             case "tempF":
-                dstScalar = src.baseScalar.times(9 / 5).minus(459.67);
+                dstScalar = src.baseScalar.mul(9 / 5).sub(459.67);
                 break;
             case "tempR":
-                dstScalar = src.baseScalar.times(9 / 5);
+                dstScalar = src.baseScalar.mul(9 / 5);
                 break;
             default:
                 throw new Error("Unknown type for temp conversion to: " + dstUnits);
@@ -630,13 +629,13 @@ var Quantity = (function () {
                     q = qty.scalar;
                     break;
                 case "tempC":
-                    q = qty.scalar.plus(273.15);
+                    q = qty.scalar.add(273.15);
                     break;
                 case "tempF":
-                    q = qty.scalar.plus(459.67).times(5 / 9);
+                    q = qty.scalar.add(459.67).mul(5 / 9);
                     break;
                 case "tempR":
-                    q = qty.scalar.times(5 / 9);
+                    q = qty.scalar.mul(5 / 9);
                     break;
                 default:
                     throw new Error("Unknown type for temp conversion from: " + units);
@@ -658,10 +657,10 @@ var Quantity = (function () {
                 dstScalar = srcDegK.scalar;
                 break;
             case "degF":
-                dstScalar = srcDegK.scalar.times(9 / 5);
+                dstScalar = srcDegK.scalar.mul(9 / 5);
                 break;
             case "degR":
-                dstScalar = srcDegK.scalar.times(9 / 5);
+                dstScalar = srcDegK.scalar.mul(9 / 5);
                 break;
             default:
                 throw new Error("Unknown type for degree conversion to: " + dstUnits);
@@ -686,10 +685,10 @@ var Quantity = (function () {
                     q = qty.scalar;
                     break;
                 case "tempF":
-                    q = qty.scalar.times(5 / 9);
+                    q = qty.scalar.mul(5 / 9);
                     break;
                 case "tempR":
-                    q = qty.scalar.times(5 / 9);
+                    q = qty.scalar.mul(5 / 9);
                     break;
                 default: throw new Error("Unknown type for temp conversion from: " + units);
             }
@@ -703,7 +702,7 @@ var Quantity = (function () {
     Quantity.prototype.subtractTemperatures = function (lhs, rhs) {
         var lhsUnits = lhs.units(), rhsConverted = rhs.to(lhsUnits), dstDegrees = new Quantity(this.getDegreeUnits(lhsUnits));
         return new Quantity({
-            scalar: lhs.scalar.minus(rhsConverted.scalar),
+            scalar: lhs.scalar.sub(rhsConverted.scalar),
             numerator: dstDegrees.numerator,
             denominator: dstDegrees.denominator
         });
@@ -711,7 +710,7 @@ var Quantity = (function () {
     Quantity.prototype.subtractTempDegrees = function (temp, deg) {
         var tempDegrees = deg.to(this.getDegreeUnits(temp.units()));
         return new Quantity({
-            scalar: temp.scalar.minus(tempDegrees.scalar),
+            scalar: temp.scalar.sub(tempDegrees.scalar),
             numerator: temp.numerator,
             denominator: temp.denominator
         });
@@ -719,7 +718,7 @@ var Quantity = (function () {
     Quantity.prototype.addTempDegrees = function (temp, deg) {
         var tempDegrees = deg.to(this.getDegreeUnits(temp.units()));
         return new Quantity({
-            scalar: temp.scalar.plus(tempDegrees.scalar),
+            scalar: temp.scalar.add(tempDegrees.scalar),
             numerator: temp.numerator,
             denominator: temp.denominator
         });
@@ -1199,15 +1198,20 @@ var Quantity = (function () {
                 "<dram>": [["dram", "drams", "dr"], 0.0017718452],
                 "<gram>": [["g", "gram", "grams", "gramme", "grammes"], 1e-3],
                 "<grain>": [["grain", "grains", "gr"], 6.479891E-5],
-                "<pound>": [["lbs", "lb", "pound", "pounds", "#"], 0.45359237],
-                "<pound-troy>": [["lbt"], 0.3732417],
+                "<hundredweight-short>": [["cwt(s)"], 45.359237],
+                "<hundredweight-long>": [["cwt(l)"], 50.80234544],
                 "<ounce>": [["oz", "ounce", "ounces"], 0.0283495231],
                 "<ounce-troy>": [["ozt"], 0.031103477],
+                "<pennyweight>": [["dwt"], 0.00155517384],
+                "<pound>": [["lbs", "lb", "pound", "pounds", "#"], 0.45359237],
+                "<pound-troy>": [["lbt"], 0.3732417],
+                "<quarter-short>": [["qr(s)"], 11.33980925],
+                "<quarter-long>": [["qr(l)"], 12.70058636],
                 "<slug>": [["slug", "slugs"], 14.5939029],
                 "<stone>": [["stone", "stones", "st"], 6.35029318],
                 "<ton-metric>": [["t", "tonne"], 1000],
-                "<ton-long>": [["tnl", "tonl"], 1016.0469088],
-                "<ton-short>": [["tn", "ton", "tons"], 907.18474],
+                "<ton-long>": [["tnl", "ton(l)", "tonl"], 1016.0469088],
+                "<ton-short>": [["tn", "ton", "ton(s)", "tons"], 907.18474],
             }
         },
         power: {
@@ -1343,11 +1347,11 @@ var Quantity = (function () {
                 "<cup-imperial>": [["cup(imp)"], 2.84130625e-4],
                 "<cup-us-customary>": [["cup(usc)"], 2.365882365e-4],
                 "<cup-us-legal>": [["cup(usl)"], 0.00024],
-                "<dram>": [["dr(f)", "dram(f)"], 3.6966911953E-06],
+                "<dram-fluid>": [["dr(f)", "dram(f)"], 3.6966911953E-06],
                 "<drum-metric-petroleum>": [["drum(mp)"], 0.2],
                 "<drum-us-petroleum>": [["drum(usp)"], 0.208197648],
                 "<fluid-ounce>": [["floz", "fluid-ounce", "fluid-ounces"], 2.84130625e-5],
-                "<fluid-ounce-us>": [["oz(usf)", "floz(us)"], 2.95735296e-5],
+                "<fluid-ounce-us>": [["oz(usl)", "oz(usf)", "floz(us)"], 2.95735296e-5],
                 "<gallon-uk>": [["gal", "gal(imp)", "gal(uk)"], 0.00454609],
                 "<gallon-us-dry>": [["gal(usd)", "gal(us dry)"], 0.004404884],
                 "<gallon-us-liquid>": [["gal(us)", "gal(usl)", "gal(us fl)"], 0.003785412],

@@ -1,6 +1,6 @@
 {
   "name": "@neutrium/quantity",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "main": "dist/index.js",
   "typings": "dist/index",
   "description": "The NeutriumJS unit conversion module.",
@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@neutrium/utilities": "^2.0.0",
-    "decimal.js": "^6.0.0"
+    "@neutrium/math": "^0.1.0"
   },
   "scripts": {
     "clean": "rm -r ./dist/*",
