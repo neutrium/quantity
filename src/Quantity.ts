@@ -1622,11 +1622,12 @@ export class Quantity
 	// @param {string[]} units Normalized unit array
 	// @returns {string} String representing passed normalized unit array and suitable for output
 	//
-	private stringifyUnits(units : string[])
+	private stringifyUnits(units : string[]) : string
 	{
 		let stringified : NestedMap | string = Quantity.stringifiedUnitsCache.get(units);
 
-		if (stringified) {
+		if (stringified && typeof stringified === 'string')
+        {
 			return stringified;
 		}
 

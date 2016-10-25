@@ -501,9 +501,7 @@ var Quantity = (function () {
         if (bottom) {
             this.denominator = Quantity.parseUnits(bottom.trim());
         }
-        console.log(this);
     };
-    ;
     //
     // Parses and converts units string to normalized unit array.
     // Result is cached to speed up next calls.
@@ -820,7 +818,7 @@ var Quantity = (function () {
     //
     Quantity.prototype.stringifyUnits = function (units) {
         var stringified = Quantity.stringifiedUnitsCache.get(units);
-        if (stringified) {
+        if (stringified && typeof stringified === 'string') {
             return stringified;
         }
         var isUnity = utilities_1.compareArray(units, Quantity.UNITY_ARRAY);
