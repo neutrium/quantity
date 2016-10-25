@@ -1,6 +1,6 @@
 {
   "name": "@neutrium/quantity",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "main": "dist/index.js",
   "typings": "dist/index",
   "description": "The NeutriumJS unit conversion module.",
@@ -31,6 +31,6 @@
     "tsc": "tsc",
     "build": "npm run tsc",
     "prepublish": "npm run clean && npm run build",
-    "postinstall": "typings install"
+    "postinstall": ""
   }
 }

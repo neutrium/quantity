@@ -1204,8 +1204,7 @@ export class Quantity
 		{
 			this.denominator = Quantity.parseUnits(bottom.trim());
 		}
-        console.log(this);
-	};
+	}
 
 	//
 	// Parses and converts units string to normalized unit array.
