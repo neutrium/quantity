@@ -490,6 +490,9 @@ export class Quantity
 	private static UNIT_MATCH : string;
 	private static UNIT_MATCH_REGEX : RegExp;
 	private static UNIT_TEST_REGEX : RegExp;
+	// Numbers for conversion
+	private static FIVE_NINTHS = new Decimal("5").div("9");
+	private static NINE_FIFTHS = new Decimal("9").div("5");
 
     // Instance variables
     initValue : any;
@@ -497,7 +500,7 @@ export class Quantity
     numerator = Quantity.UNITY_ARRAY;
     denominator = Quantity.UNITY_ARRAY;
     baseScalar : Decimal;
-    signature : number;
+    signature : number = null;
     private _isBase : boolean;
     private _units : string;
 
@@ -610,18 +613,9 @@ export class Quantity
 
     clone() : Quantity
     {
-        let cloneObj = new Quantity('1');
-
-        for (let key in this)
-        {
-            if (this.hasOwnProperty(key))
-            {
-                cloneObj[key] = this[key];
-            }
-        }
-
-        return cloneObj;
+		return new Quantity(this);
     }
+
     //
     // Converts to other compatible units.
     // Instance's converted quantities are cached for faster subsequent calls.
@@ -682,11 +676,11 @@ export class Quantity
         {
             if (target.isTemperature())
             {
-                target = this.toTemp(this,target);
+                target = this.toTemp(this, target);
             }
             else if (target.isDegrees())
             {
-                target = this.toDegrees(this,target);
+                target = this.toDegrees(this, target);
             }
             else
             {
@@ -846,12 +840,12 @@ export class Quantity
         return (this.signature === null || this.signature === 400) &&
                 this.numerator.length === 1 &&
                 compareArray(this.denominator, Quantity.UNITY_ARRAY) &&
-                (this.numerator[0].match(/<temp-[CFRK]>/) || this.numerator[0].match(/<(kelvin|celsius|rankine|fahrenheit)>/));
+				(/<temp-[CFRK]>/.test(this.numerator[0]) || /<(kelvin|celsius|rankine|fahrenheit)>/.test(this.numerator[0]));
     }
 
     isTemperature()
     {
-        return this.isDegrees() && this.numerator[0].match(/<temp-[CFRK]>/);
+        return this.isDegrees() && /<temp-[CFRK]>/.test(this.numerator[0]);
     }
 
     // returns true if no associated units
@@ -1259,7 +1253,6 @@ export class Quantity
 		Quantity.parsedUnitsCache[cacheKey] = normalizedUnits;
 
 		return normalizedUnits;
-
 	}
 
 	toBaseUnits(numerator, denominator)
@@ -1344,7 +1337,6 @@ export class Quantity
 	}
 
 	// Temperature handling functions
-
 	private toTemp(src, dst) : Quantity
 	{
 		let dstUnits = dst.units(),
@@ -1355,11 +1347,11 @@ export class Quantity
 			case "tempK":
 				dstScalar = src.baseScalar; break;
 			case "tempC":
-				dstScalar = src.baseScalar.sub(273.15); break;
+				dstScalar = src.baseScalar.sub("273.15"); break;
 			case "tempF":
-				dstScalar = src.baseScalar.mul(9/5).sub(459.67); break;
+				dstScalar = src.baseScalar.mul(Quantity.NINE_FIFTHS).sub("459.67"); break;
 			case "tempR":
-				dstScalar = src.baseScalar.mul(9/5); break;
+				dstScalar = src.baseScalar.mul(Quantity.NINE_FIFTHS); break;
 			default:
 				throw new Error("Unknown type for temp conversion to: " + dstUnits);
 		}
@@ -1385,9 +1377,9 @@ export class Quantity
 			switch(units)
 			{
 				case "tempK": q = qty.scalar; break;
-				case "tempC": q = qty.scalar.add(273.15); break;
-				case "tempF": q = qty.scalar.add(459.67).mul(5/9); break;
-				case "tempR": q = qty.scalar.mul(5/9); break;
+				case "tempC": q = qty.scalar.add("273.15"); break;
+				case "tempF": q = qty.scalar.add("459.67").mul(Quantity.FIVE_NINTHS); break;
+				case "tempR": q = qty.scalar.mul(Quantity.FIVE_NINTHS); break;
 				default:
 					throw new Error("Unknown type for temp conversion from: " + units);
 			}
@@ -1410,8 +1402,8 @@ export class Quantity
 		{
 			case "degK": dstScalar = srcDegK.scalar; break;
 			case "degC": dstScalar = srcDegK.scalar; break;
-			case "degF": dstScalar = srcDegK.scalar.mul(9/5); break;
-			case "degR": dstScalar = srcDegK.scalar.mul(9/5); break;
+			case "degF": dstScalar = srcDegK.scalar.mul(Quantity.NINE_FIFTHS); break;
+			case "degR": dstScalar = srcDegK.scalar.mul(Quantity.NINE_FIFTHS); break;
 			default:
 				throw new Error("Unknown type for degree conversion to: " + dstUnits);
 		}
@@ -1438,8 +1430,8 @@ export class Quantity
 			{
 				case "tempK": q = qty.scalar; break;
 				case "tempC": q = qty.scalar; break;
-				case "tempF": q = qty.scalar.mul(5/9); break;
-				case "tempR": q = qty.scalar.mul(5/9); break;
+				case "tempF": q = qty.scalar.mul(Quantity.FIVE_NINTHS); break;
+				case "tempR": q = qty.scalar.mul(Quantity.FIVE_NINTHS); break;
 				default: throw new Error("Unknown type for temp conversion from: " + units);
 			}
 		}
@@ -1512,7 +1504,6 @@ export class Quantity
 
 		if (this.isBase())
 		{
-
 			this.baseScalar = this.scalar;
 			this.signature = this.unitSignature.call(this);
 		}

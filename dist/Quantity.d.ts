@@ -46,6 +46,8 @@ export declare class Quantity {
     private static UNIT_MATCH;
     private static UNIT_MATCH_REGEX;
     private static UNIT_TEST_REGEX;
+    private static FIVE_NINTHS;
+    private static NINE_FIFTHS;
     initValue: any;
     scalar: Decimal;
     numerator: string[];
@@ -64,8 +66,8 @@ export declare class Quantity {
     inverse(): Quantity;
     units(): string;
     isInverse(other: string | Quantity): any;
-    isDegrees(): RegExpMatchArray;
-    isTemperature(): RegExpMatchArray;
+    isDegrees(): boolean;
+    isTemperature(): boolean;
     isUnitless(): boolean;
     add(other: any): Quantity;
     sub(other: any): Quantity;
