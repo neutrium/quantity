@@ -960,7 +960,42 @@ export class Quantity
             numerator: numden[0],
             denominator: numden[1]
         });
-    }
+	}
+
+	pow(yy : number | string | Decimal)
+	{
+		yy = new Decimal(yy);
+
+		if(!yy.isInt())
+		{
+			throw Error("Raising quantities to a fractional power not currently supported");
+		}
+
+		let num = this.numerator,
+			den = this.denominator;
+
+		for(let i = 1, len = yy.abs().toNumber(); i < len; i++)
+		{
+			num = num.concat(this.numerator);
+			den = den.concat(this.denominator);
+		}
+
+		// Invert units for negative powers
+		if(yy.s < 0)
+		{
+			let temp = num;
+			num = den;
+			den = temp;
+		}
+
+		let numden = this.cleanTerms(num, den);
+
+		return new Quantity({
+            scalar: this.scalar.pow(yy),
+            numerator: numden[0],
+            denominator: numden[1]
+        });
+	}
 
     div(other)
     {

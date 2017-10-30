@@ -139,6 +139,7 @@ Available operators include:
 - sub(other): Subtract - other can be string or quantity. other should be unit compatible.
 - mul(other): Multiply - other can be string, Decimal, number or quantity.
 - div(other): Divide - other can be string, Decimal, number or quantity.
+- pow(y): Power - y must be an integer stored in a number, string or Decimal (fractional powers not supported)
 - inverse() : Inverse - inverse the unit set and scalar value (with no special special unit checking).
 
 ### Temperatures

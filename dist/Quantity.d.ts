@@ -72,6 +72,7 @@ export declare class Quantity {
     add(other: any): Quantity;
     sub(other: any): Quantity;
     mul(other: any): Quantity;
+    pow(yy: number | string | Decimal): Quantity;
     div(other: any): Quantity;
     compareTo(other: any): any;
     eq(other: string | Quantity): boolean;
