@@ -75,11 +75,11 @@ export declare class Quantity {
     pow(yy: number | string | Decimal): Quantity;
     div(other: any): Quantity;
     compareTo(other: any): any;
-    eq(other: string | Quantity): boolean;
-    lt(other: string | Quantity): boolean;
-    lte(other: string | Quantity): boolean;
-    gt(other: string | Quantity): boolean;
-    gte(other: string | Quantity): boolean;
+    eq(other: string | number | Quantity): boolean;
+    lt(other: string | number | Quantity): boolean;
+    lte(other: string | number | Quantity): boolean;
+    gt(other: string | number | Quantity): boolean;
+    gte(other: string | number | Quantity): boolean;
     same(other: Quantity): boolean;
     private parse(val);
     private static parseUnits(units);

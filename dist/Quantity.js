@@ -779,7 +779,7 @@ var Quantity = /** @class */ (function () {
             return this.signature;
         }
         var vector = this.unitSignatureVector.call(this);
-        for (var i = 0; i < vector.length; i++) {
+        for (var i = 0, len = vector.length; i < len; i++) {
             vector[i] *= Math.pow(20, i); // Not sure if this equation is correct
         }
         return vector.reduce(function (previous, current) { return previous + current; }, 0);
@@ -795,7 +795,7 @@ var Quantity = /** @class */ (function () {
             vector[i] = 0;
         }
         // Numerator - ["<kilogram>","<meter>"]
-        for (var j = 0; j < this.numerator.length; j++) {
+        for (var j = 0, len = this.numerator.length; j < len; j++) {
             //Units - "<newton>"  : [["N","Newton","newton"], 1.0, "force", ["<kilogram>","<meter>"], ["<second>","<second>"]],
             if ((r = Quantity.UNIT_VALUES[this.numerator[j]])) {
                 n = Quantity.SIGNATURE_VECTOR.indexOf(r.category);
@@ -805,7 +805,7 @@ var Quantity = /** @class */ (function () {
                 }
             }
         }
-        for (var k = 0; k < this.denominator.length; k++) {
+        for (var k = 0, len = this.denominator.length; k < len; k++) {
             if ((r = Quantity.UNIT_VALUES[this.denominator[k]])) {
                 n = Quantity.SIGNATURE_VECTOR.indexOf(r.category);
                 if (n >= 0) {
@@ -868,7 +868,7 @@ var Quantity = /** @class */ (function () {
     };
     Quantity.prototype.getOutputNames = function (units) {
         var unitNames = [], token, tokenNext;
-        for (var i = 0; i < units.length; i++) {
+        for (var i = 0, len = units.length; i < len; i++) {
             token = units[i];
             tokenNext = units[i + 1];
             if (Quantity.PREFIX_VALUES[token]) {
@@ -885,7 +885,7 @@ var Quantity = /** @class */ (function () {
         num = num.filter(function (val) { return val !== Quantity.UNITY; });
         den = den.filter(function (val) { return val !== Quantity.UNITY; });
         var combined = {}, k;
-        for (var i = 0; i < num.length; i++) {
+        for (var i = 0, len = num.length; i < len; i++) {
             if (Quantity.PREFIX_VALUES[num[i]]) {
                 k = [num[i], num[i + 1]];
                 i++;

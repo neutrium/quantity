@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 */
 
 import { NestedMap, typeguards, compareArray } from "@neutrium/utilities";
-import { isQuantityDefinition, QuantityInitParam } from "./index";
+import { isQuantityDefinition, QuantityInitParam, QuantityInput } from "./index";
 import { Decimal } from '@neutrium/math';
 
 let isNumber = typeguards.isNumber;
@@ -503,23 +503,28 @@ export class Quantity {
 	private _isBase: boolean;
 	private _units: string;
 
-	static initialize() {
+	static initialize()
+	{
 		let definition = null;
 
-		for (let prefix in Quantity.PREFIXES) {
+		for (let prefix in Quantity.PREFIXES)
+		{
 			definition = Quantity.PREFIXES[prefix];
 			Quantity.PREFIX_VALUES[prefix] = definition[1];
 			Quantity.OUTPUT_MAP[prefix] = definition[0][0];
 
-			for (let i = 0; i < definition[0].length; i++) {
+			for (let i = 0; i < definition[0].length; i++)
+			{
 				Quantity.PREFIX_MAP[definition[0][i]] = prefix;
 			}
 		}
 
-		for (let categoryDef in Quantity.UNITS) {
+		for (let categoryDef in Quantity.UNITS)
+		{
 			let category = Quantity.UNITS[categoryDef];
 
-			for (let unitDef in category.units) {
+			for (let unitDef in category.units)
+			{
 				definition = category.units[unitDef];
 
 				Quantity.UNIT_VALUES[unitDef] = {
@@ -529,7 +534,8 @@ export class Quantity {
 					category: categoryDef
 				};
 
-				for (let j = 0; j < definition[0].length; j++) {
+				for (let j = 0; j < definition[0].length; j++)
+				{
 					Quantity.UNIT_MAP[definition[0][j]] = unitDef;
 				}
 
@@ -556,32 +562,40 @@ export class Quantity {
 	//
 	//  Allows construction as either new Quantity("3 m") or new Quantity(3, "m")
 	//
-	constructor(initValue: QuantityInitParam, initUnits?: string) {
+	constructor(initValue: QuantityInitParam, initUnits?: string)
+	{
 		// Need the definition object its used throughout -> make interface
-		if (isQuantityDefinition(initValue)) {
+		if (isQuantityDefinition(initValue))
+		{
 			this.scalar = initValue.scalar;
 			this.numerator = (initValue.numerator && initValue.numerator.length !== 0) ? initValue.numerator : Quantity.UNITY_ARRAY;
 			this.denominator = (initValue.denominator && initValue.denominator.length !== 0) ? initValue.denominator : Quantity.UNITY_ARRAY;
 		}
-		else if (initUnits) {
+		else if (initUnits)
+		{
 			this.parse.call(this, initUnits);
 			this.scalar = new Decimal(initValue);
 		}
-		else {
+		else
+		{
 			this.parse.call(this, initValue);
 		}
 
 		// math with temperatures is very limited
-		if (this.denominator.join("*").indexOf("temp") >= 0) {
+		if (this.denominator.join("*").indexOf("temp") >= 0)
+		{
 			throw new Error("Cannot divide with temperatures");
 		}
 
-		if (this.numerator.join("*").indexOf("temp") >= 0) {
-			if (this.numerator.length > 1) {
+		if (this.numerator.join("*").indexOf("temp") >= 0)
+		{
+			if (this.numerator.length > 1)
+			{
 				throw new Error("Cannot multiply by temperatures");
 			}
 
-			if (!compareArray(this.denominator, Quantity.UNITY_ARRAY)) {
+			if (!compareArray(this.denominator, Quantity.UNITY_ARRAY))
+			{
 				throw new Error("Cannot divide with temperatures");
 			}
 		}
@@ -589,13 +603,15 @@ export class Quantity {
 		this.initValue = initValue;
 		this.updateBaseScalar.call(this);
 
-		if (this.isTemperature() && this.baseScalar.lt(0)) {
+		if (this.isTemperature() && this.baseScalar.lt(0))
+		{
 			throw new Error("Temperatures must not be less than absolute zero");
 		}
 	}
 
 
-	clone(): Quantity {
+	clone(): Quantity
+	{
 		return new Quantity(this);
 	}
 
@@ -615,46 +631,58 @@ export class Quantity {
 	// weight.to("lb"); // => Quantity("55.11556554621939 lbs");
 	// weight.to(Quantity("3 g")); // => Quantity("25000 g"); // scalar of passed Qty is ignored
 	//
-	to(other: any) {
+	to(other: any)
+	{
 		let cached, target;
 
-		if (!other) {
+		if (!other)
+		{
 			return this;
 		}
 
-		if (!isString(other)) {
+		if (!isString(other))
+		{
 			return this.to(other.units());
 		}
 
 		cached = this.conversionCache[other];
 
-		if (cached) {
+		if (cached)
+		{
 			return cached;
 		}
 
 		// Instantiating target to normalize units
 		target = new Quantity(other);
 
-		if (target.units() === this.units()) {
+		if (target.units() === this.units())
+		{
 			return this;
 		}
 
-		if (!this.isCompatible(target)) {
-			if (this.isInverse(target)) {
+		if (!this.isCompatible(target))
+		{
+			if (this.isInverse(target))
+			{
 				target = this.inverse().to(other);
 			}
-			else {
+			else
+			{
 				this.throwIncompatibleUnits();
 			}
 		}
-		else {
-			if (target.isTemperature()) {
+		else
+		{
+			if (target.isTemperature())
+			{
 				target = this.toTemp(this, target);
 			}
-			else if (target.isDegrees()) {
+			else if (target.isDegrees())
+			{
 				target = this.toDegrees(this, target);
 			}
-			else {
+			else
+			{
 				let q = this.baseScalar.div(target.baseScalar);
 
 				target = new Quantity({
@@ -681,18 +709,22 @@ export class Quantity {
 	//
 	isCompatible(other: any)    // string | Quantity
 	{
-		if (isString(other)) {
+		if (isString(other))
+		{
 			return this.isCompatible(new Quantity(other));
 		}
 
-		if (!(other instanceof Quantity)) {
+		if (!(other instanceof Quantity))
+		{
 			return false;
 		}
 
-		if (other.signature !== undefined) {
+		if (other.signature !== undefined)
+		{
 			return this.signature === other.signature;
 		}
-		else {
+		else
+		{
 			return false;
 		}
 	}
@@ -858,22 +890,28 @@ export class Quantity {
 		});
 	}
 
-	sub(other) {
-		if (!isQuantityDefinition(other)) {
+	sub(other)
+	{
+		if (!isQuantityDefinition(other))
+		{
 			other = new Quantity(other);
 		}
 
-		if (!this.isCompatible(other)) {
+		if (!this.isCompatible(other))
+		{
 			this.throwIncompatibleUnits();
 		}
 
-		if (this.isTemperature() && other.isTemperature()) {
+		if (this.isTemperature() && other.isTemperature())
+		{
 			return this.subtractTemperatures(this, other);
 		}
-		else if (this.isTemperature()) {
+		else if (this.isTemperature())
+		{
 			return this.subtractTempDegrees(this, other);
 		}
-		else if (other.isTemperature()) {
+		else if (other.isTemperature())
+		{
 			throw new Error("Cannot subtract a temperature from a differential degree unit");
 		}
 
@@ -884,19 +922,23 @@ export class Quantity {
 		});
 	}
 
-	mul(other) {
-		if (isNumber(other) || other instanceof Decimal) {
+	mul(other)
+	{
+		if (isNumber(other) || other instanceof Decimal)
+		{
 			return new Quantity({
 				scalar: this.scalar.mul(other),
 				numerator: this.numerator,
 				denominator: this.denominator
 			});
 		}
-		else if (!isQuantityDefinition(other)) {
+		else if (!isQuantityDefinition(other))
+		{
 			other = new Quantity(other);
 		}
 
-		if ((this.isTemperature() || other.isTemperature()) && !(this.isUnitless() || other.isUnitless())) {
+		if ((this.isTemperature() || other.isTemperature()) && !(this.isUnitless() || other.isUnitless()))
+		{
 			throw new Error("Cannot multiply by temperatures");
 		}
 
@@ -906,7 +948,8 @@ export class Quantity {
 
 		// so as not to confuse results, multiplication and division between temperature degrees will maintain original unit info in num/den
 		// multiplication and division between deg[CFRK] can never factor each other out, only themselves: "degK*degC/degC^2" == "degK/degC"
-		if (op1.isCompatible(op2) && op1.signature !== 400) {
+		if (op1.isCompatible(op2) && op1.signature !== 400)
+		{
 			op2 = op2.to(op1);
 		}
 
@@ -919,23 +962,27 @@ export class Quantity {
 		});
 	}
 
-	pow(yy: number | string | Decimal) {
+	pow(yy: number | string | Decimal)
+	{
 		yy = new Decimal(yy);
 
-		if (!yy.isInt()) {
+		if (!yy.isInt())
+		{
 			throw Error("Raising quantities to a fractional power not currently supported");
 		}
 
 		let num = this.numerator,
 			den = this.denominator;
 
-		for (let i = 1, len = yy.abs().toNumber(); i < len; i++) {
+		for (let i = 1, len = yy.abs().toNumber(); i < len; i++)
+		{
 			num = num.concat(this.numerator);
 			den = den.concat(this.denominator);
 		}
 
 		// Invert units for negative powers
-		if (yy.s < 0) {
+		if (yy.s < 0)
+		{
 			let temp = num;
 			num = den;
 			den = temp;
@@ -950,22 +997,27 @@ export class Quantity {
 		});
 	}
 
-	div(other) {
-		if (isNumber(other) || other instanceof Decimal) {
+	div(other)
+	{
+		if (isNumber(other) || other instanceof Decimal)
+		{
 			return new Quantity({
 				"scalar": this.scalar.div(other),
 				"numerator": this.numerator,
 				"denominator": this.denominator
 			});
 		}
-		else if (!isQuantityDefinition(other)) {
+		else if (!isQuantityDefinition(other))
+		{
 			other = new Quantity(other);
 		}
 
-		if (other.isTemperature()) {
+		if (other.isTemperature())
+		{
 			throw new Error("Cannot divide with temperatures");
 		}
-		else if (this.isTemperature() && !other.isUnitless()) {
+		else if (this.isTemperature() && !other.isUnitless())
+		{
 			throw new Error("Cannot divide with temperatures");
 		}
 
@@ -975,7 +1027,8 @@ export class Quantity {
 
 		// so as not to confuse results, multiplication and division between temperature degrees will maintain original unit info in num/den
 		// multiplication and division between deg[CFRK] can never factor each other out, only themselves: "degK*degC/degC^2" == "degK/degC"
-		if (op1.isCompatible(op2) && op1.signature !== 400) {
+		if (op1.isCompatible(op2) && op1.signature !== 400)
+		{
 			op2 = op2.to(op1);
 		}
 
@@ -1001,50 +1054,62 @@ export class Quantity {
 	//     Qty("10ohm").inverse().compareTo("10S") == -1
 	//
 	//   If including inverses in the sort is needed, I suggest writing: Qty.sort(qtyArray,units)
-	compareTo(other) {
-		if (isString(other)) {
+	compareTo(other)
+	{
+		if (isString(other))
+		{
 			return this.compareTo(new Quantity(other));
 		}
 
-		if (!this.isCompatible(other)) {
+		if (!this.isCompatible(other))
+		{
 			this.throwIncompatibleUnits();
 		}
 
-		if (this.baseScalar.lt(other.baseScalar)) {
+		if (this.baseScalar.lt(other.baseScalar))
+		{
 			return -1;
 		}
-		else if (this.baseScalar.eq(other.baseScalar)) {
+		else if (this.baseScalar.eq(other.baseScalar))
+		{
 			return 0;
 		}
-		else if (this.baseScalar.gt(other.baseScalar)) {
+		else if (this.baseScalar.gt(other.baseScalar))
+		{
 			return 1;
 		}
 	}
 
-	eq(other: string | Quantity): boolean {
+	eq(other: string | number | Quantity): boolean
+	{
 		return this.compareTo(other) === 0;
 	}
 
-	lt(other: string | Quantity): boolean {
+	lt(other: string | number | Quantity): boolean
+	{
 		return this.compareTo(other) === -1;
 	}
 
-	lte(other: string | Quantity): boolean {
+	lte(other: string | number | Quantity): boolean
+	{
 		return this.eq(other) || this.lt(other);
 	}
 
-	gt(other: string | Quantity): boolean {
+	gt(other: string | number | Quantity): boolean
+	{
 		return this.compareTo(other) === 1;
 	}
 
-	gte(other: string | Quantity): boolean {
+	gte(other: string | number | Quantity): boolean
+	{
 		return this.eq(other) || this.gt(other);
 	}
 
 	// Return true if quantities and units match
 	// Quantity("100 cm").same(Quantity("100 cm"))  # => true
 	// Quantity("100 cm").same(Quantity("1 m"))     # => false
-	same(other: Quantity): boolean {
+	same(other: Quantity): boolean
+	{
 		return this.scalar.eq(other.scalar) && (this.units() === other.units());
 	}
 
@@ -1061,28 +1126,32 @@ export class Quantity {
 	// 6'4"  -- recognized as 6 feet + 4 inches
 	// 8 lbs 8 oz -- recognized as 8 lbs + 8 ounces
 	//
-	private parse(val: string) {
-
+	private parse(val: string)
+	{
 		val = (val + '').trim();
 
-		if (val.length === 0) {
+		if (val.length === 0)
+		{
 			throw new Error("Unit not recognized");
 		}
 
 		let result: string[] = Quantity.QTY_STRING_REGEX.exec(val);
 
-		if (!result) {
+		if (!result)
+		{
 			throw new Error(val + ": Quantity not recognized");
 		}
 
 		let scalarMatch = result[1];
 
-		if (scalarMatch) {
+		if (scalarMatch)
+		{
 			// Allow whitespaces between sign and scalar for loose parsing
 			scalarMatch = scalarMatch.replace(/\s/g, "");
 			this.scalar = new Decimal(scalarMatch);
 		}
-		else {
+		else
+		{
 			this.scalar = new Decimal(1);
 		}
 
@@ -1091,52 +1160,62 @@ export class Quantity {
 			n, x, nx: string;
 
 		// TODO DRY me
-		while ((result = Quantity.TOP_REGEX.exec(top))) {
+		while ((result = Quantity.TOP_REGEX.exec(top)))
+		{
 			n = parseFloat(result[2]);
 
-			if (isNaN(n)) {
+			if (isNaN(n))
+			{
 				// Prevents infinite loops
 				throw new Error("Unit exponent is not a number");
 			}
 
 			// Disallow unrecognized unit even if exponent is 0
-			if (n === 0 && !Quantity.UNIT_TEST_REGEX.test(result[1])) {
+			if (n === 0 && !Quantity.UNIT_TEST_REGEX.test(result[1]))
+			{
 				throw new Error("Unit not recognized");
 			}
 
 			x = result[1] + " ";
 			nx = "";
 
-			for (let i = 0; i < Math.abs(n); i++) {
+			for (let i = 0; i < Math.abs(n); i++)
+			{
 				nx += x;
 			}
 
-			if (n >= 0) {
+			if (n >= 0)
+			{
 				top = top.replace(result[0], nx);
 			}
-			else {
+			else
+			{
 				bottom = bottom ? bottom + nx : nx;
 				top = top.replace(result[0], "");
 			}
 		}
 
-		while ((result = Quantity.BOTTOM_REGEX.exec(bottom))) {
+		while ((result = Quantity.BOTTOM_REGEX.exec(bottom)))
+		{
 			n = parseFloat(result[2]);
 
-			if (isNaN(n)) {
+			if (isNaN(n))
+			{
 				// Prevents infinite loops
 				throw new Error("Unit exponent is not a number");
 			}
 
 			// Disallow unrecognized unit even if exponent is 0
-			if (n === 0 && !Quantity.UNIT_TEST_REGEX.test(result[1])) {
+			if (n === 0 && !Quantity.UNIT_TEST_REGEX.test(result[1]))
+			{
 				throw new Error("Unit not recognized");
 			}
 
 			x = result[1] + " ";
 			nx = "";
 
-			for (let j = 0; j < n; j++) {
+			for (let j = 0; j < n; j++)
+			{
 				nx += x;
 			}
 
@@ -1144,11 +1223,13 @@ export class Quantity {
 			bottom = bottom.replace(result[0], nx);
 		}
 
-		if (top) {
+		if (top)
+		{
 			this.numerator = Quantity.parseUnits(top.trim());
 		}
 
-		if (bottom) {
+		if (bottom)
+		{
 			this.denominator = Quantity.parseUnits(bottom.trim());
 		}
 	}
@@ -1164,13 +1245,15 @@ export class Quantity {
 	// // Returns ["<second>", "<meter>", "<second>"]
 	// parseUnits("s m s");
 	//
-	private static parseUnits(units) {
+	private static parseUnits(units)
+	{
 		let cacheKey = units,
 			cached = Quantity.parsedUnitsCache[units],
 			unitMatch,
 			normalizedUnits = [];
 
-		if (cached) {
+		if (cached)
+		{
 			return cached;
 		}
 
@@ -1178,15 +1261,18 @@ export class Quantity {
 		units = units.replace(/(\.|\*)/g, ' ');
 
 		// Scan
-		if (!Quantity.UNIT_TEST_REGEX.test(units)) {
+		if (!Quantity.UNIT_TEST_REGEX.test(units))
+		{
 			throw new Error("Unit not recognized");
 		}
 
-		while ((unitMatch = Quantity.UNIT_MATCH_REGEX.exec(units))) {
+		while ((unitMatch = Quantity.UNIT_MATCH_REGEX.exec(units)))
+		{
 			normalizedUnits.push(unitMatch.slice(1));
 		}
 
-		normalizedUnits = normalizedUnits.map(function (item) {
+		normalizedUnits = normalizedUnits.map(function (item)
+		{
 			return Quantity.PREFIX_MAP[item[0]] ? [Quantity.PREFIX_MAP[item[0]], Quantity.UNIT_MAP[item[1]]] : [Quantity.UNIT_MAP[item[1]]];
 		});
 
@@ -1204,52 +1290,65 @@ export class Quantity {
 		return normalizedUnits;
 	}
 
-	toBaseUnits(numerator, denominator) {
+	toBaseUnits(numerator, denominator)
+	{
 		let num = [],
 			den = [],
 			q = new Decimal(1),
 			unit;
 
-		for (let i = 0; i < numerator.length; i++) {
+		for (let i = 0; i < numerator.length; i++)
+		{
 			unit = numerator[i];
 
-			if (Quantity.PREFIX_VALUES[unit]) {
+			if (Quantity.PREFIX_VALUES[unit])
+			{
 				q = q.mul(Quantity.PREFIX_VALUES[unit]);
 			}
-			else {
+			else
+			{
 				unit = Quantity.UNIT_VALUES[unit];
 
-				if (unit) {
+				if (unit)
+				{
 					q = q.mul(unit.scalar);
 
-					if (unit.numerator) {
+					if (unit.numerator)
+					{
 						num.push(unit.numerator);
 					}
 
-					if (unit.denominator) {
+					if (unit.denominator)
+					{
 						den.push(unit.denominator);
 					}
 				}
 			}
 		}
 
-		for (let j = 0; j < denominator.length; j++) {
+		for (let j = 0; j < denominator.length; j++)
+		{
 			unit = denominator[j];
 
-			if (Quantity.PREFIX_VALUES[unit]) {
+			if (Quantity.PREFIX_VALUES[unit])
+			{
 				q = q.div(Quantity.PREFIX_VALUES[unit]);
 			}
-			else {
+			else
+			{
 				unit = Quantity.UNIT_VALUES[unit];
 
-				if (unit) {
+				if (unit)
+				{
 					q = q.div(unit.scalar);
 
-					if (unit.numerator) {
+					if (unit.numerator)
+					{
 						den.push(unit.numerator);
 					}
 
-					if (unit.denominator) {
+					if (unit.denominator)
+					{
 						num.push(unit.denominator);
 					}
 				}
@@ -1273,11 +1372,13 @@ export class Quantity {
 	}
 
 	// Temperature handling functions
-	private toTemp(src, dst): Quantity {
+	private toTemp(src, dst): Quantity
+	{
 		let dstUnits = dst.units(),
 			dstScalar;
 
-		switch (dstUnits) {
+		switch (dstUnits)
+		{
 			case "tempK":
 				dstScalar = src.baseScalar; break;
 			case "tempC":
@@ -1297,15 +1398,19 @@ export class Quantity {
 		});
 	}
 
-	private toTempK(qty: Quantity): Quantity {
+	private toTempK(qty: Quantity): Quantity
+	{
 		let units = qty.units(),
 			q: Decimal;
 
-		if (units.match(/(deg)[CFRK]/)) {
+		if (units.match(/(deg)[CFRK]/))
+		{
 			q = qty.baseScalar;
 		}
-		else {
-			switch (units) {
+		else
+		{
+			switch (units)
+			{
 				case "tempK": q = qty.scalar; break;
 				case "tempC": q = qty.scalar.add("273.15"); break;
 				case "tempF": q = qty.scalar.add("459.67").mul(Quantity.FIVE_NINTHS); break;
@@ -1322,12 +1427,14 @@ export class Quantity {
 		});
 	}
 
-	private toDegrees(src, dst): Quantity {
+	private toDegrees(src, dst): Quantity
+	{
 		let srcDegK = this.toDegK(src),
 			dstUnits = dst.units(),
 			dstScalar;
 
-		switch (dstUnits) {
+		switch (dstUnits)
+		{
 			case "degK": dstScalar = srcDegK.scalar; break;
 			case "degC": dstScalar = srcDegK.scalar; break;
 			case "degF": dstScalar = srcDegK.scalar.mul(Quantity.NINE_FIFTHS); break;
@@ -1343,15 +1450,19 @@ export class Quantity {
 		});
 	}
 
-	private toDegK(qty: Quantity): Quantity {
+	private toDegK(qty: Quantity): Quantity
+	{
 		let units = qty.units(),
 			q;
 
-		if (units.match(/(deg)[CFRK]/)) {
+		if (units.match(/(deg)[CFRK]/))
+		{
 			q = qty.baseScalar;
 		}
-		else {
-			switch (units) {
+		else
+		{
+			switch (units)
+			{
 				case "tempK": q = qty.scalar; break;
 				case "tempC": q = qty.scalar; break;
 				case "tempF": q = qty.scalar.mul(Quantity.FIVE_NINTHS); break;
@@ -1367,8 +1478,8 @@ export class Quantity {
 		});
 	}
 
-
-	private subtractTemperatures(lhs: Quantity, rhs: Quantity): Quantity {
+	private subtractTemperatures(lhs: Quantity, rhs: Quantity): Quantity
+	{
 		let lhsUnits = lhs.units(),
 			rhsConverted = rhs.to(lhsUnits),
 			dstDegrees = new Quantity(this.getDegreeUnits(lhsUnits));
@@ -1380,7 +1491,8 @@ export class Quantity {
 		});
 	}
 
-	private subtractTempDegrees(temp: Quantity, deg: Quantity): Quantity {
+	private subtractTempDegrees(temp: Quantity, deg: Quantity): Quantity
+	{
 		let tempDegrees = deg.to(this.getDegreeUnits(temp.units()));
 
 		return new Quantity({
@@ -1390,7 +1502,8 @@ export class Quantity {
 		});
 	}
 
-	private addTempDegrees(temp: Quantity, deg: Quantity): Quantity {
+	private addTempDegrees(temp: Quantity, deg: Quantity): Quantity
+	{
 		let tempDegrees = deg.to(this.getDegreeUnits(temp.units()));
 
 		return new Quantity({
@@ -1401,28 +1514,35 @@ export class Quantity {
 	}
 
 	// converts temp[CKFR] to deg[CKFR]
-	private getDegreeUnits(units) {
+	private getDegreeUnits(units)
+	{
 		let degrees = 'CKFR',
 			unit = units.slice(-1);
 
-		if (degrees.indexOf(unit) !== -1) {
+		if (degrees.indexOf(unit) !== -1)
+		{
 			return 'deg' + unit;
 		}
-		else {
+		else
+		{
 			throw new Error("Unknown type for temp conversion from: " + units);
 		}
 	}
 
-	private updateBaseScalar() {
-		if (this.baseScalar) {
+	private updateBaseScalar()
+	{
+		if (this.baseScalar)
+		{
 			return this.baseScalar;
 		}
 
-		if (this.isBase()) {
+		if (this.isBase())
+		{
 			this.baseScalar = this.scalar;
 			this.signature = this.unitSignature.call(this);
 		}
-		else {
+		else
+		{
 			let base = this.toBase();
 			this.baseScalar = base.scalar;
 			this.signature = base.signature;
@@ -1438,14 +1558,17 @@ export class Quantity {
 	// doi://10.1109/32.403789
 	// http://www.cs.utexas.edu/~novak/units95.html
 	//
-	private unitSignature() {
-		if (this.signature) {
+	private unitSignature()
+	{
+		if (this.signature)
+		{
 			return this.signature;
 		}
 
 		let vector = this.unitSignatureVector.call(this);
 
-		for (let i = 0; i < vector.length; i++) {
+		for (let i = 0, len = vector.length; i < len; i++)
+		{
 			vector[i] *= Math.pow(20, i);	// Not sure if this equation is correct
 		}
 
@@ -1453,36 +1576,45 @@ export class Quantity {
 	};
 
 	// calculates the unit signature vector used by unit_signature
-	private unitSignatureVector() {
-		if (!this.isBase()) {
+	private unitSignatureVector()
+	{
+		if (!this.isBase())
+		{
 			return this.unitSignatureVector.call(this.toBase());
 		}
 
 		let vector = new Array(Quantity.SIGNATURE_VECTOR.length),
 			r, n;
 
-		for (let i = 0; i < vector.length; i++) {
+		for (let i = 0; i < vector.length; i++)
+		{
 			vector[i] = 0;
 		}
 
 		// Numerator - ["<kilogram>","<meter>"]
-		for (let j = 0; j < this.numerator.length; j++) {
+		for (let j = 0, len = this.numerator.length; j < len; j++)
+		{
 			//Units - "<newton>"  : [["N","Newton","newton"], 1.0, "force", ["<kilogram>","<meter>"], ["<second>","<second>"]],
-			if ((r = Quantity.UNIT_VALUES[this.numerator[j]])) {
+			if ((r = Quantity.UNIT_VALUES[this.numerator[j]]))
+			{
 				n = Quantity.SIGNATURE_VECTOR.indexOf(r.category);
 
 				//SIGNATURE_VECTOR = ["length", "time", "temperature", "mass", "current", "substance", "luminosity", "currency", "memory", "angle", "capacitance"];
-				if (n >= 0) {
+				if (n >= 0)
+				{
 					vector[n] = vector[n] + 1;
 				}
 			}
 		}
 
-		for (let k = 0; k < this.denominator.length; k++) {
-			if ((r = Quantity.UNIT_VALUES[this.denominator[k]])) {
+		for (let k = 0, len = this.denominator.length; k < len; k++)
+		{
+			if ((r = Quantity.UNIT_VALUES[this.denominator[k]]))
+			{
 				n = Quantity.SIGNATURE_VECTOR.indexOf(r.category);
 
-				if (n >= 0) {
+				if (n >= 0)
+				{
 					vector[n] = vector[n] - 1;
 				}
 			}
@@ -1502,11 +1634,10 @@ export class Quantity {
 	//
 	// @returns {boolean} true if value is a string, false otherwise
 	//
-	private isString(value) {
+	private isString(value)
+	{
 		return typeof value === "string" || value instanceof String;
 	}
-
-
 
 	//
 	// Returns a string representing a normalized unit array
@@ -1514,19 +1645,23 @@ export class Quantity {
 	// @param {string[]} units Normalized unit array
 	// @returns {string} String representing passed normalized unit array and suitable for output
 	//
-	private stringifyUnits(units: string[]): string {
+	private stringifyUnits(units: string[]): string
+	{
 		let stringified: NestedMap | string = Quantity.stringifiedUnitsCache.get(units);
 
-		if (stringified && typeof stringified === 'string') {
+		if (stringified && typeof stringified === 'string')
+		{
 			return stringified;
 		}
 
 		let isUnity = compareArray(units, Quantity.UNITY_ARRAY);
 
-		if (isUnity) {
+		if (isUnity)
+		{
 			stringified = "1";
 		}
-		else {
+		else
+		{
 			stringified = this.simplify(this.getOutputNames(units)).join("*");
 		}
 
@@ -1537,11 +1672,14 @@ export class Quantity {
 	}
 
 	// this turns ['s','m','s'] into ['s2','m']
-	private simplify(units: string[]): string[] {
-		function reduce(acc, unit) {
+	private simplify(units: string[]): string[]
+	{
+		function reduce(acc, unit)
+		{
 			let unitCounter = acc[unit];
 
-			if (!unitCounter) {
+			if (!unitCounter)
+			{
 				acc.push(unitCounter = acc[unit] = [unit, 0]);
 			}
 
@@ -1557,64 +1695,81 @@ export class Quantity {
 		});
 	}
 
-	private getOutputNames(units: string[]): string[] {
+	private getOutputNames(units: string[]): string[]
+	{
 		let unitNames = [], token, tokenNext;
 
-		for (let i = 0; i < units.length; i++) {
+		for (let i = 0, len = units.length; i < len; i++)
+		{
 			token = units[i];
 			tokenNext = units[i + 1];
 
-			if (Quantity.PREFIX_VALUES[token]) {
+			if (Quantity.PREFIX_VALUES[token])
+			{
 				unitNames.push(Quantity.OUTPUT_MAP[token] + Quantity.OUTPUT_MAP[tokenNext]);
 				i++;
 			}
-			else {
+			else
+			{
 				unitNames.push(Quantity.OUTPUT_MAP[token]);
 			}
 		}
 		return unitNames;
 	}
 
-	cleanTerms(num, den) {
+	cleanTerms(num, den)
+	{
 		num = num.filter(function (val) { return val !== Quantity.UNITY; });
 		den = den.filter(function (val) { return val !== Quantity.UNITY; });
 
 		let combined = {},
 			k;
 
-		for (let i = 0; i < num.length; i++) {
-			if (Quantity.PREFIX_VALUES[num[i]]) {
+		for (let i = 0, len = num.length; i < len; i++)
+		{
+			if (Quantity.PREFIX_VALUES[num[i]])
+			{
 				k = [num[i], num[i + 1]];
 				i++;
 			}
-			else {
+			else
+			{
 				k = num[i];
 			}
 
-			if (k && k !== Quantity.UNITY) {
-				if (combined[k]) {
+			if (k && k !== Quantity.UNITY)
+			{
+				if (combined[k])
+				{
 					combined[k][0]++;
 				}
-				else {
+				else
+				{
 					combined[k] = [1, k];
 				}
 			}
 		}
 
-		for (let j = 0; j < den.length; j++) {
-			if (Quantity.PREFIX_VALUES[den[j]]) {
+		for (let j = 0; j < den.length; j++)
+		{
+			if (Quantity.PREFIX_VALUES[den[j]])
+			{
 				k = [den[j], den[j + 1]];
 				j++;
 			}
-			else {
+			else
+			{
 				k = den[j];
 			}
 
-			if (k && k !== Quantity.UNITY) {
-				if (combined[k]) {
+			if (k && k !== Quantity.UNITY)
+			{
+				if (combined[k])
+				{
 					combined[k][0]--;
 				}
-				else {
+				else
+				{
 					combined[k] = [-1, k];
 				}
 			}
@@ -1623,29 +1778,37 @@ export class Quantity {
 		num = [];
 		den = [];
 
-		for (let prop in combined) {
-			if (combined.hasOwnProperty(prop)) {
+		for (let prop in combined)
+		{
+			if (combined.hasOwnProperty(prop))
+			{
 				let item = combined[prop],
 					n;
 
-				if (item[0] > 0) {
-					for (n = 0; n < item[0]; n++) {
+				if (item[0] > 0)
+				{
+					for (n = 0; n < item[0]; n++)
+					{
 						num.push(item[1]);
 					}
 				}
-				else if (item[0] < 0) {
-					for (n = 0; n < -item[0]; n++) {
+				else if (item[0] < 0)
+				{
+					for (n = 0; n < -item[0]; n++)
+					{
 						den.push(item[1]);
 					}
 				}
 			}
 		}
 
-		if (num.length === 0) {
+		if (num.length === 0)
+		{
 			num = Quantity.UNITY_ARRAY;
 		}
 
-		if (den.length === 0) {
+		if (den.length === 0)
+		{
 			den = Quantity.UNITY_ARRAY;
 		}
 
@@ -1666,7 +1829,8 @@ export class Quantity {
     *
     * @throws "Incompatible units" error
     */
-	private throwIncompatibleUnits() {
+	private throwIncompatibleUnits()
+	{
 		throw new Error("Incompatible units");
 	}
 }
