@@ -1,6 +1,6 @@
 {
   "name": "@neutrium/quantity",
-  "version": "3.0.5",
+  "version": "3.0.6",
   "main": "dist/index.js",
   "typings": "dist/index",
   "description": "The NeutriumJS unit conversion module.",

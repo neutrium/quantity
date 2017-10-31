@@ -1,4 +1,4 @@
-import {Decimal} from '@neutrium/math';
+import { Decimal } from '@neutrium/math';
 
 export interface IQuantityDefinition
 {
@@ -11,3 +11,5 @@ export function isQuantityDefinition(value: any): value is IQuantityDefinition
 {
     return (<IQuantityDefinition>value).scalar !== undefined;
 }
+
+export type QuantityInitParam = string | number | Decimal | IQuantityDefinition;

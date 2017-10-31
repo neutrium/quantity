@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 */
 
 import { NestedMap, typeguards, compareArray } from "@neutrium/utilities";
-import { IQuantityDefinition, isQuantityDefinition } from "./DefinitionObject";
+import { isQuantityDefinition, QuantityInitParam } from "./index";
 import { Decimal } from '@neutrium/math';
 
 let isNumber = typeguards.isNumber;
@@ -556,7 +556,7 @@ export class Quantity {
 	//
 	//  Allows construction as either new Quantity("3 m") or new Quantity(3, "m")
 	//
-	constructor(initValue: string | number | Decimal | IQuantityDefinition, initUnits?: string) {
+	constructor(initValue: QuantityInitParam, initUnits?: string) {
 		// Need the definition object its used throughout -> make interface
 		if (isQuantityDefinition(initValue)) {
 			this.scalar = initValue.scalar;
@@ -699,18 +699,22 @@ export class Quantity {
 
 	// convert to base SI units
 	// results of the conversion are cached so subsequent calls to this will be fast
-	toBase() {
-		if (this.isBase()) {
+	toBase()
+	{
+		if (this.isBase())
+		{
 			return this;
 		}
 
-		if (this.isTemperature()) {
+		if (this.isTemperature())
+		{
 			return this.toTempK(this);
 		}
 
 		let cached = Quantity.baseUnitCache[this.units()];
 
-		if (!cached) {
+		if (!cached)
+		{
 			cached = this.toBaseUnits(this.numerator, this.denominator);
 			Quantity.baseUnitCache[this.units()] = cached;
 		}
@@ -718,23 +722,29 @@ export class Quantity {
 		return cached.mul(this.scalar);
 	}
 
-	isBase() {
-		if (this._isBase !== undefined) {
+	isBase()
+	{
+		if (this._isBase !== undefined)
+		{
 			return this._isBase;
 		}
 
-		if (this.isDegrees() && this.numerator[0].match(/<(kelvin|temp-K)>/)) {
+		if (this.isDegrees() && this.numerator[0].match(/<(kelvin|temp-K)>/))
+		{
 			this._isBase = true;
 			return this._isBase;
 		}
 
-		this.numerator.concat(this.denominator).forEach(function (item) {
-			if (item !== Quantity.UNITY && Quantity.BASE_UNITS.indexOf(item) === -1) {
+		this.numerator.concat(this.denominator).forEach(function (item)
+		{
+			if (item !== Quantity.UNITY && Quantity.BASE_UNITS.indexOf(item) === -1)
+			{
 				this._isBase = false;
 			}
 		}, this);
 
-		if (this._isBase === false) {
+		if (this._isBase === false)
+		{
 			return this._isBase;
 		}
 
@@ -744,12 +754,15 @@ export class Quantity {
 	}
 
 	// Returns a Qty that is the inverse of this Qty,
-	inverse() {
-		if (this.isTemperature()) {
+	inverse()
+	{
+		if (this.isTemperature())
+		{
 			throw new Error("Cannot divide with temperatures");
 		}
 
-		if (this.scalar.eq(0)) {
+		if (this.scalar.eq(0))
+		{
 			throw new Error("Divide by zero");
 		}
 
@@ -760,15 +773,18 @@ export class Quantity {
 		});
 	}
 
-	units() {
-		if (this._units !== undefined) {
+	units()
+	{
+		if (this._units !== undefined)
+		{
 			return this._units;
 		}
 
 		let numIsUnity = compareArray(this.numerator, Quantity.UNITY_ARRAY),
 			denIsUnity = compareArray(this.denominator, Quantity.UNITY_ARRAY);
 
-		if (numIsUnity && denIsUnity) {
+		if (numIsUnity && denIsUnity)
+		{
 			this._units = "";
 			return this._units;
 		}
@@ -781,11 +797,13 @@ export class Quantity {
 		return this._units;
 	}
 
-	isInverse(other: string | Quantity) {
+	isInverse(other: string | Quantity)
+	{
 		return this.inverse().isCompatible(other);
 	}
 
-	isDegrees() {
+	isDegrees()
+	{
 		// signature may not have been calculated yet
 		return (this.signature === null || this.signature === 400) &&
 			this.numerator.length === 1 &&
@@ -793,35 +811,43 @@ export class Quantity {
 			(/<temp-[CFRK]>/.test(this.numerator[0]) || /<(kelvin|celsius|rankine|fahrenheit)>/.test(this.numerator[0]));
 	}
 
-	isTemperature() {
+	isTemperature()
+	{
 		return this.isDegrees() && /<temp-[CFRK]>/.test(this.numerator[0]);
 	}
 
 	// returns true if no associated units
 	// false, even if the units are "unitless" like 'radians, each, etc'
-	isUnitless() {
+	isUnitless()
+	{
 		return compareArray(this.numerator, Quantity.UNITY_ARRAY) && compareArray(this.denominator, Quantity.UNITY_ARRAY);
 	}
 
 	//
 	// Mathematical operations on quantities
 	//
-	add(other) {
-		if (!isQuantityDefinition(other)) {
+	add(other)
+	{
+		if (!isQuantityDefinition(other))
+		{
 			other = new Quantity(other);
 		}
 
-		if (!this.isCompatible(other)) {
+		if (!this.isCompatible(other))
+		{
 			this.throwIncompatibleUnits();
 		}
 
-		if (this.isTemperature() && other.isTemperature()) {
+		if (this.isTemperature() && other.isTemperature())
+		{
 			throw new Error("Cannot add two temperatures");
 		}
-		else if (this.isTemperature()) {
+		else if (this.isTemperature())
+		{
 			return this.addTempDegrees(this, other);
 		}
-		else if (other.isTemperature()) {
+		else if (other.isTemperature())
+		{
 			return this.addTempDegrees(other, this);
 		}
 

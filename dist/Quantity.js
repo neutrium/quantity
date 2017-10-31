@@ -12,7 +12,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 */
 Object.defineProperty(exports, "__esModule", { value: true });
 var utilities_1 = require("@neutrium/utilities");
-var DefinitionObject_1 = require("./DefinitionObject");
+var index_1 = require("./index");
 var math_1 = require("@neutrium/math");
 var isNumber = utilities_1.typeguards.isNumber;
 var isString = utilities_1.typeguards.isString;
@@ -26,7 +26,7 @@ var Quantity = /** @class */ (function () {
         this.denominator = Quantity.UNITY_ARRAY;
         this.signature = null;
         // Need the definition object its used throughout -> make interface
-        if (DefinitionObject_1.isQuantityDefinition(initValue)) {
+        if (index_1.isQuantityDefinition(initValue)) {
             this.scalar = initValue.scalar;
             this.numerator = (initValue.numerator && initValue.numerator.length !== 0) ? initValue.numerator : Quantity.UNITY_ARRAY;
             this.denominator = (initValue.denominator && initValue.denominator.length !== 0) ? initValue.denominator : Quantity.UNITY_ARRAY;
@@ -265,7 +265,7 @@ var Quantity = /** @class */ (function () {
     // Mathematical operations on quantities
     //
     Quantity.prototype.add = function (other) {
-        if (!DefinitionObject_1.isQuantityDefinition(other)) {
+        if (!index_1.isQuantityDefinition(other)) {
             other = new Quantity(other);
         }
         if (!this.isCompatible(other)) {
@@ -287,7 +287,7 @@ var Quantity = /** @class */ (function () {
         });
     };
     Quantity.prototype.sub = function (other) {
-        if (!DefinitionObject_1.isQuantityDefinition(other)) {
+        if (!index_1.isQuantityDefinition(other)) {
             other = new Quantity(other);
         }
         if (!this.isCompatible(other)) {
@@ -316,7 +316,7 @@ var Quantity = /** @class */ (function () {
                 denominator: this.denominator
             });
         }
-        else if (!DefinitionObject_1.isQuantityDefinition(other)) {
+        else if (!index_1.isQuantityDefinition(other)) {
             other = new Quantity(other);
         }
         if ((this.isTemperature() || other.isTemperature()) && !(this.isUnitless() || other.isUnitless())) {
@@ -367,7 +367,7 @@ var Quantity = /** @class */ (function () {
                 "denominator": this.denominator
             });
         }
-        else if (!DefinitionObject_1.isQuantityDefinition(other)) {
+        else if (!index_1.isQuantityDefinition(other)) {
             other = new Quantity(other);
         }
         if (other.isTemperature()) {
