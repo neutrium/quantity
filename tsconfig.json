@@ -1,14 +1,19 @@
 {
-    "compilerOptions": {
-        "module": "commonjs",
-        "target": "es5",
-        "moduleResolution": "node",
-        "noImplicitAny": false,
-        "sourceMap": false,
-        "declaration": true,
-        "outDir": "dist/"
-    },
-    "files": [
-        "./src/index.ts"
-    ]
+	"compilerOptions": {
+		"module": "Node16",
+		"target": "ES2022",
+		"moduleResolution": "node16",
+		"noImplicitAny": false,
+		"sourceMap": false,
+		"declaration": true,
+		"outDir": "dist",
+		"lib": [
+			"ES2022",
+			"DOM"
+		]
+	},
+	"files": [
+		"./src/Quantity.ts",
+		"./src/parsers/index.ts"
+	]
 }

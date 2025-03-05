@@ -1,0 +1,11 @@
+import { Quantity } from '../Quantity.js';
+export declare function isTemperature(a: Quantity): boolean;
+export declare function isDegrees(a: Quantity): boolean;
+export declare function addTempDegrees(temp: Quantity, deg: Quantity): Quantity;
+export declare function subtractTemperatures(a: Quantity, b: Quantity): Quantity;
+export declare function subtractTempDegrees(temp: Quantity, deg: Quantity): Quantity;
+export declare function toDegrees(src: Quantity, dst: Quantity): Quantity;
+export declare function toDegK(qty: Quantity): Quantity;
+export declare function toTemp(src: Quantity, dst: Quantity): Quantity;
+export declare function toTempK(qty: Quantity): Quantity;
+export declare function getDegreeUnits(units: any): string;

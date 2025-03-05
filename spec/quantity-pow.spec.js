@@ -1,6 +1,7 @@
-var Quantity = require('../dist/Quantity').Quantity;
+import { Quantity } from '../dist/Quantity.js'
 
 describe("Neutrium Quantity Power Tests", function() {
+
 	it("should (10m)^2 equal 100 m^2", function() {
 		var q1 = new Quantity("10m").pow(2),
 			q2 = new Quantity("100m^2");

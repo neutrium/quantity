@@ -1,4 +1,4 @@
-var Quantity = require('../dist/Quantity').Quantity;
+import { Quantity } from '../dist/Quantity.js'
 
 describe("Neutrium Quantity Temperature Tests", function() {
 	it("should 32 tempF equal 0 tempC", function() {

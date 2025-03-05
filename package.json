@@ -1,40 +1,53 @@
 {
-  "name": "@neutrium/quantity",
-  "version": "3.0.7",
-  "main": "dist/index.js",
-  "typings": "dist/index",
-  "description": "The NeutriumJS unit conversion module.",
-  "keywords": [
-    "neutrium",
-    "unit",
-    "conversion"
-  ],
-  "license": "CC-BY-4.0",
-  "author:": "Trevor Walker <trevorw@neutrium.net> (https://neutrium.net)",
-  "private": false,
-  "engines": {
-    "node": ">=0.10.0"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/neutrium/quantity.git"
-  },
-  "bugs": {
-    "url": "https://github.com/neutrium/quantity/issues"
-  },
-  "dependencies": {
-    "@neutrium/math": "^0.1.1",
-    "@neutrium/utilities": "^2.0.0"
-  },
-  "scripts": {
-    "clean": "rm -r ./dist/*",
-    "tsc": "tsc",
-    "build": "npm run tsc",
-    "prepublish": "npm run clean && npm run build",
-    "postinstall": "",
-    "test": "jasmine"
-  },
-  "devDependencies": {
-    "jasmine": "^2.5.3"
-  }
+	"name": "@neutrium/quantity",
+	"version": "4.0.0",
+	"type": "module",
+	"exports": {
+		"." : "./dist/Quantity.js",
+		"./parsers.js" : "./dist/parsers/index.js",
+		"./guards.js" : "./dist/guards.js"
+	},
+	"typings": "dist/index",
+	"description": "The NeutriumJS unit conversion module.",
+	"keywords": [
+		"neutrium",
+		"unit",
+		"conversion"
+	],
+	"license": "CC-BY-4.0",
+	"author:": "Trevor Walker <trevorw@neutrium.net> (https://neutrium.net)",
+	"private": false,
+	"engines": {
+		"node": ">=18"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/neutrium/quantity.git"
+	},
+	"bugs": {
+		"url": "https://github.com/neutrium/quantity/issues"
+	},
+	"dependencies": {
+		"@neutrium/math": "^0.1.1",
+		"@neutrium/utilities": "^2.0.0",
+		"moo": "^0.5.2",
+		"nearley": "^2.20.1"
+	},
+	"scripts": {
+		"clean": "rm -r ./dist/*",
+		"tsc": "tsc",
+		"nearley": "nearleyc ./src/parsers/qty-grammar.ne -o ./src/parsers/qty-grammar.ts",
+		"build": "npm run tsc",
+		"prepublish": "npm run clean && npm run nearley && npm run build ",
+		"postinstall": "",
+		"test": "jasmine",
+		"benchmark": "node ./benchmark/benchmark.js"
+	},
+	"devDependencies": {
+		"@types/moo": "^0.5.10",
+		"@types/nearley": "^2.11.5",
+		"benny": "^3.7.1",
+		"esbench": "^0.7.0",
+		"jasmine": "^5.5.0"
+	}
 }

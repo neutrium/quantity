@@ -1,0 +1,30 @@
+import { Parser } from './Parser.js';
+import { QuantityDefinition } from "../QuantityDefinition.js";
+export declare class RegexQtyParser implements Parser<QuantityDefinition> {
+    private static parsedUnitsCache;
+    private tokenMapper;
+    private static UNITY;
+    private static readonly SIGN;
+    private static readonly INTEGER;
+    private static readonly SIGNED_INTEGER;
+    private static readonly FRACTION;
+    private static readonly FLOAT;
+    private static readonly EXPONENT;
+    private static readonly SCI_NUMBER;
+    private static readonly SIGNED_NUMBER;
+    private static readonly QTY_STRING;
+    private static readonly QTY_STRING_REGEX;
+    private static readonly POWER_OP;
+    private static readonly TOP_REGEX;
+    private static readonly BOTTOM_REGEX;
+    private static readonly BOUNDARY_REGEX;
+    private static PREFIX_REGEX;
+    private static UNIT_REGEX;
+    private static UNIT_MATCH;
+    private static UNIT_MATCH_REGEX;
+    private static UNIT_TEST_REGEX;
+    constructor();
+    initialize(): void;
+    parse(val: string): QuantityDefinition;
+    private parseUnits;
+}
