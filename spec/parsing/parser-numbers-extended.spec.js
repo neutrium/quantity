@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import { NearleyQtyParser } from '../../dist/parsers/NearleyQtyParser.js'
 
 [

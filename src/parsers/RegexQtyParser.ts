@@ -1,4 +1,4 @@
-import { Decimal } from "@neutrium/math";
+import { Decimal } from "@neutrium/decimal";
 import { Parser } from './Parser.js';
 
 import { QuantityDefinition } from "../QuantityDefinition.js";

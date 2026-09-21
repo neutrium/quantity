@@ -1,4 +1,4 @@
-import { Decimal } from "@neutrium/math";
+import { Decimal } from "@neutrium/decimal";
 import { UnitTokenManager } from '../UnitTokenManager.js';
 export class RegexQtyParser {
     static parsedUnitsCache = {};

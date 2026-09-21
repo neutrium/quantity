@@ -1,4 +1,4 @@
-import { Decimal } from '@neutrium/math';
+import { Decimal } from '@neutrium/decimal';
 import { typeguards } from "@neutrium/utilities";
 
 import { Quantity } from '../Quantity.js'
@@ -171,7 +171,7 @@ export function pow(a: Quantity, yy: number | string | Decimal) : Quantity
 	}
 
 	// Invert units for negative powers
-	if (yy.s < 0)
+	if (yy.lt(0))
 	{
 		let temp = num;
 		num = den;

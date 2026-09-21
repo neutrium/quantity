@@ -1,4 +1,4 @@
-import { Decimal } from '@neutrium/math';
+import { Decimal } from '@neutrium/decimal';
 import { typeguards } from "@neutrium/utilities";
 import { Quantity } from '../Quantity.js';
 import { isCompatible } from './comparison.js';
@@ -116,7 +116,7 @@ export function pow(a, yy) {
         den = den.concat(a.denominator);
     }
     // Invert units for negative powers
-    if (yy.s < 0) {
+    if (yy.lt(0)) {
         let temp = num;
         num = den;
         den = temp;

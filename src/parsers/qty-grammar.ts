@@ -13,7 +13,7 @@ declare var integer: any;
 declare var unit: any;
 declare var signedFloat: any;
 
-import { Decimal } from '@neutrium/math';
+import { Decimal } from '@neutrium/decimal';
 import { MooQtyLexer } from './MooQtyLexer.js';
 import { UnitTokenManager } from '../UnitTokenManager.js';
 

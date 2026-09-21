@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import { UnitTokenManager } from '../dist/UnitTokenManager.js'
 
 describe("Neutrium Quantity Token Manager Tests", function() {

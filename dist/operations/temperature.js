@@ -1,4 +1,4 @@
-import { Decimal } from '@neutrium/math';
+import { Decimal } from '@neutrium/decimal';
 import { compareArray } from '@neutrium/utilities';
 import { Quantity } from '../Quantity.js';
 // Numbers for conversion

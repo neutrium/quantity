@@ -3,7 +3,7 @@
 // Bypasses TS6133. Allow declared but unused functions.
 // @ts-ignore
 function id(d) { return d[0]; }
-import { Decimal } from '@neutrium/math';
+import { Decimal } from '@neutrium/decimal';
 import { MooQtyLexer } from './MooQtyLexer.js';
 import { UnitTokenManager } from '../UnitTokenManager.js';
 const lexer = new MooQtyLexer().lexer;

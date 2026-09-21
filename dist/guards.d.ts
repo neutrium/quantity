@@ -1,4 +1,4 @@
-import { Decimal } from '@neutrium/math';
+import { Decimal } from '@neutrium/decimal';
 import { Quantity } from './Quantity.js';
 import { QuantityDefinition } from './QuantityDefinition.js';
 export type QuantityInitParam = string | number | Decimal | QuantityDefinition | Quantity;

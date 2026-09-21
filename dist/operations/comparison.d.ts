@@ -6,6 +6,6 @@ export declare function gt(a: Quantity, b: string | number | Quantity): boolean;
 export declare function gte(a: Quantity, b: string | number | Quantity): boolean;
 export declare function same(a: Quantity, b: Quantity): boolean;
 export declare function isInverse(a: Quantity, b: string | Quantity): boolean;
-export declare function compareTo(a: Quantity, b: string | number | Quantity): 0 | 1 | -1;
+export declare function compareTo(a: Quantity, b: string | number | Quantity): -1 | 0 | 1;
 export declare function isCompatible(a: Quantity, b: string | number | Quantity): boolean;
 export declare function isUnitless(a: Quantity): boolean;

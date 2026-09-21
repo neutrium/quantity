@@ -8,6 +8,8 @@ The @neutrium/quantity package is a unit conversion  developed and maintained by
 
 ### Node
 
+Requires Node.js 24 or newer.
+
 First add the @neutrium/quantity package to your project:
 
 	npm install @neutrium/quantity --save
@@ -42,7 +44,7 @@ Both the scalar or unit expression portions can be blank. Not specifying a scala
 
 When creating a quantity with a single string the scalar portion can be any string representing an integer or real floating point number that is parsable in javascript e.g. '1', '1.4', '1e3', '-1e-3'.
 
-If creating a quantity using a separate scalar parameter (e.g. new Quantity(1, 'm')) the scalar may be provided as a string (subject to the rules above), a number or a [Decimal](https://github.com/neutrium/math) object.
+If creating a quantity using a separate scalar parameter (e.g. new Quantity(1, 'm')) the scalar may be provided as a string (subject to the rules above), a number or a [Decimal](https://github.com/neutrium/decimal) object.
 
 ### \<unit-expression\>
 
@@ -94,7 +96,7 @@ You can access the scalar component of the quantity:
 	qty = Quantity('10 m');
 	qty.scalar;								// Decimal(10)
 
-The scalar component is a [Decimal](https://github.com/MikeMcl/decimal.js/) object that provides a range of operators. For more information, see the [Decimal.js documentation](http://mikemcl.github.io/decimal.js/).
+The scalar component is a [Decimal](https://github.com/neutrium/decimal) object that provides a range of operators. For more information, see the [@neutrium/decimal documentation](https://github.com/neutrium/decimal#readme).
 
 ### Displaying a Quantities Units
 

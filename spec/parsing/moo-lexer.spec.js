@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import { MooQtyLexer } from '../../dist/parsers/MooQtyLexer.js'
 
 describe("Neutrium Quantity MooLexer Tests", function() {
