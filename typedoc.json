@@ -1,0 +1,47 @@
+{
+	"$schema": "https://typedoc.org/schema.json",
+	"entryPoints": [
+		"./src/Quantity.ts",
+		"./src/parsers/index.ts",
+		"./src/guards.ts",
+		"./src/QuantityDefinition.ts",
+		"./src/parsers/Parser.ts"
+	],
+	"tsconfig": "./tsconfig.json",
+	"out": "./docs",
+	"name": "@neutrium/quantity",
+	"includeVersion": true,
+	"readme": "./guides/index.md",
+	"projectDocuments": [
+		"./guides/usage.md",
+		"./guides/temperatures.md",
+		"./guides/parsers.md",
+		"./guides/benchmarks.md"
+
+	],
+	"categorizeByGroup": false,
+	"categoryOrder": [
+		"Construction",
+		"Values",
+		"Conversion",
+		"Arithmetic",
+		"Comparison",
+		"Temperature",
+		"Advanced",
+		"*"
+	],
+	"navigationLinks": {
+		"Demo": "/quantity/demo/",
+		"GitHub": "https://github.com/neutrium/quantity",
+		"Neutrium": "https://neutrium.net"
+	},
+	"excludeInternal": true,
+	"excludePrivate": true,
+	"excludeProtected": true,
+	"validation": {
+		"notDocumented": true,
+		"invalidLink": true
+	},
+	"treatWarningsAsErrors": true,
+	"cleanOutputDir": true
+}

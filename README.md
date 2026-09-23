@@ -6,6 +6,8 @@ The @neutrium/quantity package is a unit conversion  developed and maintained by
 
 ## Getting Started
 
+[API documentation](https://neutrium.github.io/quantity/)
+
 ### Node
 
 Requires Node.js 24 or newer.
@@ -29,6 +31,95 @@ Or create quantities specifing the scalar and units separately:
 #### Browsers
 
 To use this library in a browser environment you will need to use a bundler like [vite](https://vite.dev) or [webpack](https://webpack.js.org) to convert it to a web bunble and expose the Quantity object.
+
+## Interactive demo
+
+The [Quantity Lab](https://neutrium.github.io/quantity/demo/) follows the visual style
+of the Neutrium formatter and decimal demos. Explore live conversions, unit
+arithmetic, temperature scales, and comparisons, with editable presets and
+copyable JavaScript examples. Calculations use the local library build.
+
+```sh
+npm ci
+npm run demo
+```
+
+Open the local URL printed by Vite (`/quantity/demo/`). `npm run demo:build`
+builds the standalone demo into `docs/demo/`. To generate the complete API site
+and demo,
+run `npm run site`. TypeDoc clears `docs/`, so build the demo after the API
+reference. The Pages workflow publishes both together.
+
+## Development and releases
+
+Run `npm run benchmark` for Vitest benchmarks of parsing, construction, conversions,
+and arithmetic. See [benchmark methodology and options](benchmark/README.md).
+
+Use Node.js 24 or newer and npm:
+
+```sh
+npm ci
+npm test
+npm run verify
+```
+
+`npm test` builds from source before running Vitest. `npm run verify` also packs the
+library, installs the archive in a temporary consumer project, and checks its public
+entry points and TypeScript declarations with NodeNext and Bundler resolution.
+`npm run test:built` and `npm run test:package:built` reuse an existing build.
+
+`dist/` and `src/parsers/qty-grammar.ts` are generated and excluded from Git.
+Edit `src/parsers/qty-grammar.ne` to change the grammar. `npm run build` cleans the
+output, regenerates the grammar, and compiles JavaScript and declarations.
+`npm pack` builds automatically; `npm publish` builds and runs verification first.
+The npm package includes compiled output, TypeScript source, the grammar, README,
+and license. Consumers installing from npm do not need to compile the library.
+
+GitHub Actions verifies pull requests and pushes to `master` or `main` on Node.js
+24.0.0, the latest 24.x, and 26.x. To release, update the version in `package.json`
+and `package-lock.json`, commit it, and push a matching `vX.Y.Z` tag. The release
+workflow runs CI, verifies and publishes to npm, then creates a GitHub release.
+Prerelease versions publish under the `next` tag; stable versions use `latest`.
+
+Before the first automated release, configure an npm trusted publisher for
+`@neutrium/quantity`: GitHub owner `neutrium`, repository `quantity`, workflow
+`release.yml`, with no environment specified. The workflow uses OIDC authentication
+and does not require a stored npm token. See the
+[npm trusted publishing documentation](https://docs.npmjs.com/trusted-publishers/).
+
+## API documentation
+
+The [API reference](https://neutrium.github.io/quantity/) is generated from the
+TypeScript source and its documentation comments using TypeDoc, following the
+setup in [@neutrium/formatter](https://github.com/neutrium/formatter).
+It covers `@neutrium/quantity`, `@neutrium/quantity/parsers.js`, and
+`@neutrium/quantity/guards.js`. `QuantityDefinition` and `Parser` are included as
+supporting structural types; they are not separate package entry points.
+
+To generate the site locally:
+
+```sh
+npm ci
+npm run docs
+```
+
+Open `docs/index.html` to browse the result. The command regenerates the parser
+grammar before running TypeDoc, so it also works in a fresh checkout. Generated
+`docs/` files are ignored by Git and excluded from the npm package.
+
+The library and TypeDoc share TypeScript 6.0.3. All development dependencies are
+installed with `npm ci` and locked in the root `package-lock.json`.
+The site landing page is `guides/index.md`; the other `guides/` files provide
+worked examples for quantities, temperatures, and parsers. Public API comments
+and links are validated with warnings treated as errors.
+Pull requests run this documentation check in CI.
+
+For publishing, set **Settings → Pages → Build and deployment → Source** to
+**GitHub Actions** in the GitHub repository. The `Documentation` workflow tests
+the package, generates the site, and deploys it to GitHub Pages after relevant
+changes reach the default branch (`master` or `main`). It can also be run manually
+on the default branch from the Actions tab. The site is published at
+<https://neutrium.github.io/quantity/> using the `github-pages` environment.
 
 ## Unit Syntax
 
@@ -93,7 +184,7 @@ You can create a copy of a quantity using the clone function:
 
 You can access the scalar component of the quantity:
 
-	qty = Quantity('10 m');
+	qty = new Quantity('10 m');
 	qty.scalar;								// Decimal(10)
 
 The scalar component is a [Decimal](https://github.com/neutrium/decimal) object that provides a range of operators. For more information, see the [@neutrium/decimal documentation](https://github.com/neutrium/decimal#readme).
@@ -104,7 +195,7 @@ The units of a quantity can be accessed using the `units()` method:
 
 	let qty = new Quantity('1 m/s').mul('kg')
 
-	// Returns 'kg.m/s'
+	// Returns 'm*kg/s'
 	qty.units()
 
 
@@ -116,7 +207,7 @@ Quantities can be converted by using the `to()` method:
 
 You can also convert a quantity to a standard set of base units:
 
-	qty.base();								// Converts feet back to meters, the base unit of length
+	qty.toBase();								// Converts feet back to meters, the base unit of length
 
 ### Comparing Quantities
 
@@ -136,7 +227,7 @@ You can perform numerical and logical comparison using the following functions:
 | qty1.gte(qty2)			| True if qty1 is greater than or equal to qty2, false otherwise.				|
 | qty1.compareTo(qty2)		|  -1 if qty1 < qty2; 0 if qty1 == qty2; 1 if qty1 > qty2						|
 | qty1.isTemperature()		| True is qty1 is a temperature	e.g. new Quantity('1 tempC')					|
-| qty1.isDegrees()			| True is qty1 is a temperature	e.g. new Quantity('1 degC')					|
+| qty1.isDegrees() | True for standalone temperature degrees or absolute temperatures. Use `!qty1.isTemperature()` as well to identify intervals only. |
 
 ### Quantity Arithmetic
 
@@ -161,19 +252,19 @@ In line with its forefathers, @neutrium/quantity differentiates between temperat
 
 As you would expect, unit math on temperatures is limited:
 
-	Quantity('100 tempC').add('10 degC')	// 110 tempC
-	Quantity('100 tempC').sub('10 degC')	// 90 tempC
-	Quantity('100 tempC').add('50 tempC')	// throws error
-	Quantity('100 tempC').sub('50 tempC')	// 50 degC
-	Quantity('50 tempC').sub('100 tempC')	// -50 degC
-	Quantity('100 tempC').mul(scalar)		// 100*scalar tempC
-	Quantity('100 tempC').div(scalar)		// 100/scalar tempC
-	Quantity('100 tempC').mul(qty)			// throws error
-	Quantity('100 tempC').div(qty)			// throws error
-	Quantity('100 tempC*unit')				// throws error
-	Quantity('100 tempC/unit')				// throws error
-	Quantity('100 unit/tempC')				// throws error
-	Quantity('100 tempC').inverse()			// throws error
+	new Quantity('100 tempC').add('10 degC')	// 110 tempC
+	new Quantity('100 tempC').sub('10 degC')	// 90 tempC
+	new Quantity('100 tempC').add('50 tempC')	// throws error
+	new Quantity('100 tempC').sub('50 tempC')	// 50 degC
+	new Quantity('50 tempC').sub('100 tempC')	// -50 degC
+	new Quantity('100 tempC').mul(scalar)		// 100*scalar tempC
+	new Quantity('100 tempC').div(scalar)		// 100/scalar tempC
+	new Quantity('100 tempC').mul(qty)			// throws error
+	new Quantity('100 tempC').div(qty)			// throws error
+	new Quantity('100 tempC*unit')				// throws error
+	new Quantity('100 tempC/unit')				// throws error
+	new Quantity('100 unit/tempC')				// throws error
+	new Quantity('100 tempC').inverse()			// throws error
 
 
 ### Errors

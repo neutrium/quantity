@@ -2,6 +2,6 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
 	test: {
-		include: ['spec/**/*[sS]pec.js'],
+		include: ['spec/**/*[sS]pec.js', 'demo/spec/**/*.spec.js'],
 	},
 });

@@ -8,3 +8,9 @@ npm-debug.log
 node_modules/
 bower_components/
 benchmark/results/*
+
+# Generated build and package artifacts
+dist/
+/docs/
+src/parsers/qty-grammar.ts
+*.tgz

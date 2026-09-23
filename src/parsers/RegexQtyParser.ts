@@ -4,6 +4,23 @@ import { Parser } from './Parser.js';
 import { QuantityDefinition } from "../QuantityDefinition.js";
 import { UnitTokenManager } from '../UnitTokenManager.js'
 
+/**
+ * Legacy parser for scalar and unit expressions without parenthesized grouping.
+ *
+ * Import from `@neutrium/quantity/parsers.js`. Pass an instance as the third
+ * argument to {@link Quantity.Quantity.constructor | Quantity constructor}, or call {@link parse} directly
+ * when a parsed definition is needed.
+ *
+ * @example
+ * ```ts
+ * import { Quantity } from '@neutrium/quantity';
+ * import { RegexQtyParser } from '@neutrium/quantity/parsers.js';
+ *
+ * const parser = new RegexQtyParser();
+ * const force = new Quantity('2 kg*m/s^2', undefined, parser);
+ * force.to('N').scalar.toString(); // "2"
+ * ```
+ */
 export class RegexQtyParser implements Parser<QuantityDefinition>
 {
 	private static parsedUnitsCache = {};
@@ -43,6 +60,7 @@ export class RegexQtyParser implements Parser<QuantityDefinition>
 		this.initialize();
 	}
 
+	/** Initialize unit and prefix patterns from the unit token manager. */
 	initialize()
 	{
 		// Look at preprocessing the below
@@ -73,6 +91,14 @@ export class RegexQtyParser implements Parser<QuantityDefinition>
 	// 6'4"  -- recognized as 6 feet + 4 inches
 	// 8 lbs 8 oz -- recognized as 8 lbs + 8 ounces
 	//
+	/**
+	 * Parse an expression into a scalar and normalized unit tokens.
+	 * @param val - Expression such as `"2 kg*m/s^2"`, `"m"`, or `"2"`.
+	 * @returns A definition suitable for passing to the Quantity constructor.
+	 * @throws If the parser rejects the expression or encounters an unknown unit.
+	 * @remarks Parsing alone does not enforce Quantity's absolute-temperature
+	 * restrictions. Construct a Quantity when validating a complete physical value.
+	 */
 	public parse(val: string) : QuantityDefinition
 	{
 		let output: QuantityDefinition = {

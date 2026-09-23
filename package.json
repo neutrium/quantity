@@ -3,11 +3,19 @@
 	"version": "4.0.0",
 	"type": "module",
 	"exports": {
-		"." : "./dist/Quantity.js",
-		"./parsers.js" : "./dist/parsers/index.js",
-		"./guards.js" : "./dist/guards.js"
+		".": {
+			"types": "./dist/Quantity.d.ts",
+			"import": "./dist/Quantity.js"
+		},
+		"./parsers.js": {
+			"types": "./dist/parsers/index.d.ts",
+			"import": "./dist/parsers/index.js"
+		},
+		"./guards.js": {
+			"types": "./dist/guards.d.ts",
+			"import": "./dist/guards.js"
+		}
 	},
-	"typings": "dist/index",
 	"description": "The NeutriumJS unit conversion module.",
 	"keywords": [
 		"neutrium",
@@ -27,6 +35,7 @@
 	"bugs": {
 		"url": "https://github.com/neutrium/quantity/issues"
 	},
+	"homepage": "https://neutrium.github.io/quantity/",
 	"dependencies": {
 		"@neutrium/decimal": "^2.2.0",
 		"@neutrium/utilities": "^2.0.0",
@@ -34,20 +43,45 @@
 		"nearley": "^2.20.1"
 	},
 	"scripts": {
-		"clean": "rm -r ./dist/*",
+		"clean": "rm -rf dist src/parsers/qty-grammar.ts",
 		"tsc": "tsc",
 		"nearley": "nearleyc ./src/parsers/qty-grammar.ne -o ./src/parsers/qty-grammar.ts",
-		"build": "npm run tsc",
-		"prepublish": "npm run clean && npm run nearley && npm run build ",
-		"postinstall": "",
-		"test": "vitest run",
-		"benchmark": "node ./benchmark/benchmark.js"
+		"build": "npm run clean && npm run nearley && npm run tsc",
+		"docs": "npm run nearley && typedoc",
+		"test": "npm run build && npm run test:built",
+		"test:built": "vitest run",
+		"test:package": "node tools/test-package.mjs",
+		"test:package:built": "node tools/test-package.mjs --skip-build",
+		"verify": "npm run build && npm run verify:built",
+		"verify:built": "npm run test:built && npm run test:package:built",
+		"prepack": "node tools/prepack.mjs",
+		"prepublishOnly": "npm run verify",
+		"benchmark": "npm run build && vitest bench --run --config vitest.benchmark.config.js",
+		"demo": "npm run demo:dev",
+		"demo:dev": "npm run build && vite --config demo/vite.config.mjs --host 127.0.0.1",
+		"demo:check": "tsc -p demo/tsconfig.json",
+		"demo:bundle": "npm run demo:check && vite build --config demo/vite.config.mjs",
+		"demo:build": "npm run build && npm run demo:bundle",
+		"site": "npm run build && npm run docs && npm run demo:bundle"
 	},
 	"devDependencies": {
 		"@types/moo": "^0.5.10",
 		"@types/nearley": "^2.11.5",
-		"benny": "^3.7.1",
-		"typescript": "^7.0.2",
+		"typedoc": "^0.28.20",
+		"typescript": "6.0.3",
+		"vite": "^8.3.0",
 		"vitest": "^5.0.1"
+	},
+	"types": "./dist/Quantity.d.ts",
+	"files": [
+		"dist",
+		"src/**/*.ts",
+		"src/**/*.ne",
+		"README.md",
+		"license.txt"
+	],
+	"publishConfig": {
+		"access": "public",
+		"registry": "https://registry.npmjs.org/"
 	}
 }
