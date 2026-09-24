@@ -38,3 +38,11 @@ new DirectNearleyParser().parse('m');
 const coreQuantity: QuantityCore = customQuantity;
 const compatibleQuantity: Quantity = regexQuantity;
 const typedResult: Quantity = customQuantity;
+
+// The core always requires a parser, including when copying a definition.
+// @ts-expect-error A parser must be provided to the core constructor.
+new QuantityCore(regexQuantity);
+// @ts-expect-error Undefined is not a valid core parser.
+new QuantityCore(regexQuantity, undefined, undefined);
+const parsedCore = new QuantityCore(regexQuantity, undefined, new DirectRegexParser());
+const parsedCoreResult: QuantityCore = parsedCore.add(regexQuantity);

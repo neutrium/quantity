@@ -55,8 +55,10 @@ describe('parser selection', () => {
 		expect(q.clone().add('1e3 m').scalar.toString()).toBe('2000');
 	});
 
-	it('allows definitions in the unconfigured core but requires a parser for expressions', () => {
-		const q = new QuantityCore({ scalar: new Decimal(2), numerator: ['<meter>'], denominator: ['<1>'] });
+	it('requires a parser even when the core is constructed from a definition', () => {
+		const definition = { scalar: new Decimal(2), numerator: ['<meter>'], denominator: ['<1>'] };
+		expect(() => new QuantityCore(definition)).toThrow('A parser is required');
+		const q = new QuantityCore(definition, undefined, new RegexQtyParser());
 		expect(q.mul(3).scalar.toString()).toBe('6');
 		expect(() => new QuantityCore('m')).toThrow('A parser is required');
 	});

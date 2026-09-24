@@ -47,7 +47,7 @@ export class RegexQtyParser implements Parser<QuantityDefinition>
 	private static readonly BOTTOM_REGEX = new RegExp("([^ \\*.]+?)(?:" + RegexQtyParser.POWER_OP + ")?(\\d+)");
 	private static readonly BOUNDARY_REGEX = "\\b|\\s|$";
 
-	// REGEX - defined during module initalisation
+	// REGEX - shared patterns, initialized lazily by the first parser instance
 	private static PREFIX_REGEX: string;
 	private static UNIT_REGEX: string;
 	private static UNIT_MATCH: string;
@@ -57,10 +57,16 @@ export class RegexQtyParser implements Parser<QuantityDefinition>
 	constructor()
 	{
 		this.tokenMapper = UnitTokenManager.instance;
-		this.initialize();
+		if (!RegexQtyParser.UNIT_TEST_REGEX)
+		{
+			this.initialize();
+		}
 	}
 
-	/** Initialize unit and prefix patterns from the unit token manager. */
+	/**
+	 * Rebuild shared unit and prefix patterns from the unit token manager.
+	 * Construction initializes these patterns only once; call this explicitly to rebuild them.
+	 */
 	initialize()
 	{
 		// Look at preprocessing the below

@@ -2,6 +2,7 @@ import { Decimal } from '@neutrium/decimal';
 import { compareArray } from '@neutrium/utilities';
 
 import type { Quantity } from '../QuantityCore.js'
+import type { QuantityDefinition } from '../QuantityDefinition.js';
 
 // Numbers for conversion
 const FIVE_NINTHS = new Decimal("5").div("9");
@@ -24,7 +25,7 @@ export function isDegrees(a: Quantity) : boolean
 
 export function addTempDegrees(temp: Quantity, deg: Quantity): Quantity
 {
-	let tempDegrees = deg.to(getDegreeUnits(temp.units()));
+	let tempDegrees = deg.to(temp.createQuantity(getDegreeUnits(temp)));
 
 	return temp.createQuantity({
 		scalar: temp.scalar.add(tempDegrees.scalar),
@@ -35,9 +36,8 @@ export function addTempDegrees(temp: Quantity, deg: Quantity): Quantity
 
 export function subtractTemperatures(a: Quantity, b: Quantity): Quantity
 {
-	let aUnits = a.units(),
-		bConverted = b.to(aUnits),
-		dstDegrees = a.createQuantity(getDegreeUnits(aUnits));
+	let bConverted = b.to(a),
+		dstDegrees = getDegreeUnits(a);
 
 	return a.createQuantity({
 		scalar: a.scalar.sub(bConverted.scalar),
@@ -48,7 +48,7 @@ export function subtractTemperatures(a: Quantity, b: Quantity): Quantity
 
 export function subtractTempDegrees(temp: Quantity, deg: Quantity): Quantity
 {
-	let tempDegrees = deg.to(getDegreeUnits(temp.units()));
+	let tempDegrees = deg.to(temp.createQuantity(getDegreeUnits(temp)));
 
 	return temp.createQuantity({
 		scalar: temp.scalar.sub(tempDegrees.scalar),
@@ -163,18 +163,20 @@ export function toTempK(qty: Quantity): Quantity
 	});
 }
 
-// converts temp[C|K|F|R] to deg[C|K|F|R]
-export function getDegreeUnits(units)
-{
-	let degrees = 'CKFR',
-		unit = units.slice(-1);
+const DEGREE_TOKENS = new Map([
+	['<temp-C>', '<celsius>'],
+	['<temp-F>', '<fahrenheit>'],
+	['<temp-K>', '<kelvin>'],
+	['<temp-R>', '<rankine>']
+]);
 
-	if (degrees.indexOf(unit) !== -1)
+// Resolve absolute-temperature units to interval tokens without parsing display text.
+export function getDegreeUnits(temperature: Quantity): QuantityDefinition
+{
+	const token = DEGREE_TOKENS.get(temperature.numerator[0]);
+	if (!temperature.isTemperature() || !token)
 	{
-		return 'deg' + unit;
+		throw new Error("Expected an absolute temperature");
 	}
-	else
-	{
-		throw new Error("Unknown type for temp conversion from: " + units);
-	}
+	return { scalar: new Decimal(1), numerator: [token], denominator: ['<1>'] };
 }

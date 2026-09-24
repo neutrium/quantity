@@ -64,7 +64,8 @@ export class Quantity
 
 	private static baseUnitCache: Record<string, QuantityDefinition> = {};
 	private static stringifiedUnitsCache = new NestedMap();
-	private conversionCache: any = {};
+	private conversionCache = new Map<string, Quantity>();
+	private quantityConversionCache = new WeakMap<Quantity, Quantity>();
 
 	private parser: Parser<QuantityDefinition>;
 
@@ -118,7 +119,7 @@ export class Quantity
 	 * @param initUnits - Nonempty unit expression for a separate scalar. A scalar in
 	 * this expression is replaced by `initValue`. Ignored for quantity definitions.
 	 * @param parser - Parser used for string expressions; supplied by the configured entry point.
-	 * Ignored when `initValue` is already a quantity definition.
+	 * Required even for definitions; retained for subsequent string operations.
 	 * @throws If inputs cannot be parsed, an absolute temperature is below absolute
 	 * zero, or absolute-temperature units occur in a compound expression.
 	 *
@@ -138,9 +139,14 @@ export class Quantity
 	 */
 	constructor(
 		initValue: QuantityInitParam,
-		initUnits?: string,
-		parser?: Parser<QuantityDefinition>
+		initUnits: string | undefined,
+		parser: Parser<QuantityDefinition>
 	) {
+		if (!parser || typeof parser.parse !== "function")
+		{
+			throw new Error("A parser is required; use a configured Quantity entry point");
+		}
+
 		this.tokenMapper = UnitTokenManager.instance;
 		this.parser = parser;
 
@@ -156,12 +162,12 @@ export class Quantity
 
 			if (initUnits)	// Todo type guard properly
 			{
-				parserResult = this.parseExpression(initUnits);
+				parserResult = this.parser.parse(initUnits);
 				parserResult.scalar = new Decimal(initValue);
 			}
 			else if(typeof initValue === 'string')
 			{
-				parserResult = this.parseExpression(initValue);
+				parserResult = this.parser.parse(initValue);
 			}
 			else
 			{
@@ -205,18 +211,9 @@ export class Quantity
 	createQuantity(input: QuantityInitParam, units?: string): Quantity
 	{
 		const Constructor = this.constructor as new (
-			input: QuantityInitParam, units?: string, parser?: Parser<QuantityDefinition>
+			input: QuantityInitParam, units: string | undefined, parser: Parser<QuantityDefinition>
 		) => Quantity;
 		return new Constructor(input, units, this.parser);
-	}
-
-	private parseExpression(expression: string): QuantityDefinition
-	{
-		if (!this.parser)
-		{
-			throw new Error("A parser is required for string inputs; use a configured Quantity entry point");
-		}
-		return this.parser.parse(expression);
 	}
 
 	/**
@@ -577,28 +574,43 @@ export class Quantity
 	 */
 	to(other: string | Quantity) : Quantity
 	{
-		let cached, target;
-
 		if (!other)
 		{
 			return this;
 		}
 
-		if (!isString(other))
+		if (isString(other))
 		{
-			return this.to(other.units());
+			const expression = other as string;
+			const cached = this.conversionCache.get(expression);
+			if (cached) return cached;
+			const result = this.convertToUnits(this.createQuantity(expression));
+			this.conversionCache.set(expression, result);
+			return result;
 		}
 
-		cached = this.conversionCache[other];
+		const quantity = other as Quantity;
+		const cached = this.quantityConversionCache.get(quantity);
 
 		if (cached)
 		{
 			return cached;
 		}
 
-		// Instantiating target to normalize units
-		target = this.createQuantity(other);
+		// A Quantity target supplies units only, including when its scalar is zero.
+		const target = this.createQuantity({
+			scalar: new Decimal(1),
+			numerator: quantity.numerator,
+			denominator: quantity.denominator
+		});
+		const result = this.convertToUnits(target);
+		this.quantityConversionCache.set(quantity, result);
 
+		return result;
+	}
+
+	private convertToUnits(target: Quantity): Quantity
+	{
 		if (target.units() === this.units())
 		{
 			return this;
@@ -606,40 +618,25 @@ export class Quantity
 
 		if (!this.isCompatible(target))
 		{
-			if (this.isInverse(target))
-			{
-				target = this.inverse().to(other);
-			}
-			else
-			{
-				throwIncompatibleUnits();
-			}
+			if (!this.isInverse(target)) throwIncompatibleUnits();
+			return this.inverse().convertToUnits(target);
 		}
-		else
+
+		if (target.isTemperature())
 		{
-			if (target.isTemperature())
-			{
-				target = toTemp(this, target);
-			}
-			else if (target.isDegrees())
-			{
-				target = toDegrees(this, target);
-			}
-			else
-			{
-				let q = this.baseScalar.div(target.baseScalar);
-
-				target = this.createQuantity({
-					scalar: q,
-					numerator: target.numerator,
-					denominator: target.denominator
-				});
-			}
+			return toTemp(this, target);
 		}
 
-		this.conversionCache[other] = target;
+		if (target.isDegrees())
+		{
+			return toDegrees(this, target);
+		}
 
-		return target;
+		return this.createQuantity({
+			scalar: this.baseScalar.div(target.baseScalar),
+			numerator: target.numerator,
+			denominator: target.denominator
+		});
 	}
 
 	//

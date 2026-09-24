@@ -42,7 +42,7 @@ length.clone().add('2 metres').to('cm').scalar.toString(); // "500"
 
 Cloning, arithmetic, conversion, comparisons, and temperature operations preserve parser selection. Results retain the configured class. Operations accept operands from other entry points; result construction follows the receiving instance.
 
-The core also exports `QuantityCore`, `QuantityInitParam`, `QuantityDefinition`, `Parser`, and `QuantityConstructor`. The unconfigured core accepts parsed definitions; string inputs require an explicitly supplied parser. Core imports do not load either built-in parser.
+The core also exports `QuantityCore`, `QuantityInitParam`, `QuantityDefinition`, `Parser`, and `QuantityConstructor`. The core constructor requires a parser even for definitions: `new QuantityCore(definition, undefined, parser)`. The configured entry points still supply their default parser automatically. Core imports do not load either built-in parser.
 
 ## Use parsed definitions
 
@@ -71,3 +71,7 @@ Definitions use internal tokens such as `<meter>` and `<1>`, not display aliases
 {@link guards.isQuantity | isQuantity} checks the shared core class across all configured entry points and safely accepts nullish values. It does not recognize plain definitions or instances from a different installed copy of the library.
 
 {@link guards.isQuantityDefinition | isQuantityDefinition} only checks that a `scalar` property is defined. It does not validate Decimal values or token arrays, and throws on `null` or `undefined`. It is a shallow discriminator, not a validator for external JSON.
+
+Existing Quantity operands and conversion targets are processed from their tokens,
+without passing formatted unit strings to the parser. Custom parsers only need to
+understand the strings supplied by their callers.

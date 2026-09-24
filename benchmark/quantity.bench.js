@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import { Quantity } from '../dist/Quantity.js';
+import { Quantity as RegexQuantity } from '../dist/regex.js';
 import { NearleyQtyParser, RegexQtyParser } from '../dist/parsers/index.js';
 import { compare } from './helpers.js';
 
@@ -11,6 +12,7 @@ test('quantity construction', async ({ bench }) => {
 	const validate = value => assert(value.same(expected));
 	await compare(bench, [
 		{ name: 'expression: default Nearley', run: () => new Quantity('3.5 kg.m/s^2'), validate },
+		{ name: 'expression: default Regex entry', run: () => new RegexQuantity('3.5 kg.m/s^2'), validate },
 		{ name: 'expression: reused Regex parser', run: () => new Quantity('3.5 kg.m/s^2', undefined, regex), validate },
 		{ name: 'separate scalar and units', run: () => new Quantity('3.5', 'kg.m/s^2'), validate },
 		{ name: 'preparsed definition', run: () => new Quantity(definition), validate },
