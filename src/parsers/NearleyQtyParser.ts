@@ -24,6 +24,8 @@ import { QuantityDefinition } from '../QuantityDefinition.js'
  */
 export class NearleyQtyParser
 {
+	private static compiledGrammar: ReturnType<typeof Nearley.Grammar.fromCompiled>;
+
 	constructor() { }
 
 	/**
@@ -38,8 +40,12 @@ export class NearleyQtyParser
 	 */
 	public parse(val: string) : QuantityDefinition
 	{
-		// You have to create a new parser each time to reset the state
-		const parser = new Nearley.Parser(Nearley.Grammar.fromCompiled(grammar))
+		// Rules and indexes are reusable; parse tables and lexer state are not.
+		const compiled = NearleyQtyParser.compiledGrammar ??=
+			Nearley.Grammar.fromCompiled(grammar);
+		// Moo supports clone(), though its installed declaration omits that method.
+		const lexer = grammar.Lexer as typeof grammar.Lexer & { clone(): typeof grammar.Lexer };
+		const parser = new Nearley.Parser(compiled, { lexer: lexer.clone() });
 
 		parser.feed(val);
 

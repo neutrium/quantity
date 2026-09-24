@@ -2,7 +2,7 @@ import { Decimal } from '@neutrium/decimal';
 import { typeguards } from "@neutrium/utilities";
 
 import type { Quantity } from '../QuantityCore.js'
-import { QuantityInitParam } from '../guards.js';
+import { isQuantity, type QuantityInitParam } from '../guards.js';
 import { isCompatible } from './comparison.js';
 import { addTempDegrees, subtractTemperatures, subtractTempDegrees } from './temperature.js';
 import { throwIncompatibleUnits } from './errors.js';
@@ -16,7 +16,7 @@ const UNITY = "<1>";
 //
 export function add(a: Quantity, b_o: QuantityInitParam) : Quantity
 {
-	const b = a.createQuantity(b_o);
+	const b = isQuantity(b_o) ? b_o : a.createQuantity(b_o);
 
 	if (!isCompatible(a, b))
 	{
@@ -33,7 +33,7 @@ export function add(a: Quantity, b_o: QuantityInitParam) : Quantity
 	}
 	else if (b.isTemperature())
 	{
-		return addTempDegrees(b, a);
+		return addTempDegrees(b, a, a);
 	}
 
 	return a.createQuantity({
@@ -45,7 +45,7 @@ export function add(a: Quantity, b_o: QuantityInitParam) : Quantity
 
 export function sub(a: Quantity, b_o: QuantityInitParam) : Quantity
 {
-	const b = a.createQuantity(b_o);
+	const b = isQuantity(b_o) ? b_o : a.createQuantity(b_o);
 
 	if (!isCompatible(a,b))
 	{
@@ -83,7 +83,7 @@ export function mul(a: Quantity, b_o: QuantityInitParam) : Quantity
 		});
 	}
 
-	const b = a.createQuantity(b_o);
+	const b = isQuantity(b_o) ? b_o : a.createQuantity(b_o);
 
 	if ((a.isTemperature() || b.isTemperature()) && !(a.isUnitless() || b.isUnitless()))
 	{
@@ -121,7 +121,7 @@ export function div(a: Quantity, b_o: QuantityInitParam) : Quantity
 		});
 	}
 
-	const b = a.createQuantity(b_o);
+	const b = isQuantity(b_o) ? b_o : a.createQuantity(b_o);
 
 	if (b.isTemperature())
 	{

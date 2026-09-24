@@ -18,7 +18,7 @@ export function lt(a: Quantity, b: string | number | Quantity): boolean
 
 export function lte(a: Quantity, b: string | number | Quantity): boolean
 {
-	return eq(a,b) || lt(a,b);
+	return compareTo(a, b) <= 0;
 }
 
 export function gt(a: Quantity, b: string | number | Quantity): boolean
@@ -28,7 +28,7 @@ export function gt(a: Quantity, b: string | number | Quantity): boolean
 
 export function gte(a: Quantity, b: string | number | Quantity): boolean
 {
-	return eq(a,b) || gt(a,b);
+	return compareTo(a, b) >= 0;
 }
 
 // Return true if quantities and units match
@@ -68,18 +68,9 @@ export function compareTo(a: Quantity, b: string | number | Quantity)
 		throwIncompatibleUnits();
 	}
 
-	if (a.baseScalar.lt(b.baseScalar))
-	{
-		return -1;
-	}
-	else if (a.baseScalar.eq(b.baseScalar))
-	{
-		return 0;
-	}
-	else if (a.baseScalar.gt(b.baseScalar))
-	{
-		return 1;
-	}
+	const comparison = a.baseScalar.cmp(b.baseScalar);
+	// Preserve the existing undefined result for unordered (NaN) comparisons.
+	return Number.isNaN(comparison) ? undefined : comparison;
 }
 
 //

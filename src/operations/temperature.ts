@@ -21,11 +21,11 @@ export function isDegrees(a: Quantity) : boolean
 		(/<temp-[CFRK]>/.test(a.numerator[0]) || /<(kelvin|celsius|rankine|fahrenheit)>/.test(a.numerator[0]));
 }
 
-export function addTempDegrees(temp: Quantity, deg: Quantity): Quantity
+export function addTempDegrees(temp: Quantity, deg: Quantity, resultOwner: Quantity = temp): Quantity
 {
 	let tempDegrees = deg.to(temp.createQuantity(getDegreeUnits(temp)));
 
-	return temp.createQuantity({
+	return resultOwner.createQuantity({
 		scalar: temp.scalar.add(tempDegrees.scalar),
 		numerator: temp.numerator,
 		denominator: temp.denominator

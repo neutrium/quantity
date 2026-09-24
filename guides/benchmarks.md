@@ -14,11 +14,12 @@ Each command builds fresh `dist` output. The first runs all benchmarks once; the
 - Construction covers the public Quantity API with the default parser, an explicit Regex parser, separate scalar/units, and a preparsed definition.
 - Conversions cover length, speed and absolute temperature. Each measures construction plus conversion, first conversion on a fresh instance prepared outside the timer, and repeated conversion on a warmed instance.
 - Arithmetic uses prepared operands for addition, subtraction, multiplication, division, scalar multiplication and positive/negative integer powers. Different unit addition uses a warmed conversion cache.
+- Comparisons cover `lte` and `gte` with string operands and `compareTo` with an existing quantity.
 
 All workloads validate their results before timing and consume and validate the last measured result afterwards. Assertions and expected-value construction are outside timed callbacks. Setup hooks allocate fresh instances outside the timer; their allocations can still affect garbage collection during a run.
 
 These are steady-state measurements: module initialization, shared unit caches, and the Regex parser's static cache are warmed. Constructing a new Regex parser does not clear its static cache. Reusing the Nearley wrapper does not reuse its
-internal Nearley parser, which is recreated on each call. Fresh-instance conversion cases measure an empty instance conversion cache, not a cold process.
+internal Nearley parser, which is recreated on each call with its own lexer state. The compiled grammar is shared across calls and wrappers. Fresh-instance conversion cases measure an empty instance conversion cache, not a cold process.
 
 The cached-conversion cases time **100 calls per operation** across 100 warmed instances, retaining every result in a preallocated array. This reduces timer overhead and avoids a loop whose identical results are discarded. Array access and result storage are included. Their reported throughput is batches/second: multiply by 100 for calls/second, or divide latency by 100 for average time/call. Other cases perform one library operation per measurement. Rankings across different workloads show relative costs, not interchangeable implementations.
 

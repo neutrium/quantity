@@ -77,3 +77,13 @@ test('arithmetic: reused operands', async ({ bench }) => {
 	assert.equal(length.scalar.toString(), '10');
 	assert.equal(otherUnits.scalar.toString(), '200');
 });
+
+test('comparisons: reused operands and strings', async ({ bench }) => {
+	const length = new Quantity('10 m');
+	const smaller = new Quantity('2 m');
+	await compare(bench, [
+		{ name: 'lte: string operand', run: () => length.lte('20 m'), validate: value => assert.equal(value, true) },
+		{ name: 'gte: string operand', run: () => length.gte('2 m'), validate: value => assert.equal(value, true) },
+		{ name: 'compareTo: reused smaller operand', run: () => length.compareTo(smaller), validate: value => assert.equal(value, 1) },
+	]);
+});

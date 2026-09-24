@@ -588,6 +588,12 @@ export class Quantity
 		}
 
 		const quantity = other as Quantity;
+
+		if (quantity.units() === this.units())
+		{
+			return this;
+		}
+
 		const cached = this.quantityConversionCache.get(quantity);
 
 		if (cached)
