@@ -5,52 +5,52 @@
 {@link parsers.NearleyQtyParser | NearleyQtyParser} is the default. It supports compound expressions, integer
 powers, and parenthesized groups followed by an exponent, such as `(m/s)^2`. {@link parsers.RegexQtyParser | RegexQtyParser} is the legacy alternative and does not support parenthesized grouping.
 
+Choose the default or regex entry point at import time:
+
 ```ts
-import { Quantity } from '@neutrium/quantity';
-import { RegexQtyParser } from '@neutrium/quantity/parsers.js';
+import { Quantity } from '@neutrium/quantity'; // Nearley
+// Or: import { Quantity } from '@neutrium/quantity/regex';
 
-const parser = new RegexQtyParser();
-const speed = new Quantity('12 m/s', undefined, parser);
+const speed = new Quantity('12 m/s');
 speed.scalar.toString(); // "12"
-
-const length = new Quantity(3, 'm', parser);
-length.units(); // "m"
 ```
 
-The custom parser is used to construct that instance. Operations that create other quantities do not propagate it; parse nonstandard operands explicitly before passing them to arithmetic methods.
+The regex entry point imports no Nearley runtime, grammar, or Moo lexer. The root entry imports no regex parser. These boundaries let bundlers exclude the unused parser; npm still installs the package's declared dependencies.
+
+The existing `@neutrium/quantity/parsers.js` barrel remains available. Individual parser imports are also exposed as `@neutrium/quantity/parsers/nearley` and `@neutrium/quantity/parsers/regex`. A third constructor argument still overrides
+the parser, but importing the root entry keeps Nearley in the dependency graph.
 
 ## Adapt input with a custom parser
 
-A custom parser needs a `parse(string)` method returning a Decimal scalar and normalized `numerator` and `denominator` token arrays. Delegating to the default parser avoids depending on internal token names.
+Use the parser-independent core to configure your own Quantity class. The factory creates a parser for each independently constructed instance; derived quantities share the originating parser. Parsers must support repeated synchronous calls.
 
 ```ts
-import { Quantity } from '@neutrium/quantity';
-import { NearleyQtyParser } from '@neutrium/quantity/parsers.js';
+import { createQuantityClass, type Parser, type QuantityDefinition } from '@neutrium/quantity/core';
+import { RegexQtyParser } from '@neutrium/quantity/parsers/regex';
 
-const defaultParser = new NearleyQtyParser();
-const parser = {
-    parse(input: string)
-	{
-        const result = defaultParser.parse(input.replaceAll('metres', 'm'));
-        if (!result)
-        {
-            throw new Error('Incomplete quantity expression');
-		}
-        return result;
-    }
-};
+const Quantity = createQuantityClass((): Parser<QuantityDefinition> => {
+    const parser = new RegexQtyParser();
 
-const length = new Quantity('3 metres', undefined, parser);
-length.to('cm').scalar.toString(); // "300"
+    return {
+        parse: input => parser.parse(input.replaceAll('metres', 'm'))
+    };
+});
+
+const length = new Quantity('3 metres');
+length.clone().add('2 metres').to('cm').scalar.toString(); // "500"
 ```
 
-{@link "parsers/Parser".Parser | Parser} and {@link QuantityDefinition.QuantityDefinition | QuantityDefinition} document these structures but are not exported from the package entry points. TypeScript infers a compatible parser from the object above, so internal-path imports are unnecessary.
+Cloning, arithmetic, conversion, comparisons, and temperature operations preserve parser selection. Results retain the configured class. Operations accept operands from other entry points; result construction follows the receiving instance.
+
+The core also exports `QuantityCore`, `QuantityInitParam`, `QuantityDefinition`, `Parser`, and `QuantityConstructor`. The unconfigured core accepts parsed definitions; string inputs require an explicitly supplied parser. Core imports do not load either built-in parser.
 
 ## Use parsed definitions
 
 Direct parsing produces a definition, not a fully checked physical quantity. The Quantity constructor applies restrictions such as absolute zero and invalid compound temperature units.
 
 ```ts
+import { NearleyQtyParser } from '@neutrium/quantity/parsers/nearley';
+
 const definition = new NearleyQtyParser().parse('2 m/s');
 
 if (!definition)
@@ -68,6 +68,6 @@ Definitions use internal tokens such as `<meter>` and `<1>`, not display aliases
 
 ## Understand the guards
 
-{@link guards.isQuantity | isQuantity} checks `instanceof Quantity` and safely accepts nullish values. It does not recognize plain definitions or instances from a different installed copy of the library.
+{@link guards.isQuantity | isQuantity} checks the shared core class across all configured entry points and safely accepts nullish values. It does not recognize plain definitions or instances from a different installed copy of the library.
 
 {@link guards.isQuantityDefinition | isQuantityDefinition} only checks that a `scalar` property is defined. It does not validate Decimal values or token arrays, and throws on `null` or `undefined`. It is a shallow discriminator, not a validator for external JSON.

@@ -1,7 +1,7 @@
 import { Decimal } from '@neutrium/decimal';
 import { compareArray } from '@neutrium/utilities';
 
-import { Quantity } from '../Quantity.js'
+import type { Quantity } from '../QuantityCore.js'
 
 // Numbers for conversion
 const FIVE_NINTHS = new Decimal("5").div("9");
@@ -26,7 +26,7 @@ export function addTempDegrees(temp: Quantity, deg: Quantity): Quantity
 {
 	let tempDegrees = deg.to(getDegreeUnits(temp.units()));
 
-	return new Quantity({
+	return temp.createQuantity({
 		scalar: temp.scalar.add(tempDegrees.scalar),
 		numerator: temp.numerator,
 		denominator: temp.denominator
@@ -37,9 +37,9 @@ export function subtractTemperatures(a: Quantity, b: Quantity): Quantity
 {
 	let aUnits = a.units(),
 		bConverted = b.to(aUnits),
-		dstDegrees = new Quantity(getDegreeUnits(aUnits));
+		dstDegrees = a.createQuantity(getDegreeUnits(aUnits));
 
-	return new Quantity({
+	return a.createQuantity({
 		scalar: a.scalar.sub(bConverted.scalar),
 		numerator: dstDegrees.numerator,
 		denominator: dstDegrees.denominator
@@ -50,7 +50,7 @@ export function subtractTempDegrees(temp: Quantity, deg: Quantity): Quantity
 {
 	let tempDegrees = deg.to(getDegreeUnits(temp.units()));
 
-	return new Quantity({
+	return temp.createQuantity({
 		scalar: temp.scalar.sub(tempDegrees.scalar),
 		numerator: temp.numerator,
 		denominator: temp.denominator
@@ -73,7 +73,7 @@ export function toDegrees(src: Quantity, dst: Quantity): Quantity
 			throw new Error("Unknown type for degree conversion to: " + dstUnits);
 	}
 
-	return new Quantity({
+	return src.createQuantity({
 		scalar: dstScalar,
 		numerator: dst.numerator,
 		denominator: dst.denominator
@@ -101,7 +101,7 @@ export function toDegK(qty: Quantity): Quantity
 		}
 	}
 
-	return new Quantity({
+	return qty.createQuantity({
 		scalar: q,
 		numerator: ["<kelvin>"],
 		denominator: ["<1>"]
@@ -127,7 +127,7 @@ export function toTemp(src: Quantity, dst: Quantity): Quantity
 			throw new Error("Unknown type for temp conversion to: " + dstUnits);
 	}
 
-	return new Quantity({
+	return src.createQuantity({
 		scalar: dstScalar,
 		numerator: dst.numerator,
 		denominator: dst.denominator
@@ -156,7 +156,7 @@ export function toTempK(qty: Quantity): Quantity
 		}
 	}
 
-	return new Quantity({
+	return qty.createQuantity({
 		scalar: q,
 		numerator: ["<temp-K>"],
 		denominator: ["<1>"]

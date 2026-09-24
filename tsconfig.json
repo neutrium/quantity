@@ -17,6 +17,8 @@
 	},
 	"files": [
 		"./src/Quantity.ts",
-		"./src/parsers/index.ts"
+		"./src/parsers/index.ts",
+		"./src/core.ts",
+		"./src/regex.ts"
 	]
 }

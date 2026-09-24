@@ -1,7 +1,7 @@
 import { Decimal } from '@neutrium/decimal';
 import { typeguards } from "@neutrium/utilities";
 
-import { Quantity } from '../Quantity.js'
+import type { Quantity } from '../QuantityCore.js'
 import { QuantityInitParam } from '../guards.js';
 import { isCompatible } from './comparison.js';
 import { addTempDegrees, subtractTemperatures, subtractTempDegrees } from './temperature.js';
@@ -16,7 +16,7 @@ const UNITY = "<1>";
 //
 export function add(a: Quantity, b_o: QuantityInitParam) : Quantity
 {
-	const b = new Quantity(b_o);
+	const b = a.createQuantity(b_o);
 
 	if (!isCompatible(a, b))
 	{
@@ -36,7 +36,7 @@ export function add(a: Quantity, b_o: QuantityInitParam) : Quantity
 		return addTempDegrees(b, a);
 	}
 
-	return new Quantity({
+	return a.createQuantity({
 		scalar: a.scalar.add(b.to(a).scalar),
 		numerator: a.numerator,
 		denominator: a.denominator
@@ -45,7 +45,7 @@ export function add(a: Quantity, b_o: QuantityInitParam) : Quantity
 
 export function sub(a: Quantity, b_o: QuantityInitParam) : Quantity
 {
-	const b = new Quantity(b_o);
+	const b = a.createQuantity(b_o);
 
 	if (!isCompatible(a,b))
 	{
@@ -65,7 +65,7 @@ export function sub(a: Quantity, b_o: QuantityInitParam) : Quantity
 		throw new Error("Cannot subtract a temperature from a differential degree unit");
 	}
 
-	return new Quantity({
+	return a.createQuantity({
 		scalar: a.scalar.sub(b.to(a).scalar),
 		numerator: a.numerator,
 		denominator: a.denominator
@@ -76,14 +76,14 @@ export function mul(a: Quantity, b_o: QuantityInitParam) : Quantity
 {
 	if (typeguards.isNumber(b_o) || b_o instanceof Decimal)
 	{
-		return new Quantity({
+		return a.createQuantity({
 			scalar: a.scalar.mul(b_o),
 			numerator: a.numerator,
 			denominator: a.denominator
 		});
 	}
 
-	const b = new Quantity(b_o);
+	const b = a.createQuantity(b_o);
 
 	if ((a.isTemperature() || b.isTemperature()) && !(a.isUnitless() || b.isUnitless()))
 	{
@@ -103,7 +103,7 @@ export function mul(a: Quantity, b_o: QuantityInitParam) : Quantity
 
 	let numden = cleanUnitNames(op1.numerator.concat(op2.numerator), op1.denominator.concat(op2.denominator));
 
-	return new Quantity({
+	return a.createQuantity({
 		scalar: op1.scalar.mul(op2.scalar),
 		numerator: numden[0],
 		denominator: numden[1]
@@ -114,14 +114,14 @@ export function div(a: Quantity, b_o: QuantityInitParam) : Quantity
 {
 	if (typeguards.isNumber(b_o) || b_o instanceof Decimal)
 	{
-		return new Quantity({
+		return a.createQuantity({
 			"scalar": a.scalar.div(b_o),
 			"numerator": a.numerator,
 			"denominator": a.denominator
 		});
 	}
 
-	const b = new Quantity(b_o);
+	const b = a.createQuantity(b_o);
 
 	if (b.isTemperature())
 	{
@@ -145,7 +145,7 @@ export function div(a: Quantity, b_o: QuantityInitParam) : Quantity
 
 	let numden = cleanUnitNames(op1.numerator.concat(op2.denominator), op1.denominator.concat(op2.numerator));
 
-	return new Quantity({
+	return a.createQuantity({
 		scalar: op1.scalar.div(op2.scalar),
 		numerator: numden[0],
 		denominator: numden[1]
@@ -180,7 +180,7 @@ export function pow(a: Quantity, yy: number | string | Decimal) : Quantity
 
 	let numden = cleanUnitNames(num, den);
 
-	return new Quantity({
+	return a.createQuantity({
 		scalar: a.scalar.pow(yy),
 		numerator: numden[0],
 		denominator: numden[1]
@@ -200,7 +200,7 @@ export function inverse(a: Quantity) : Quantity
 		throw new Error("Divide by zero");
 	}
 
-	return new Quantity({
+	return a.createQuantity({
 		scalar: new Decimal(1).div(a.scalar),
 		numerator: a.denominator,
 		denominator: a.numerator

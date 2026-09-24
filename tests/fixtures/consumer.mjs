@@ -23,3 +23,18 @@ await assert.rejects(import('@neutrium/quantity/dist/Quantity.js'), {
 });
 
 console.log('Packed consumer runtime passed');
+
+// Configured entry points share the same core type and runtime guard.
+import { Quantity as RegexQuantity } from '@neutrium/quantity/regex';
+import { createQuantityClass, QuantityCore } from '@neutrium/quantity/core';
+import { RegexQtyParser as DirectRegexParser } from '@neutrium/quantity/parsers/regex';
+import { NearleyQtyParser as DirectNearleyParser } from '@neutrium/quantity/parsers/nearley';
+const CustomQuantity = createQuantityClass(() => new DirectRegexParser());
+const customQuantity = new CustomQuantity('1e3 m').clone().add('1e3 m');
+const regexQuantity = new RegexQuantity('1e3 m');
+new DirectNearleyParser().parse('m');
+assert(customQuantity instanceof CustomQuantity);
+assert(customQuantity instanceof QuantityCore);
+assert(isQuantity(regexQuantity));
+assert.equal(customQuantity.scalar.toString(), '2000');
+assert(regexQuantity.eq(new Quantity('1000 m')));

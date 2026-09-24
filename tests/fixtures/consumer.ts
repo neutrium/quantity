@@ -25,3 +25,16 @@ if (isQuantity(unknownValue))
 new Quantity(1, 2);
 // @ts-expect-error Powers require a decimal, number or string.
 quantity.pow({});
+
+// Configured entry points share the same core type and runtime guard.
+import { Quantity as RegexQuantity } from '@neutrium/quantity/regex';
+import { createQuantityClass, QuantityCore } from '@neutrium/quantity/core';
+import { RegexQtyParser as DirectRegexParser } from '@neutrium/quantity/parsers/regex';
+import { NearleyQtyParser as DirectNearleyParser } from '@neutrium/quantity/parsers/nearley';
+const CustomQuantity = createQuantityClass(() => new DirectRegexParser());
+const customQuantity = new CustomQuantity('1e3 m').clone().add('1e3 m');
+const regexQuantity = new RegexQuantity('1e3 m');
+new DirectNearleyParser().parse('m');
+const coreQuantity: QuantityCore = customQuantity;
+const compatibleQuantity: Quantity = regexQuantity;
+const typedResult: Quantity = customQuantity;

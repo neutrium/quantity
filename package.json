@@ -14,6 +14,22 @@
 		"./guards.js": {
 			"types": "./dist/guards.d.ts",
 			"import": "./dist/guards.js"
+		},
+		"./core": {
+			"types": "./dist/core.d.ts",
+			"import": "./dist/core.js"
+		},
+		"./regex": {
+			"types": "./dist/regex.d.ts",
+			"import": "./dist/regex.js"
+		},
+		"./parsers/nearley": {
+			"types": "./dist/parsers/NearleyQtyParser.d.ts",
+			"import": "./dist/parsers/NearleyQtyParser.js"
+		},
+		"./parsers/regex": {
+			"types": "./dist/parsers/RegexQtyParser.d.ts",
+			"import": "./dist/parsers/RegexQtyParser.js"
 		}
 	},
 	"description": "The NeutriumJS unit conversion module.",
@@ -53,7 +69,7 @@
 		"test:package": "node tools/test-package.mjs",
 		"test:package:built": "node tools/test-package.mjs --skip-build",
 		"verify": "npm run build && npm run verify:built",
-		"verify:built": "npm run test:built && npm run test:package:built",
+		"verify:built": "npm run test:built && npm run test:package:built && npm run test:bundles:built",
 		"prepack": "node tools/prepack.mjs",
 		"prepublishOnly": "npm run verify",
 		"benchmark": "npm run build && vitest bench --run --config vitest.benchmark.config.js",
@@ -62,7 +78,8 @@
 		"demo:check": "tsc -p demo/tsconfig.json",
 		"demo:bundle": "npm run demo:check && vite build --config demo/vite.config.mjs",
 		"demo:build": "npm run build && npm run demo:bundle",
-		"site": "npm run build && npm run docs && npm run demo:bundle"
+		"site": "npm run build && npm run docs && npm run demo:bundle",
+		"test:bundles:built": "node tools/test-bundles.mjs"
 	},
 	"devDependencies": {
 		"@types/moo": "^0.5.10",
@@ -83,5 +100,6 @@
 	"publishConfig": {
 		"access": "public",
 		"registry": "https://registry.npmjs.org/"
-	}
+	},
+	"sideEffects": false
 }

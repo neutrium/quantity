@@ -1,6 +1,6 @@
 import { Decimal } from '@neutrium/decimal'
-import { Quantity } from './Quantity.js'
-import { QuantityDefinition } from './QuantityDefinition.js';
+import { Quantity } from './QuantityCore.js'
+import type { QuantityDefinition } from './QuantityDefinition.js';
 
 /**
  * Input types shared by the constructor and arithmetic methods.
@@ -38,9 +38,9 @@ export function isQuantityDefinition(value: any): value is QuantityDefinition
 }
 
 /**
- * Test whether a value is an instance of this package's Quantity class.
+ * Test whether a value belongs to this package's shared Quantity core.
  * @param x - Any value, including null or undefined.
- * @returns Whether the value passes `instanceof Quantity`.
+ * @returns Whether the value is a Quantity from the default, regex, or custom entry point.
  * @remarks Plain definitions and instances from another copy of the package do
  * not pass this check.
  * @example

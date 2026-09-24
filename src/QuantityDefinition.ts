@@ -7,8 +7,8 @@ import { Decimal } from "@neutrium/decimal";
  * `m`. Prefixes are separate tokens, and repeated units represent powers.
  * Use a bundled parser to generate definitions rather than maintaining token names.
  *
- * @remarks This supporting interface is not exported from a public package entry
- * point. TypeScript accepts a structurally matching object without importing it.
+ * @remarks Import this interface from `@neutrium/quantity/core`. TypeScript also accepts
+ * a structurally matching object without importing it.
  * Arrays may be shared with a constructed quantity; do not mutate them afterward.
  *
  * @example

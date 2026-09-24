@@ -34,9 +34,7 @@ To use this library in a browser environment you will need to use a bundler like
 
 ## Interactive demo
 
-The [Quantity Lab](https://neutrium.github.io/quantity/demo/) follows the visual style
-of the Neutrium formatter and decimal demos. Explore live conversions, unit
-arithmetic, temperature scales, and comparisons, with editable presets and
+The [Quantity Lab](https://neutrium.github.io/quantity/demo/) follows the visual style of the Neutrium formatter and decimal demos. Explore live conversions, unit arithmetic, temperature scales, and comparisons, with editable presets and
 copyable JavaScript examples. Calculations use the local library build.
 
 ```sh
@@ -44,16 +42,12 @@ npm ci
 npm run demo
 ```
 
-Open the local URL printed by Vite (`/quantity/demo/`). `npm run demo:build`
-builds the standalone demo into `docs/demo/`. To generate the complete API site
-and demo,
-run `npm run site`. TypeDoc clears `docs/`, so build the demo after the API
+Open the local URL printed by Vite (`/quantity/demo/`). `npm run demo:build` builds the standalone demo into `docs/demo/`. To generate the complete API site and demo, run `npm run site`. TypeDoc clears `docs/`, so build the demo after the API
 reference. The Pages workflow publishes both together.
 
 ## Development and releases
 
-Run `npm run benchmark` for Vitest benchmarks of parsing, construction, conversions,
-and arithmetic. See [benchmark methodology and options](benchmark/README.md).
+Run `npm run benchmark` for Vitest benchmarks of parsing, construction, conversions, and arithmetic. See [benchmark methodology and options](benchmark/README.md).
 
 Use Node.js 24 or newer and npm:
 
@@ -63,38 +57,20 @@ npm test
 npm run verify
 ```
 
-`npm test` builds from source before running Vitest. `npm run verify` also packs the
-library, installs the archive in a temporary consumer project, and checks its public
-entry points and TypeScript declarations with NodeNext and Bundler resolution.
-`npm run test:built` and `npm run test:package:built` reuse an existing build.
+`npm test` builds from source before running Vitest. `npm run verify` also packs the library, installs the archive in a temporary consumer project, and checks its public entry points and TypeScript declarations with NodeNext and Bundler resolution. `npm run test:built` and `npm run test:package:built` reuse an existing build.
 
-`dist/` and `src/parsers/qty-grammar.ts` are generated and excluded from Git.
-Edit `src/parsers/qty-grammar.ne` to change the grammar. `npm run build` cleans the
-output, regenerates the grammar, and compiles JavaScript and declarations.
-`npm pack` builds automatically; `npm publish` builds and runs verification first.
-The npm package includes compiled output, TypeScript source, the grammar, README,
-and license. Consumers installing from npm do not need to compile the library.
+`dist/` and `src/parsers/qty-grammar.ts` are generated and excluded from Git. Edit `src/parsers/qty-grammar.ne` to change the grammar. `npm run build` cleans the output, regenerates the grammar, and compiles JavaScript and declarations.
+`npm pack` builds automatically; `npm publish` builds and runs verification first. The npm package includes compiled output, TypeScript source, the grammar, README, and license. Consumers installing from npm do not need to compile the library.
 
-GitHub Actions verifies pull requests and pushes to `master` or `main` on Node.js
-24.0.0, the latest 24.x, and 26.x. To release, update the version in `package.json`
-and `package-lock.json`, commit it, and push a matching `vX.Y.Z` tag. The release
-workflow runs CI, verifies and publishes to npm, then creates a GitHub release.
-Prerelease versions publish under the `next` tag; stable versions use `latest`.
+GitHub Actions verifies pull requests and pushes to `master` or `main` on Node.js 24.0.0, the latest 24.x, and 26.x. To release, update the version in `package.json` and `package-lock.json`, commit it, and push a matching `vX.Y.Z` tag. The release workflow runs CI, verifies and publishes to npm, then creates a GitHub release. Prerelease versions publish under the `next` tag; stable versions use `latest`.
 
-Before the first automated release, configure an npm trusted publisher for
-`@neutrium/quantity`: GitHub owner `neutrium`, repository `quantity`, workflow
-`release.yml`, with no environment specified. The workflow uses OIDC authentication
-and does not require a stored npm token. See the
-[npm trusted publishing documentation](https://docs.npmjs.com/trusted-publishers/).
+Before the first automated release, configure an npm trusted publisher for `@neutrium/quantity`: GitHub owner `neutrium`, repository `quantity`, workflow `release.yml`, with no environment specified. The workflow uses OIDC authentication
+and does not require a stored npm token. See the [npm trusted publishing documentation](https://docs.npmjs.com/trusted-publishers/).
 
 ## API documentation
 
-The [API reference](https://neutrium.github.io/quantity/) is generated from the
-TypeScript source and its documentation comments using TypeDoc, following the
-setup in [@neutrium/formatter](https://github.com/neutrium/formatter).
-It covers `@neutrium/quantity`, `@neutrium/quantity/parsers.js`, and
-`@neutrium/quantity/guards.js`. `QuantityDefinition` and `Parser` are included as
-supporting structural types; they are not separate package entry points.
+The [API reference](https://neutrium.github.io/quantity/) is generated from the TypeScript source and its documentation comments using TypeDoc, following the setup in [@neutrium/formatter](https://github.com/neutrium/formatter).
+It covers `@neutrium/quantity`, `@neutrium/quantity/parsers.js`, and `@neutrium/quantity/guards.js`. `QuantityDefinition` and `Parser` are included as supporting structural types; they are not separate package entry points.
 
 To generate the site locally:
 
@@ -103,23 +79,13 @@ npm ci
 npm run docs
 ```
 
-Open `docs/index.html` to browse the result. The command regenerates the parser
-grammar before running TypeDoc, so it also works in a fresh checkout. Generated
-`docs/` files are ignored by Git and excluded from the npm package.
+Open `docs/index.html` to browse the result. The command regenerates the parser grammar before running TypeDoc, so it also works in a fresh checkout. Generated `docs/` files are ignored by Git and excluded from the npm package.
 
-The library and TypeDoc share TypeScript 6.0.3. All development dependencies are
-installed with `npm ci` and locked in the root `package-lock.json`.
-The site landing page is `guides/index.md`; the other `guides/` files provide
-worked examples for quantities, temperatures, and parsers. Public API comments
-and links are validated with warnings treated as errors.
-Pull requests run this documentation check in CI.
+The library and TypeDoc share TypeScript 6.0.3. All development dependencies are installed with `npm ci` and locked in the root `package-lock.json`. The site landing page is `guides/index.md`; the other `guides/` files provide
+worked examples for quantities, temperatures, and parsers. Public API comments and links are validated with warnings treated as errors. Pull requests run this documentation check in CI.
 
-For publishing, set **Settings → Pages → Build and deployment → Source** to
-**GitHub Actions** in the GitHub repository. The `Documentation` workflow tests
-the package, generates the site, and deploys it to GitHub Pages after relevant
-changes reach the default branch (`master` or `main`). It can also be run manually
-on the default branch from the Actions tab. The site is published at
-<https://neutrium.github.io/quantity/> using the `github-pages` environment.
+For publishing, set **Settings → Pages → Build and deployment → Source** to **GitHub Actions** in the GitHub repository. The `Documentation` workflow tests the package, generates the site, and deploys it to GitHub Pages after relevant
+changes reach the default branch (`master` or `main`). It can also be run manually on the default branch from the Actions tab. The site is published at <https://neutrium.github.io/quantity/> using the `github-pages` environment.
 
 ## Unit Syntax
 
@@ -372,6 +338,31 @@ The general conventions listed below are utilised to define unit names. These ca
 - Where a unit has both dry and fluid/liquid variants, a d or l is added to the unit respectively e.g. gal(d). Dry and liquid variants are typically used in conjunction with US localised variants. In these cases you would add the d or l to the localisation, for example a US fluid gallon would be represented as gal(usl).
 
 ## Quantity Parser
+
+Select the parser through the package entry point:
+
+```ts
+import { Quantity } from '@neutrium/quantity'; // Nearley (default)
+// Or: import { Quantity } from '@neutrium/quantity/regex';
+```
+
+The regex entry point excludes Nearley, its grammar, and Moo from its import graph.
+For custom parsers, import `createQuantityClass` and the `Parser` and
+`QuantityDefinition` types from `@neutrium/quantity/core`. Derived quantities retain
+both their configured class and parser, including arithmetic, conversions, and clones.
+
+```ts
+import { createQuantityClass } from '@neutrium/quantity/core';
+import { RegexQtyParser } from '@neutrium/quantity/parsers/regex';
+
+const Quantity = createQuantityClass(() => new RegexQtyParser());
+const result = new Quantity('1e3 m').add('2 m');
+```
+
+The individual parsers are exported at `/parsers/nearley` and `/parsers/regex`.
+The `/parsers.js` barrel and third constructor argument remain supported. Passing a
+parser override to the root entry does not exclude its default Nearley dependency.
+Parser selection changes bundle contents, not npm's installed dependencies.
 
 The @neutrium/quantity package ships with two unit parsers:
 

@@ -5,7 +5,9 @@
 		"./src/parsers/index.ts",
 		"./src/guards.ts",
 		"./src/QuantityDefinition.ts",
-		"./src/parsers/Parser.ts"
+		"./src/parsers/Parser.ts",
+		"./src/core.ts",
+		"./src/regex.ts"
 	],
 	"tsconfig": "./tsconfig.json",
 	"out": "./docs",
@@ -17,7 +19,6 @@
 		"./guides/temperatures.md",
 		"./guides/parsers.md",
 		"./guides/benchmarks.md"
-
 	],
 	"categorizeByGroup": false,
 	"categoryOrder": [

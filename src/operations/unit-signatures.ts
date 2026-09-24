@@ -1,4 +1,4 @@
-import { Quantity } from "../Quantity.js";
+import type { Quantity } from "../QuantityCore.js";
 import { UnitTokenManager } from "../UnitTokenManager.js";
 
 

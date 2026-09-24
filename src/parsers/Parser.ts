@@ -1,9 +1,8 @@
 /**
  * Structural contract for a parser supplied to the Quantity constructor.
  * @typeParam Result - Parsed output; Quantity requires a QuantityDefinition shape.
- * @remarks This interface is documented as a supporting type and is not exported
- * from a public entry point. Pass an object with a compatible `parse` method;
- * an explicit `implements Parser` declaration is unnecessary.
+ * @remarks Import this interface from `@neutrium/quantity/core`. A compatible `parse`
+ * method is sufficient; an explicit `implements Parser` declaration is unnecessary.
  * @see {@link parsers.NearleyQtyParser | NearleyQtyParser} for the default implementation.
  * @see {@link parsers.RegexQtyParser | RegexQtyParser} for the legacy implementation.
  */

@@ -1,6 +1,6 @@
 import { typeguards, compareArray } from '@neutrium/utilities';
 
-import { Quantity } from '../Quantity.js'
+import { Quantity } from '../QuantityCore.js'
 import { throwIncompatibleUnits } from './errors.js';
 import { inverse } from './maths.js';
 
@@ -60,7 +60,7 @@ export function compareTo(a: Quantity, b: string | number | Quantity)
 {
 	if (typeguards.isString(b) || typeguards.isNumber(b))
 	{
-		return compareTo(a, new Quantity(b));
+		return compareTo(a, a.createQuantity(b));
 	}
 
 	if (!isCompatible(a, b))
@@ -95,7 +95,7 @@ export function isCompatible(a: Quantity, b: string | number | Quantity) : boole
 {
 	if (typeguards.isString(b))
 	{
-		return isCompatible(a, new Quantity(b));
+		return isCompatible(a, a.createQuantity(b));
 	}
 
 	if (!(b instanceof Quantity))
