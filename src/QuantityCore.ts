@@ -162,8 +162,7 @@ export class Quantity
 
 			if (initUnits)	// Todo type guard properly
 			{
-				parserResult = this.parser.parse(initUnits);
-				parserResult.scalar = new Decimal(initValue);
+				parserResult = { ...this.parser.parse(initUnits), scalar: new Decimal(initValue) };
 			}
 			else if(typeof initValue === 'string')
 			{
@@ -321,8 +320,7 @@ export class Quantity
 	 * @returns A new quantity with the powered scalar and units.
 	 * @throws If the exponent is fractional or invalid, or the resulting units violate
 	 * absolute-temperature restrictions.
-	 * @remarks The current implementation retains the original units for exponent zero.
-	 * For a dimensionless identity, construct `new Quantity('1')` explicitly.
+	 * @remarks Exponent zero returns the dimensionless identity, with scalar one.
 	 * @example
 	 * ```ts
 	 * new Quantity('3 m').pow(2).scalar.toString(); // "9"

@@ -55,6 +55,18 @@ function unitsToPower(units, pwrStr)
 		denominator: string[] = units.denominator;
 	const pwr = parseInt(pwrStr)
 
+	if (pwr === 0)
+	{
+		// Zero removes dimensions, but must not make an invalid unit valid.
+		if ([...numerator, ...denominator].some(token => !tm.getUnit(token)))
+		{
+			throw new Error("Unit not recognized");
+		}
+
+		return { numerator: ['<1>'], denominator: ['<1>'] };
+	}
+
+
 	if(pwr < 0)
 	{
 		numerator = units.denominator;

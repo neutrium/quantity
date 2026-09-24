@@ -110,8 +110,8 @@ function convert(input: string, targetUnits: string): string
 
 - {@link Quantity.Quantity.inverse | Quantity.inverse} rejects zero explicitly. {@link Quantity.Quantity.div | Quantity.div} delegates
   scalar division to Decimal; check zero divisors if your application must reject them.
-- {@link Quantity.Quantity.pow | Quantity.pow} supports integer exponents. Currently, exponent zero retains
-  the original units. Construct `new Quantity('1')` for a dimensionless identity.
+- {@link Quantity.Quantity.pow | Quantity.pow} supports integer exponents. Exponent zero returns
+  the dimensionless identity (`1` with no units).
 - {@link Quantity.Quantity.clone | Quantity.clone} creates a new instance but shares scalar and unit arrays;
   it is not a deep copy and does not preserve a custom parser.
 - Assigning to public fields does not invalidate caches. Treat quantities as immutable.

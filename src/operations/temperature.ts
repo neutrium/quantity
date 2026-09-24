@@ -4,9 +4,7 @@ import { compareArray } from '@neutrium/utilities';
 import type { Quantity } from '../QuantityCore.js'
 import type { QuantityDefinition } from '../QuantityDefinition.js';
 
-// Numbers for conversion
-const FIVE_NINTHS = new Decimal("5").div("9");
-const NINE_FIFTHS = new Decimal("9").div("5");
+import { FIVE_NINTHS, NINE_FIFTHS } from "../data/TemperatureFactors.js";
 
 
 export function isTemperature(a: Quantity) : boolean

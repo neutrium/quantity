@@ -161,6 +161,11 @@ export function pow(a: Quantity, yy: number | string | Decimal) : Quantity
 		throw Error("Raising quantities to a fractional power not currently supported");
 	}
 
+	if (yy.eq(0))
+	{
+		return a.createQuantity({ scalar: new Decimal(1), numerator: [UNITY], denominator: [UNITY] });
+	}
+
 	let num = a.numerator,
 		den = a.denominator;
 

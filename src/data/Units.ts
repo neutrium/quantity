@@ -1,3 +1,5 @@
+import { FIVE_NINTHS } from './TemperatureFactors.js';
+
 export const UNITS = {
 	"": {
 		"units": {
@@ -305,12 +307,12 @@ export const UNITS = {
 		"units": {
 			"<kelvin>": [["degK", "kelvin", "K"], 1.0],
 			"<celsius>": [["degC", "celsius", "celsius", "centigrade", "C"], 1.0],
-			"<fahrenheit>": [["degF", "fahrenheit", "F"], 5/9],
-			"<rankine>": [["degR", "rankine", "R"], 5/9],
+			"<fahrenheit>": [["degF", "fahrenheit", "F"], FIVE_NINTHS],
+			"<rankine>": [["degR", "rankine", "R"], FIVE_NINTHS],
 			"<temp-K>": [["tempK"], 1.0],
 			"<temp-C>": [["tempC"], 1.0],
-			"<temp-F>": [["tempF"], 5/9],
-			"<temp-R>": [["tempR"], 5/9]
+			"<temp-F>": [["tempF"], FIVE_NINTHS],
+			"<temp-R>": [["tempR"], FIVE_NINTHS]
 		}
 	},
 	"time": {

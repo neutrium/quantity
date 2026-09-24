@@ -1,3 +1,4 @@
+import type { Decimal } from '@neutrium/decimal';
 import { PREFIXES } from './data/Prefixes.js'
 import { UNITS } from './data/Units.js'
 
@@ -66,7 +67,7 @@ export class UnitTokenManager
 
 	private initialize()
 	{
-		let definition : [string[], number];
+		let definition : [string[], number | Decimal];
 
 		// Process the prefixes file
 		for (let prefix in PREFIXES)
