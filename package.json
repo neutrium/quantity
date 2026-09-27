@@ -38,7 +38,7 @@
 		"unit",
 		"conversion"
 	],
-	"license": "CC-BY-4.0",
+	"license": "MIT",
 	"author:": "Trevor Walker <trevorw@neutrium.net> (https://neutrium.net)",
 	"private": false,
 	"engines": {
@@ -98,7 +98,7 @@
 		"src/**/*.ts",
 		"src/**/*.ne",
 		"README.md",
-		"license.txt"
+		"LICENSE"
 	],
 	"publishConfig": {
 		"access": "public",

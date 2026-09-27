@@ -24,9 +24,9 @@ try
 		'pack', '--ignore-scripts', '--json', '--pack-destination', directory,
 	], { cwd: root, encoding: 'utf8' }))[0];
 	const files = packed.files.map(file => file.path);
-	assert(files.includes('license.txt'));
+	assert(files.includes('LICENSE'), 'The package must include LICENSE');
 	assert(files.includes('src/parsers/qty-grammar.ne'));
-	assert(files.every(file => /^(dist\/|src\/|README\.md$|license\.txt$|package\.json$)/.test(file)),
+	assert(files.every(file => /^(dist\/|src\/|README\.md$|LICENSE$|package\.json$)/.test(file)),
 		'The package must not include tests, benchmarks or development configuration');
 
 	await writeFile(join(directory, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
