@@ -64,5 +64,5 @@ Absolute temperatures below absolute zero throw. Absolute-temperature units cann
 
 ## Precision and absolute zero
 
-Absolute-temperature conversions and differences combine offsets and scale factors before final rounding. A physically valid result that would round below absolute zero is clamped to the exact boundary (`-273.15 tempC` or `-459.67 tempF`), even if that requires more digits than the configured precision. An actually invalid source or result is rejected before rounding. Configured exponent limits still apply. See [numeric precision and range](usage.md#numeric-precision-and-range) for isolated
+Absolute-temperature conversions and differences combine offsets and scale factors before final rounding. A physically valid result that would round below absolute zero is clamped to the exact boundary (`-273.15 tempC` or `-459.67 tempF`), even if that requires more digits than the configured precision. An actually invalid source or result is rejected before rounding. Configured exponent limits still apply. See [configuration](usage.md#configuration) for isolated
 settings and exact comparisons.
