@@ -1,14 +1,14 @@
-import { calculate, CalculationError, errorMessage, operations, presets, type Operation } from './calculations';
+import { calculate, CalculationError, errorMessage, operations, presets, roundingModes, type Operation, type Rounding } from './calculations';
 import './styles.css';
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 	<a class="skip-link" href="#lab">Skip to quantity lab</a>
 	<header class="topbar">
-		<a class="brand" href="https://neutrium.github.io/quantity/" aria-label="Quantity API home">
+		<a class="brand" href="/quantity/" aria-label="Quantity API home">
 			<span class="brand-mark" aria-hidden="true"><img src="${import.meta.env.BASE_URL}neutrium-logo.png" alt="" /></span>
 			<span>@neutrium/quantity</span>
 		</a>
-		<nav class="topnav" aria-label="Project links"><a href="https://neutrium.github.io/quantity/">API reference</a><a href="https://github.com/neutrium/quantity">GitHub</a></nav>
+		<nav class="topnav" aria-label="Project links"><a href="/quantity/">API reference</a><a href="https://github.com/neutrium/quantity">GitHub</a></nav>
 	</header>
 	<main class="page" id="lab">
 		<section class="intro" aria-labelledby="page-title">
@@ -20,9 +20,11 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 			<form class="panel" id="controls" novalidate>
 				<div class="panel-heading"><h2>Calculation</h2><span class="hint">Updates live</span></div>
 				<div class="controls">
-					<div class="field"><label for="value">Quantity</label><input id="value" spellcheck="false" autocomplete="off" maxlength="200" aria-describedby="value-help" /><span class="hint" id="value-help">A scalar and units, such as 1.5 m or 100 km/h.</span></div>
+					<div class="field"><label for="value">Quantity</label><input id="value" spellcheck="false" autocomplete="off" maxlength="200" aria-describedby="value-help" /><span class="hint" id="value-help">A quantity or expression, such as 1.5 m, 1/2 m, or 2 kg/(m*s).</span></div>
 					<div class="field"><label for="operation">Operation</label><select id="operation">${Object.entries(operations).map(([value, label]) => `<option value="${value}">${label}</option>`).join('')}</select></div>
 					<div class="field" id="operand-field"><label id="operand-label" for="operand">Target units</label><input id="operand" spellcheck="false" autocomplete="off" maxlength="200" aria-describedby="operand-help" /><span class="hint" id="operand-help"></span></div>
+					<div class="field"><label for="precision">Precision</label><input id="precision" type="number" min="1" max="100" step="1" value="20" aria-describedby="precision-help" /><span class="hint" id="precision-help">1–100 significant digits for this demo, using an isolated Quantity class.</span></div>
+					<div class="field"><label for="rounding">Rounding</label><select id="rounding" aria-describedby="rounding-help">${roundingModes.map(mode => `<option value="${mode}">${mode}</option>`).join('')}</select><span class="hint" id="rounding-help">Applies to arithmetic and conversions.</span></div>
 					<aside class="example-note"><p class="eyebrow">Try it out</p><p id="preset-note"></p></aside>
 				</div>
 			</form>
@@ -39,7 +41,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 			</section>
 		</div>
 		<section class="reference-grid" aria-label="Unit syntax quick reference">
-			<article><h2>Build an expression</h2><p>Combine units with <code>*</code>, <code>/</code>, and integer powers. Group with parentheses: <code>kg*(m/s)^2</code>.</p></article>
+			<article><h2>Build an expression</h2><p>Combine units with <code>*</code>, <code>/</code>, and integer powers. Group with parentheses: <code>kg/(m*s)</code>. Dot multiplication binds more tightly: <code>kg/m.s</code> means <code>kg/(m*s)</code>.</p></article>
 			<article><h2>Temperature or interval?</h2><p><code>20 tempC</code> is an absolute temperature. <code>20 degC</code> is a change in temperature. Add an interval to a temperature to shift it.</p></article>
 			<article><h2>Keep dimensions consistent</h2><p>Add or compare compatible measurements, such as metres and feet. Multiplication and division create new unit expressions.</p></article>
 		</section>
@@ -51,6 +53,8 @@ const element = <T extends HTMLElement>(id: string) => document.getElementById(i
 const value = element<HTMLInputElement>('value');
 const operation = element<HTMLSelectElement>('operation');
 const operand = element<HTMLInputElement>('operand');
+const precision = element<HTMLInputElement>('precision');
+const rounding = element<HTMLSelectElement>('rounding');
 const copy = element<HTMLButtonElement>('copy');
 let copyTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -59,7 +63,7 @@ function update()
 	clearTimeout(copyTimer);
 	copy.textContent = 'Copy code';
 
-	for (const field of [value, operand])
+	for (const field of [value, operand, precision, rounding])
 	{
 		field.removeAttribute('aria-invalid');
 		field.setAttribute('aria-describedby', `${field.id}-help`);
@@ -70,11 +74,11 @@ function update()
 	element('operand-field').hidden = unary;
 	operand.disabled = unary;
 	element('operand-label').textContent = op === 'to' ? 'Target units' : op === 'pow' ? 'Integer power' : 'Second quantity';
-	element('operand-help').textContent = op === 'to' ? 'A unit expression, such as ft, m/s, or tempF.' : op === 'pow' ? 'An integer between −12 and 12 for this demo.' : 'Include units, or use a scalar such as 2 to multiply or divide.';
+	element('operand-help').textContent = op === 'to' ? 'Target units, such as ft or tempF. Any target scalar is ignored.' : op === 'pow' ? 'A safe integer power, up to ±9007199254740991.' : 'Include units, or use a scalar such as 2 to multiply or divide.';
 
 	try
 	{
-		const result = calculate({ value: value.value, operation: op, operand: operand.value });
+		const result = calculate({ value: value.value, operation: op, operand: operand.value, precision: Number(precision.value), rounding: rounding.value as Rounding });
 		for (const key of ['output', 'base', 'units', 'type', 'code'] as const) element(key).textContent = result[key];
 		element('output-label').textContent = result.comparison ? operations[op] : 'Calculated quantity';
 		element('base-label').textContent = result.comparison ? 'Input in base units' : 'In base units';
@@ -97,7 +101,7 @@ function update()
 
 		if (error instanceof CalculationError && error.field)
 		{
-			const field = error.field === 'value' ? value : operand;
+			const field = element<HTMLInputElement | HTMLSelectElement>(error.field);
 			field.setAttribute('aria-invalid', 'true');
 			field.setAttribute('aria-describedby', `${field.id}-help error`);
 		}
@@ -125,6 +129,8 @@ function loadPreset(index: number)
 	value.value = preset.value;
 	operation.value = preset.operation;
 	operand.value = preset.operand;
+	precision.value = String(preset.precision ?? 20);
+	rounding.value = preset.rounding ?? 'half-up';
 	element('preset-note').textContent = preset.note;
 	presetButtons.forEach((button, i) => {
 		button.classList.toggle('active', index === i);

@@ -196,7 +196,7 @@ input, select, textarea {
 	outline: none;
 }
 
-input, select { min-height: 2.65rem; padding: 0.62rem 0.72rem; }
+input, select { height: 2.75rem; padding: 0.62rem 0.72rem; }
 textarea {
 	min-height: 210px;
 	resize: vertical;

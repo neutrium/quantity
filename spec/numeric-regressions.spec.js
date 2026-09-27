@@ -27,8 +27,8 @@ describe('zero powers', () => {
             const parser = new Parser();
             for (const input of ['m0', 'm^0', '3 m^0', 'm^0/s^0']) {
                 const definition = parser.parse(input);
-                expect(definition.numerator).toEqual(['<1>']);
-                expect(definition.denominator).toEqual(['<1>']);
+                expect(definition.numerator).toEqual([]);
+                expect(definition.denominator).toEqual([]);
                 expect(new Quantity(definition).isUnitless()).toBe(true);
             }
             expect(new Quantity(parser.parse('m^0/s')).same(new Quantity('s^-1'))).toBe(true);
@@ -68,7 +68,7 @@ describe('temperature factor precision', () => {
 
 describe('parser definition ownership', () => {
     it('does not overwrite a cached parser result when a separate scalar is supplied', () => {
-        const definition = { scalar: new Decimal(1), numerator: ['<meter>'], denominator: ['<1>'] };
+        const definition = { scalar: new Decimal(1), numerator: [{ unit: '<meter>', exponent: 1 }], denominator: [] };
         const Custom = createQuantityClass(() => ({ parse: () => definition }));
         const q = new Custom('7', 'm');
         expect(q.scalar.toString()).toBe('7');
@@ -80,7 +80,7 @@ describe('parser definition ownership', () => {
 
     it('accepts frozen parser-owned definitions and token arrays', () => {
         const definition = Object.freeze({
-            scalar: new Decimal(1), numerator: Object.freeze(['<meter>']), denominator: Object.freeze(['<1>']),
+            scalar: new Decimal(1), numerator: Object.freeze([{ unit: '<meter>', exponent: 1 }]), denominator: Object.freeze([]),
         });
         const q = new Quantity('2.5', 'm', { parse: () => definition });
         expect(q.scalar.toString()).toBe('2.5');

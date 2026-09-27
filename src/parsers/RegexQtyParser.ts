@@ -1,11 +1,23 @@
+import type { DecimalConstructor } from '../operations/numeric-context.js';
+import { BudgetCache } from '../utils/BudgetCache.js';
+import { WeakCacheRegistry } from '../utils/WeakCacheRegistry.js';
+import { unitPlanBytes } from '../utils/cache-memory.js';
+import { parserConfig, type ParserConfigInput, type ParserConfig, type ParserCacheStats } from './ParserConfig.js';
 import { Decimal } from "@neutrium/decimal";
 import { Parser } from './Parser.js';
 
-import { QuantityDefinition } from "../QuantityDefinition.js";
+import type { QuantityDefinition, UnitPower, UnitStructure } from "../QuantityDefinition.js";
 import { UnitTokenManager } from '../UnitTokenManager.js'
+import { checkedExponent, normalizePowers } from '../operations/unit-powers.js';
+
+function createCache(config: ParserConfig): BudgetCache<UnitStructure>
+{
+	return new BudgetCache(config.cache, { measure: plan => unitPlanBytes(plan.numerator) + unitPlanBytes(plan.denominator) });
+}
 
 /**
  * Legacy parser for scalar and unit expressions without parenthesized grouping.
+ * Powers bind first, then dot products; * / and whitespace evaluate from left to right.
  *
  * Import from `@neutrium/quantity/parsers.js`. Pass an instance as the third
  * argument to {@link Quantity.Quantity.constructor | Quantity constructor}, or call {@link parse} directly
@@ -23,253 +35,184 @@ import { UnitTokenManager } from '../UnitTokenManager.js'
  */
 export class RegexQtyParser implements Parser<QuantityDefinition>
 {
-	private static parsedUnitsCache = {};
-	private tokenMapper: UnitTokenManager;
-
-	private static UNITY = "<1>";
-
-	// REGEX - Numbers
-	private static readonly SIGN = "[+-]";
-	private static readonly INTEGER = "\\d+";
-	private static readonly SIGNED_INTEGER = RegexQtyParser.SIGN + "?" +RegexQtyParser.INTEGER;
-	private static readonly FRACTION = "\\." + RegexQtyParser.INTEGER;
-	private static readonly FLOAT = "(?:" + RegexQtyParser.INTEGER + "(?:" + RegexQtyParser.FRACTION + ")?" + ")" + "|" + "(?:" + RegexQtyParser.FRACTION + ")";
-	private static readonly EXPONENT = "[Ee]" + RegexQtyParser.SIGNED_INTEGER;
-	private static readonly SCI_NUMBER = "(?:" + RegexQtyParser.FLOAT + ")(?:" + RegexQtyParser.EXPONENT + ")?";
-	// Note below could be replaced by "[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?"
-	private static readonly SIGNED_NUMBER = RegexQtyParser.SIGN + "?\\s*" + RegexQtyParser.SCI_NUMBER;
-
-	// REGEX - Quantity strings e.g. "2.5 m/s^2"
-	private static readonly QTY_STRING = "(" + RegexQtyParser.SIGNED_NUMBER + ")?" + "\\s*([^/]*)(?:\/(.+))?";
-	private static readonly QTY_STRING_REGEX = new RegExp("^" + RegexQtyParser.QTY_STRING + "$");
-	private static readonly POWER_OP = "\\^|\\*{2}";
-	private static readonly TOP_REGEX = new RegExp("([^ \\*.]+?)(?:" + RegexQtyParser.POWER_OP + ")?(-?\\d+)(?![A-z])");
-	private static readonly BOTTOM_REGEX = new RegExp("([^ \\*.]+?)(?:" + RegexQtyParser.POWER_OP + ")?(\\d+)");
-	private static readonly BOUNDARY_REGEX = "\\b|\\s|$";
-
-	// REGEX - shared patterns, initialized lazily by the first parser instance
-	private static PREFIX_REGEX: string;
-	private static UNIT_REGEX: string;
-	private static UNIT_MATCH: string;
-	private static UNIT_MATCH_REGEX: RegExp;
-	private static UNIT_TEST_REGEX: RegExp;
-
-	constructor()
+	private static readonly caches = new WeakCacheRegistry(createCache);
+	private readonly options: ParserConfig;
+	/** Immutable effective parser settings. */
+	get config(): ParserConfig
 	{
-		this.tokenMapper = UnitTokenManager.instance;
-		if (!RegexQtyParser.UNIT_TEST_REGEX)
+		return this.options;
+	}
+	/** Estimated retention for the cache shared by this configuration. */
+	get cacheStats(): ParserCacheStats
+	{
+		return this.cache.stats;
+	}
+	/** Release all plans shared by this parser configuration. */
+	clearCache(): void
+	{
+		this.cache.clear();
+	}
+
+	private get cache(): BudgetCache<UnitStructure>
+	{
+		return RegexQtyParser.caches.get(this.options);
+	}
+	private static UNIT_MATCH_REGEX: RegExp;
+	private static readonly UNIT_SEPARATOR_REGEX = /(?:\s*([.*/])\s*|\s+)/y;
+	private tokenMapper = UnitTokenManager.instance;
+
+	// Capture sign, unsigned scalar, and units separately. Whitespace after a
+	// sign remains accepted without stripping whitespace or '+' from each scalar.
+	private static readonly QTY_STRING_REGEX = /^(?:([+-]?)\s*((?:\d+(?:\.\d+)?|\.\d+)(?:[Ee][+-]?\d+)?))?\s*([\s\S]*)$/;
+
+	/** Create a parser; supplied options isolate its cache from the default scope. */
+	constructor(config?: ParserConfigInput)
+	{
+		this.options = parserConfig(config);
+
+		if (!RegexQtyParser.UNIT_MATCH_REGEX)
 		{
 			this.initialize();
 		}
 	}
 
-	/**
-	 * Rebuild shared unit and prefix patterns from the unit token manager.
-	 * Construction initializes these patterns only once; call this explicitly to rebuild them.
-	 */
-	initialize()
+	/** Rebuild shared patterns and clear cached definitions after changing unit aliases. */
+	initialize(): void
 	{
-		// Look at preprocessing the below
-		// Each prefix definition ordered by length eg E|EI|...
-		RegexQtyParser.PREFIX_REGEX = Object.keys(this.tokenMapper.getMap('prefix')).sort(function (a, b) {
-			return b.length - a.length;
-		}).join("|");
-
-		RegexQtyParser.UNIT_REGEX = Object.keys(this.tokenMapper.getMap('unit')).sort(function (a, b) {
-			return b.length - a.length;
-		}).join("|").replace(/(\(|\))/g, '\\$1');
-
-		// Minimal boundary regex to support units with Unicode characters. \b only works for ASCII
-		RegexQtyParser.UNIT_MATCH = "(" + RegexQtyParser.PREFIX_REGEX + ")??(" + RegexQtyParser.UNIT_REGEX + ")(?:" + RegexQtyParser.BOUNDARY_REGEX + ")";
-		RegexQtyParser.UNIT_MATCH_REGEX = new RegExp(RegexQtyParser.UNIT_MATCH, "g"); // g flag for multiple occurences
-		RegexQtyParser.UNIT_TEST_REGEX = new RegExp("^\\s*(" + RegexQtyParser.UNIT_MATCH + "\\s*(\\.?|\\*?)\\s*)+$");	// Try also to get . as in kg.s as kg*s
+		const alternatives = (map: Record<string, string>) => Object.keys(map)
+			.sort((a, b) => b.length - a.length)
+			.map(value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+		const prefixes = alternatives(this.tokenMapper.getMap('prefix'));
+		const units = alternatives(this.tokenMapper.getMap('unit'));
+		// Sticky matching consumes one unit and its exponent, never repeated copies.
+		RegexQtyParser.UNIT_MATCH_REGEX = new RegExp(
+			`(${prefixes})??(${units})(?:(?:\\^|\\*\\*)([+-]?\\d+)|([+-]?\\d+))?(?=\\s|[*.\/]|$)`, 'y');
+		// Drop every configured scope without retaining an iterable registry of parsers.
+		RegexQtyParser.caches.clear();
 	}
 
-	// Parse a string into a unit object.
-	// Typical formats like :
-	// "5.6 kg*m/s^2"
-	// "5.6 kg*m*s^-2"
-	// "5.6 kilogram*meter*second^-2"
-	// "2.2 kPa"
-	// "37 degC"
-	// "1"  -- creates a unitless constant with value 1
-	// "GPa"  -- creates a unit with scalar 1 with units 'GPa'
-	// 6'4"  -- recognized as 6 feet + 4 inches
-	// 8 lbs 8 oz -- recognized as 8 lbs + 8 ounces
-	//
 	/**
-	 * Parse an expression into a scalar and normalized unit tokens.
+	 * Parse a scalar and counted units without expanding powers.
 	 * @param val - Expression such as `"2 kg*m/s^2"`, `"m"`, or `"2"`.
-	 * @returns A definition suitable for passing to the Quantity constructor.
-	 * @throws If the parser rejects the expression or encounters an unknown unit.
-	 * @remarks Parsing alone does not enforce Quantity's absolute-temperature
-	 * restrictions. Construct a Quantity when validating a complete physical value.
+	 * @param Numeric - Decimal constructor used to evaluate the scalar; defaults to shared Decimal.
+	 * @returns A definition accepted by Quantity. Empty sides represent unity.
+	 * @throws If syntax, unit tokens, or integer exponents are invalid.
 	 */
-	public parse(val: string) : QuantityDefinition
+	parse(val: string, Numeric: DecimalConstructor = Decimal): QuantityDefinition
 	{
-		let output: QuantityDefinition = {
-			scalar: new Decimal(1),
-			numerator: [RegexQtyParser.UNITY],
-			denominator: [RegexQtyParser.UNITY]
-		}
-
-		val = (val + '').trim();
-
-		if (val.length === 0)
-		{
-			throw new Error("Unit not recognized");
-		}
-
-		let result: (string[] | null) = RegexQtyParser.QTY_STRING_REGEX.exec(val);
+		val = String(val).trim();
+		const result = val && RegexQtyParser.QTY_STRING_REGEX.exec(val);
 
 		if (!result)
 		{
-			throw new Error(val + ": Quantity not recognized");
+			throw new Error('Quantity not recognized');
 		}
 
-		let scalarMatch = result[1];
+		const scalarText = result[1] === '-' ? '-' + result[2] : result[2] ?? '1';
+		const scalar = new Numeric(scalarText);
+		const units = this.parseUnits(result[3].trim());
 
-		if (scalarMatch)
-		{
-			// Allow whitespaces between sign and scalar for loose parsing
-			scalarMatch = scalarMatch.replace(/\s/g, "");
-			output.scalar = new Decimal(scalarMatch);
-		}
-
-		let top = result[2],
-			bottom: string = result[3],
-			n, x, nx: string;
-
-		while ((result = RegexQtyParser.TOP_REGEX.exec(top)))
-		{
-			n = parseFloat(result[2]);
-
-			if (isNaN(n))
-			{
-				// Prevents infinite loops
-				throw new Error("Unit exponent is not a number");
-			}
-
-			// Disallow unrecognized unit even if exponent is 0
-			if (n === 0 && !RegexQtyParser.UNIT_TEST_REGEX.test(result[1]))
-			{
-				throw new Error("Unit not recognized");
-			}
-
-			x = result[1] + " ";
-			nx = "";
-
-			for (let i = 0; i < Math.abs(n); i++)
-			{
-				nx += x;
-			}
-
-			if (n >= 0)
-			{
-				top = top.replace(result[0], nx);
-			}
-			else
-			{
-				bottom = bottom ? bottom + nx : nx;
-				top = top.replace(result[0], "");
-			}
-		}
-
-		while ((result = RegexQtyParser.BOTTOM_REGEX.exec(bottom)))
-		{
-			n = parseFloat(result[2]);
-
-			if (isNaN(n))
-			{
-				// Prevents infinite loops
-				throw new Error("Unit exponent is not a number");
-			}
-
-			// Disallow unrecognized unit even if exponent is 0
-			if (n === 0 && !RegexQtyParser.UNIT_TEST_REGEX.test(result[1]))
-			{
-				throw new Error("Unit not recognized");
-			}
-
-			x = result[1] + " ";
-			nx = "";
-
-			for (let j = 0; j < n; j++)
-			{
-				nx += x;
-			}
-
-			bottom = bottom.replace(result[0], nx);
-		}
-
-		if (top)
-		{
-			output.numerator = this.parseUnits(top.trim());
-		}
-
-		if (bottom)
-		{
-			output.denominator = this.parseUnits(bottom.trim());
-		}
-
-		return output;
+		return {
+			scalar,
+			numerator: units.numerator,
+			denominator: units.denominator
+		};
 	}
 
-	//
-	// Parses and converts units string to normalized array of unit tokens.
-	// Result is cached to speed up next calls.
-	//
-	// @param {string} units Units string
-	// @returns {string[]} Array of normalized units
-	//
-	// @example
-	// // Returns ["<second>", "<meter>", "<second>"]
-	// parseUnits("s m s");
-	//
-	private parseUnits(units: string) : string[]
+	private parseUnits(units: string): UnitStructure
 	{
-		let cacheKey = units,
-			cached = RegexQtyParser.parsedUnitsCache[units],
-			unitMatch,
-			normalizedUnits : (string[][] | string[]) = [];
+		const cached = this.cache.get(units);
 
 		if (cached)
 		{
 			return cached;
 		}
 
-		// Strip out
-		units = units.replace(/(\.|\*)/g, ' ');
+		const num: UnitPower[] = [], den: UnitPower[] = [];
+		let cursor = 0;
+		let divide = false;
 
-		// Scan
-		if (!RegexQtyParser.UNIT_TEST_REGEX.test(units))
+		// The scalar has already been removed, leaving /m in inputs such as 2/m.
+		if (units.startsWith('/'))
 		{
-			throw new Error("Unit not recognized");
+			cursor = /^\/\s*/.exec(units)![0].length;
+			divide = true;
+
+			if (cursor === units.length)
+			{
+				throw new Error('Unit not recognized');
+			}
 		}
 
-		while ((unitMatch = RegexQtyParser.UNIT_MATCH_REGEX.exec(units)))
+		while (cursor < units.length)
 		{
-			normalizedUnits.push(unitMatch.slice(1));
+			RegexQtyParser.UNIT_MATCH_REGEX.lastIndex = cursor;
+			const match = RegexQtyParser.UNIT_MATCH_REGEX.exec(units);
+
+			if (!match)
+			{
+				throw new Error('Unit not recognized');
+			}
+
+			cursor += match[0].length;
+			// A dot immediately followed by a digit is decimal syntax, not unit
+			// multiplication. In particular m^2.1 must not become m^2 * unity.
+			if (units[cursor] === '.' && /[0-9]/.test(units[cursor + 1] ?? ''))
+			{
+				throw new Error('Unit exponent must use safe integer syntax');
+			}
+
+			const unit = this.tokenMapper.getUnitToken(match[2]);
+			const prefix = match[1] ? this.tokenMapper.getPrefixToken(match[1]) : undefined;
+
+			if (!unit || prefix === null)
+			{
+				throw new Error('Unit not recognized');
+			}
+
+			const power = checkedExponent(Number(match[3] ?? match[4] ?? 1));
+			const exponent = divide ? -power : power;
+
+			if (exponent)
+			{
+				(exponent > 0 ? num : den).push({
+					unit,
+					...(prefix ? { prefix } : {}),
+					exponent: Math.abs(exponent)
+				});
+			}
+
+			if (cursor < units.length)
+			{
+				RegexQtyParser.UNIT_SEPARATOR_REGEX.lastIndex = cursor;
+				const separator = RegexQtyParser.UNIT_SEPARATOR_REGEX.exec(units);
+
+				if (!separator)
+				{
+					throw new Error('Unit not recognized');
+				}
+
+				cursor += separator[0].length;
+				// A dot continues the current tightly bound product. A slash divides
+				// by the whole next dot product; * or whitespace starts a numerator product.
+				if (separator[1] !== '.')
+				{
+					divide = separator[1] === '/';
+				}
+
+				if (cursor === units.length)
+				{
+					throw new Error('Unit not recognized');
+				}
+			}
 		}
 
-		const parser : RegexQtyParser = this;
+		const result = { numerator: normalizePowers(num), denominator: normalizePowers(den) };
+		// Bound retention when applications parse many distinct large powers.
+		this.cache.set(units, result);
 
-		normalizedUnits = <string[][]>normalizedUnits.map(function (item) : string[] {
-
-			// Convert multiple forms of a given unit to mutliple occurances of the same token
-			const result = [parser.tokenMapper.getPrefixToken(item[0]), parser.tokenMapper.getUnitToken(item[1])];
-
-			// Filter null values and empty strings
-			return result.filter((x: any) : x is string => x)
-		});
-
-		// Flatten and remove null elements
-		normalizedUnits = normalizedUnits.reduce(function (a, b) {
-			return a.concat(b);
-		}, []);
-
-		RegexQtyParser.parsedUnitsCache[cacheKey] = normalizedUnits;
-
-		return normalizedUnits;
+		return result;
 	}
 }
+
+export type { ParserConfigInput, ParserConfig, ParserCacheStats, ParserCacheConfigInput } from './ParserConfig.js';

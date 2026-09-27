@@ -56,7 +56,7 @@ describe('parser selection', () => {
 	});
 
 	it('requires a parser even when the core is constructed from a definition', () => {
-		const definition = { scalar: new Decimal(2), numerator: ['<meter>'], denominator: ['<1>'] };
+		const definition = { scalar: new Decimal(2), numerator: [{ unit: '<meter>', exponent: 1 }], denominator: [] };
 		expect(() => new QuantityCore(definition)).toThrow('A parser is required');
 		const q = new QuantityCore(definition, undefined, new RegexQtyParser());
 		expect(q.mul(3).scalar.toString()).toBe('6');

@@ -1,77 +1,15 @@
+import type { UnitPower } from '../QuantityDefinition.js';
+import { UnitTokenManager } from '../UnitTokenManager.js';
 
-import { compareArray } from "@neutrium/utilities";
-import { UnitTokenManager } from "../UnitTokenManager.js";
-
-// Coalesces an array of units e.g. converts ['s','m','s'] into ['s2','m']
-export function simplifyUnits(units: string[]): string[]
+export function stringifyUnits(units: readonly UnitPower[], separator = '*'): string
 {
-	let unitCounts = units.reduce(reduceUnit, []);
-
-	return unitCounts.map(function (unitCount) {
-		return unitCount[0] + (unitCount[1] > 1 ? unitCount[1] : "");
-	});
-}
-
-function reduceUnit(acc, unit)
-{
-	let unitCounter = acc[unit];
-
-	if (!unitCounter)
+	if (!units.length)
 	{
-		acc.push(unitCounter = acc[unit] = [unit, 0]);
+		return '1';
 	}
 
-	unitCounter[1]++;
+	const tm = UnitTokenManager.instance;
 
-	return acc;
-}
-
-//
-// Returns a string representing a normalized unit array
-//
-// @param {string[]} units Normalized unit array
-// @returns {string} String representing passed normalized unit array and suitable for output
-//
-export function stringifyUnits(units: string[]): string
-{
-	let stringified : string;
-
-	let isUnity = compareArray(units, ["<1>"]);
-
-	if (isUnity)
-	{
-		stringified = "1";
-	}
-	else
-	{
-		stringified = simplifyUnits(getOutputNames(units)).join("*");
-	}
-
-	return stringified;
-}
-
-export function getOutputNames(units: string[]): string[]
-{
-	const tokenMapper = UnitTokenManager.instance;
-
-	let unitNames = [], token, tokenNext;
-
-	for (let i = 0, len = units.length; i < len; i++)
-	{
-		token = units[i];
-		tokenNext = units[i + 1];
-
-		const unit = tokenMapper.getUnit(token)
-
-		let val = tokenMapper.getTokenDefaultValue(token)
-
-		if (unit.category === 'prefix')
-		{
-			val += tokenMapper.getTokenDefaultValue(tokenNext)
-			i++;
-		}
-
-		unitNames.push(val);
-	}
-	return unitNames;
+	return units.map(({ unit, prefix, exponent }) =>
+		tm.getUnitOutput(unit, prefix) + (exponent === 1 ? '' : exponent)).join(separator);
 }

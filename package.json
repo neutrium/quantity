@@ -1,6 +1,6 @@
 {
 	"name": "@neutrium/quantity",
-	"version": "4.0.0",
+	"version": "5.0.0",
 	"type": "module",
 	"exports": {
 		".": {
@@ -63,7 +63,9 @@
 		"tsc": "tsc",
 		"nearley": "nearleyc ./src/parsers/qty-grammar.ne -o ./src/parsers/qty-grammar.ts",
 		"build": "npm run clean && npm run nearley && npm run tsc",
-		"docs": "npm run nearley && typedoc",
+		"docs": "npm run nearley && npm run docs:built",
+		"docs:built": "typedoc",
+		"docs:dev": "npm run site && vite preview --config tools/docs.vite.config.mjs",
 		"test": "npm run build && npm run test:built",
 		"test:built": "vitest run",
 		"test:package": "node tools/test-package.mjs",
@@ -78,7 +80,8 @@
 		"demo:check": "tsc -p demo/tsconfig.json",
 		"demo:bundle": "npm run demo:check && vite build --config demo/vite.config.mjs",
 		"demo:build": "npm run build && npm run demo:bundle",
-		"site": "npm run build && npm run docs && npm run demo:bundle",
+		"site": "npm run build && npm run site:built",
+		"site:built": "npm run docs:built && npm run demo:bundle",
 		"test:bundles:built": "node tools/test-bundles.mjs"
 	},
 	"devDependencies": {

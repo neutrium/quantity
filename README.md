@@ -1,16 +1,10 @@
 # @neutrium/quantity
 
-@neutrium/quantity is a versatile package designed to simplify the process of converting between various units of measurement including length, mass, time, temperature, volume, and more. Whether you’re building engineering applications or everyday utilities, @neutrium/quantity makes unit conversions reliable, fast, and hassle-free.
+The @neutrium/quantity package is a unit conversion library developed and maintained by the [Neutrium](https://neutrium.net) team. It evolved from the [JS-quantities](https://github.com/gentooboontoo/js-quantities) package which originated as a port of the [Ruby Units](http://github.com/olbrich/ruby-units) library.
 
-The @neutrium/quantity package is a unit conversion  developed and maintained by the [Neutrium](https://neutrium.net) team. It evolved from the [JS-quantities](https://github.com/gentooboontoo/js-quantities) package which originated as a port of the [Ruby Units](http://github.com/olbrich/ruby-units) library.
+[Interactive demo](https://neutrium.github.io/quantity/demo/) · [API reference](https://neutrium.github.io/quantity/)
 
 ## Getting Started
-
-[API documentation](https://neutrium.github.io/quantity/)
-
-### Node
-
-Requires Node.js 24 or newer.
 
 First add the @neutrium/quantity package to your project:
 
@@ -23,69 +17,24 @@ Then import `Quantity` where you want to use it:
 Now start creating quantities:
 
 	let qty = new Quantity('1 m');
+	// or specifying the scalar and units separately: new Quantity(1, 'm');
 
-Or create quantities specifing the scalar and units separately:
+Perform a unit conversion:
 
-	let qty = new Quantity(1, 'm');
+	const impQty = qty.to('ft');
 
-#### Browsers
-
-To use this library in a browser environment you will need to use a bundler like [vite](https://vite.dev) or [webpack](https://webpack.js.org) to convert it to a web bunble and expose the Quantity object.
-
-## Interactive demo
-
-The [Quantity Lab](https://neutrium.github.io/quantity/demo/) follows the visual style of the Neutrium formatter and decimal demos. Explore live conversions, unit arithmetic, temperature scales, and comparisons, with editable presets and
-copyable JavaScript examples. Calculations use the local library build.
+## Preview documentation locally
 
 ```sh
 npm ci
-npm run demo
+npm run docs:dev
 ```
 
-Open the local URL printed by Vite (`/quantity/demo/`). `npm run demo:build` builds the standalone demo into `docs/demo/`. To generate the complete API site and demo, run `npm run site`. TypeDoc clears `docs/`, so build the demo after the API
-reference. The Pages workflow publishes both together.
-
-## Development and releases
-
-Run `npm run benchmark` for Vitest benchmarks of parsing, construction, conversions, and arithmetic. See [benchmark methodology and options](benchmark/README.md).
-
-Use Node.js 24 or newer and npm:
-
-```sh
-npm ci
-npm test
-npm run verify
-```
-
-`npm test` builds from source before running Vitest. `npm run verify` also packs the library, installs the archive in a temporary consumer project, and checks its public entry points and TypeScript declarations with NodeNext and Bundler resolution. `npm run test:built` and `npm run test:package:built` reuse an existing build.
-
-`dist/` and `src/parsers/qty-grammar.ts` are generated and excluded from Git. Edit `src/parsers/qty-grammar.ne` to change the grammar. `npm run build` cleans the output, regenerates the grammar, and compiles JavaScript and declarations.
-`npm pack` builds automatically; `npm publish` builds and runs verification first. The npm package includes compiled output, TypeScript source, the grammar, README, and license. Consumers installing from npm do not need to compile the library.
-
-GitHub Actions verifies pull requests and pushes to `master` or `main` on Node.js 24.0.0, the latest 24.x, and 26.x. To release, update the version in `package.json` and `package-lock.json`, commit it, and push a matching `vX.Y.Z` tag. The release workflow runs CI, verifies and publishes to npm, then creates a GitHub release. Prerelease versions publish under the `next` tag; stable versions use `latest`.
-
-Before the first automated release, configure an npm trusted publisher for `@neutrium/quantity`: GitHub owner `neutrium`, repository `quantity`, workflow `release.yml`, with no environment specified. The workflow uses OIDC authentication
-and does not require a stored npm token. See the [npm trusted publishing documentation](https://docs.npmjs.com/trusted-publishers/).
-
-## API documentation
-
-The [API reference](https://neutrium.github.io/quantity/) is generated from the TypeScript source and its documentation comments using TypeDoc, following the setup in [@neutrium/formatter](https://github.com/neutrium/formatter).
-It covers `@neutrium/quantity`, `@neutrium/quantity/parsers.js`, and `@neutrium/quantity/guards.js`. `QuantityDefinition` and `Parser` are included as supporting structural types; they are not separate package entry points.
-
-To generate the site locally:
-
-```sh
-npm ci
-npm run docs
-```
-
-Open `docs/index.html` to browse the result. The command regenerates the parser grammar before running TypeDoc, so it also works in a fresh checkout. Generated `docs/` files are ignored by Git and excluded from the npm package.
-
-The library and TypeDoc share TypeScript 6.0.3. All development dependencies are installed with `npm ci` and locked in the root `package-lock.json`. The site landing page is `guides/index.md`; the other `guides/` files provide
-worked examples for quantities, temperatures, and parsers. Public API comments and links are validated with warnings treated as errors. Pull requests run this documentation check in CI.
-
-For publishing, set **Settings → Pages → Build and deployment → Source** to **GitHub Actions** in the GitHub repository. The `Documentation` workflow tests the package, generates the site, and deploys it to GitHub Pages after relevant
-changes reach the default branch (`master` or `main`). It can also be run manually on the default branch from the Actions tab. The site is published at <https://neutrium.github.io/quantity/> using the `github-pages` environment.
+This builds the API documentation and demo, then serves them at
+[http://127.0.0.1:4173/quantity/](http://127.0.0.1:4173/quantity/).
+Use the **Demo** link to open the interactive demo, and **API reference** to return.
+Stop with Ctrl+C and rerun the command to rebuild after changes. For live demo
+development, use `npm run demo:dev`.
 
 ## Unit Syntax
 
@@ -95,13 +44,17 @@ The quantity is defined using a string containing a scalar value followed by a u
 
 	<scalar> <unit-expression>
 
-Both the scalar or unit expression portions can be blank. Not specifying a scalar will give a quantity with a scalar of 1 while having an empty unit expression will give a dimensionless quantity.
+A unit expression without a scalar defaults to 1; a scalar without units creates
+a dimensionless quantity. An empty or whitespace-only expression is invalid.
 
 ### \<scalar\>
 
-When creating a quantity with a single string the scalar portion can be any string representing an integer or real floating point number that is parsable in javascript e.g. '1', '1.4', '1e3', '-1e-3'.
+Numeric literals include integers, decimal fractions, and scientific notation,
+for example `1`, `1.4`, `1e3`, and `-1e-3`. Nearley also evaluates scalar products,
+division, and powers inside expressions; it does not support addition or subtraction
+operators. See the [parser guide](guides/parsers.md) for the complete grammar.
 
-If creating a quantity using a separate scalar parameter (e.g. new Quantity(1, 'm')) the scalar may be provided as a string (subject to the rules above), a number or a [Decimal](https://github.com/neutrium/decimal) object.
+If creating a quantity using a separate scalar parameter (e.g. new Quantity(1, 'm')) the scalar may be provided as a numeric string, a number, a [Decimal](https://github.com/neutrium/decimal) object, or an object whose `toString()` returns a numeric literal. Omitting units creates a dimensionless quantity: `new Quantity(2)`, `new Quantity('2')`, and `new Quantity(new Decimal(2))` are equivalent.
 
 ### \<unit-expression\>
 
@@ -114,7 +67,16 @@ A unit expression is a string of units combined with any logical combination of 
 | Exponentiation  | ^\<integer\>       		| m^2, kg.m.s^-2      	|
 | Grouping        | (\<unit-expression\>)   | kg*(m/s)^2          	|
 
-Where \<integer\> is any signed integer and \<unit-expression\> is any logical unit expression.
+Unit exponents must be safe integers. Both parsers also accept `**` and compact
+powers such as `m2`. The default Nearley parser supports grouped expressions and Unicode notation;
+Regex does not support expression groups.
+
+Powers bind first, then dot multiplication, then `*`, whitespace multiplication,
+and `/` from left to right. Consequently `kg/m.s` means `kg/(m*s)`, while
+`kg/m*s` means `(kg/m)*s`. Use explicit grouping with Nearley or repeated division
+(`kg/m/s`) with either parser when both terms belong in the denominator.
+`units()` displays compound denominators with tightly coupled dots: `kg/m/s`
+becomes `kg/m.s`, which both parsers interpret as `kg/(m*s)`.
 
 ### Examples
 
@@ -155,7 +117,7 @@ You can access the scalar component of the quantity:
 
 The scalar component is a [Decimal](https://github.com/neutrium/decimal) object that provides a range of operators. For more information, see the [@neutrium/decimal documentation](https://github.com/neutrium/decimal#readme).
 
-### Displaying a Quantities Units
+### Displaying a quantity’s units
 
 The units of a quantity can be accessed using the `units()` method:
 
@@ -182,22 +144,29 @@ You can perform numerical and logical comparison using the following functions:
 | Operation					| Return Value																	|
 | ------------------------- | ----------------------------------------------------------------------------- |
 | qty1.isBase()				| True if qty1 is in base (SI) units, false otherwise.							|
-| qty1.isUnitless()			| True if if qty1 is dimensionless, false otherwise.								|
+| qty1.isUnitless()			| True if neither side contains unit records; a ratio such as m/m can be dimensionless but return false.								|
 | qty1.isCompatible(qty2)	| True if both quantities have the same unit signature, false otherwise.		|
-| qty1.isInverse(qty2)		| True if qty1 is the inverse of qty, false otherwise.	 						|
+| qty1.isInverse(qty2)		| True if dimensions are reciprocal; scalar values, including zero, are ignored.	 						|
 | qty1.eq(qty2)				| True if both quantities are equal e.g. 1m == 100cm => true, false otherwise.	|
 | qty1.same(qty2)			| True if both quantities are same e.g. 1m == 100cm => false, false otherwise.	|
 | qty1.lt(qty2)				| True if qty1 is strictly less than qty2, false otherwise.						|
 | qty1.lte(qty2) 			| True if qty1 is less than or equal to qty2, false otherwise.					|
 | qty1.gt(qty2)				| True if qty1 is strictly greater than qty2, false otherwise.					|
 | qty1.gte(qty2)			| True if qty1 is greater than or equal to qty2, false otherwise.				|
-| qty1.compareTo(qty2)		|  -1 if qty1 < qty2; 0 if qty1 == qty2; 1 if qty1 > qty2						|
-| qty1.isTemperature()		| True is qty1 is a temperature	e.g. new Quantity('1 tempC')					|
-| qty1.isDegrees() | True for standalone temperature degrees or absolute temperatures. Use `!qty1.isTemperature()` as well to identify intervals only. |
+| qty1.compareTo(qty2)		| -1 if qty1 < qty2; 0 if equal; 1 if greater; undefined for NaN |
+| qty1.isTemperature()		| True if qty1 is an absolute temperature	e.g. new Quantity('1 tempC')					|
+| qty1.isDegrees() | True for standalone, unprefixed temperature degrees or absolute temperatures. Use `!qty1.isTemperature()` as well to identify intervals only. |
+
+Numeric comparison operands use the receiver's units: `new Quantity('100 cm').eq(100)`
+is true. String operands remain full expressions: `.eq('1 m')` is true, while
+`.eq('100')` throws for incompatible units. Numeric addition and subtraction instead
+use dimensionless operands: `new Quantity(2).add(3)` succeeds, but
+`new Quantity('2 m').add(3)` throws. Numeric objects are accepted for construction
+and arithmetic, but comparison thresholds must be numbers or Decimal instances.
 
 ### Quantity Arithmetic
 
-Basic arithmetic operations can be performed using the quantity instant methods as follows:
+Basic arithmetic operations can be performed using the quantity instance methods as follows:
 
 	var qty = new Quantity('1 m').add('1 ft');
 
@@ -205,12 +174,12 @@ Available operators include:
 
 | Operation			| Description |
 | ----------------- | ----------- |
-| qty.add(other)	| Add - other can be string or quantity but needs be unit compatible. |
-| qty.sub(other)	| Subtract - other can be string or quantity but needs to be unit compatible. |
-| qty.mul(other)	| Multiply - other can be string, Decimal, number or quantity. |
-| qty.div(other)	| Divide - other can be string, Decimal, number or quantity. |
+| qty.add(other) | Add a compatible expression, definition, Quantity, or dimensionless scalar. |
+| qty.sub(other) | Subtract a compatible expression, definition, Quantity, or dimensionless scalar. |
+| qty.mul(other) | Multiply by an expression, definition, Quantity, number, Decimal, or numeric object. |
+| qty.div(other) | Divide by an expression, definition, Quantity, number, Decimal, or numeric object. |
 | qty.pow(y)		| Power - y must be an integer stored in a number, string or Decimal (fractional powers not supported) |
-| qty.inverse()		| Inverse - inverse the unit set and scalar value (with no special special unit checking). |
+| qty.inverse() | Take the reciprocal; rejects zero and absolute temperatures. |
 
 ### Temperatures
 
@@ -225,8 +194,8 @@ As you would expect, unit math on temperatures is limited:
 	new Quantity('50 tempC').sub('100 tempC')	// -50 degC
 	new Quantity('100 tempC').mul(scalar)		// 100*scalar tempC
 	new Quantity('100 tempC').div(scalar)		// 100/scalar tempC
-	new Quantity('100 tempC').mul(qty)			// throws error
-	new Quantity('100 tempC').div(qty)			// throws error
+	new Quantity('100 tempC').mul('2 m')		// throws error
+	new Quantity('100 tempC').div('2 m')		// throws error
 	new Quantity('100 tempC*unit')				// throws error
 	new Quantity('100 tempC/unit')				// throws error
 	new Quantity('100 unit/tempC')				// throws error
@@ -234,6 +203,11 @@ As you would expect, unit math on temperatures is limited:
 
 
 ### Errors
+
+Nearley reports syntax and evaluation failures as `QuantityParseError`, available
+from `/parsers/nearley` and `/parsers.js`; `tryParse()` returns a discriminated
+success/error result. Regex throws ordinary errors and does not expose `tryParse()`.
+Both parsers reject incomplete input.
 
 When @neutrium/quantity cannot parse the provided string, or you attempt to perform an invalid operation (such as multiplying two temperatures), it will throw an [Error](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error). Therefore, when handling dynamic input, it is recommended you use the standard try-catch block.
 
@@ -264,7 +238,7 @@ This package supports the unit categories listed below, with each category’s b
 | Magnetic Flux Density 	| kg/A.s^2 			|
 | Mass 						| kg 				|
 | Power 					| kg.m^2/s^3 		|
-| Pressure 					| kg/m.s^3 			|
+| Pressure 					| kg/m.s^2 			|
 | Radiation 				| m^2/s^2 			|
 | Radioactivity 			| s^-1				|
 | Sound 					| bel 				|
@@ -337,7 +311,12 @@ The general conventions listed below are utilised to define unit names. These ca
 - Where a unit has several localisations (e.g. US, UK or Imperial gallon), the variants will be differentiated by appending the localisation to the unit name. For example gal(us), gal(uk) or gal(imp).
 - Where a unit has both dry and fluid/liquid variants, a d or l is added to the unit respectively e.g. gal(d). Dry and liquid variants are typically used in conjunction with US localised variants. In these cases you would add the d or l to the localisation, for example a US fluid gallon would be represented as gal(usl).
 
-## Quantity Parser
+## Quantity Parser Selection
+
+The @neutrium/quantity package ships with two unit parsers:
+
+- NearleyQtyParser (default) - A performant parser using a [moo.js](https://github.com/no-context/moo) lexer and [nearley.js](https://github.com/kach/nearley) parser
+- RegexQtyParser - A parser that uses regular expressions and is based on the original [JS-quantities](https://github.com/gentooboontoo/js-quantities) logic
 
 Select the parser through the package entry point:
 
@@ -346,7 +325,8 @@ import { Quantity } from '@neutrium/quantity'; // Nearley (default)
 // Or: import { Quantity } from '@neutrium/quantity/regex';
 ```
 
-The regex entry point excludes Nearley, its grammar, and Moo from its import graph.
+Select the default Nearly parser for full feature set and robust parsing. However if you prefer a smaller package and faster operation (at the cost of feature set) select the Regex parser which excludes the Nearley and Moo dependencies.
+
 For custom parsers, import `createQuantityClass` and the `Parser` and
 `QuantityDefinition` types from `@neutrium/quantity/core`. Derived quantities retain
 both their configured class and parser, including arithmetic, conversions, and clones.
@@ -355,28 +335,24 @@ both their configured class and parser, including arithmetic, conversions, and c
 import { createQuantityClass } from '@neutrium/quantity/core';
 import { RegexQtyParser } from '@neutrium/quantity/parsers/regex';
 
-const Quantity = createQuantityClass(() => new RegexQtyParser());
+const Quantity = createQuantityClass(config => new RegexQtyParser(config));
 const result = new Quantity('1e3 m').add('2 m');
 ```
 
-The individual parsers are exported at `/parsers/nearley` and `/parsers/regex`.
-The `/parsers.js` barrel and third constructor argument remain supported. Passing a
-parser override to the root entry does not exclude its default Nearley dependency.
-Parser selection changes bundle contents, not npm's installed dependencies.
-
-The @neutrium/quantity package ships with two unit parsers:
-
-- NearleyQtyParser (default) - A performant parser using a [moo.js](https://github.com/no-context/moo) lexer and [nearley.js](https://github.com/kach/nearley) parser
-- RegexQtyParser - A legacy parser that uses regular expressions and is based on the original [JS-quantities](https://github.com/gentooboontoo/js-quantities) logic
-
-You can specify the parser to use or provide your own parser confirming to `parsers/Parser.ts` by passing it as an optional third argument to the Quantity constructor:
+You can specify the parser to use or provide your own parser conforming to the `Parser` type exported by `@neutrium/quantity/core` by passing it as an optional third argument to the Quantity constructor:
 
 	import { RegexQtyParser } from '@neutrium/quantity/parsers.js';
 
 	const parser = new RegexQtyParser();
 	let qty = new Quantity(1, 'm', parser);
 
-It is recommended that you stick with the default NearleyQtyParser, as it is significantly faster (~10-25x) than the legacy RegexQtyParser and supports more comprehensive unit expressions (e.g., parentheses grouping).
+Nearley remains the default and supports parenthesized expression groups, scalar
+products and division (`m/2`, `(2 m/s)**2`), and Unicode notation (`m²`, `kg·m/s²`).
+Its `tryParse()` method returns structured errors with source locations. See the
+[parser guide](guides/parsers.md) for syntax, precedence, and caching details.
+Regex has a smaller dependency graph and is faster on the warmed simple-expression
+workloads in the [benchmarks](guides/benchmarks.md). Choose the entry point that
+supports your input syntax.
 
 ## Release Notes
 
@@ -386,7 +362,22 @@ It is recommended that you stick with the default NearleyQtyParser, as it is sig
 | 2.0.0   | Ported to Typescript, renamed package, converted to a npm module and dropped bower support |
 | 3.0.0   | Switch to using [Decimal.js](https://github.com/MikeMcl/decimal.js/) for the quantity scalar to improve the accuracy of mathematical operations and range of scalar representation |
 | 4.0.0	  | Major refactor, conversion to ESM and introduction of Nearley.js based default parser |
+| 5.0.0   | Counted unit API, bounded allocation for large powers, immutable unit records, and collision-free dimensional signatures |
 
 ## License
 
-[Creative Commons Attribution 4.0 International](http://creativecommons.org/licenses/by/4.0/legalcode)
+This project is licensed under the MIT License, see the [LICENSE](./LICENSE) file for details.
+
+You are free to:
+
+- Use this plugin for personal or commercial purposes
+- Modify and distribute the code
+- Include it in other projects
+
+Under the following conditions:
+
+- You must include the original license and copyright notice
+
+### Disclaimer
+
+This plugin is provided "as is", without warranty of any kind. Use at your own risk.

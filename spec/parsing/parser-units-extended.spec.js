@@ -18,8 +18,8 @@ import { NearleyQtyParser } from '../../dist/parsers/NearleyQtyParser.js'
 				let result = parser.parse("m/s^-2");
 
 				expect(result.scalar.eq(1)).toBe(true);
-				expect(result.numerator).toEqual(['<meter>', '<second>', '<second>']);
-				expect(result.denominator).toEqual(['<1>']);
+				expect(result.numerator).toEqual([{ unit: '<meter>', exponent: 1 }, { unit: '<second>', exponent: 2 }]);
+				expect(result.denominator).toEqual([]);
 			});
 		});
 
@@ -29,32 +29,32 @@ import { NearleyQtyParser } from '../../dist/parsers/NearleyQtyParser.js'
 				let result = parser.parse("(kg.s)^2");
 
 				expect(result.scalar.eq(1)).toBe(true);
-				expect(result.numerator).toEqual(['<kilogram>', '<second>', '<kilogram>', '<second>']);
-				expect(result.denominator).toEqual(['<1>']);
+				expect(result.numerator).toEqual([{ unit: '<kilogram>', exponent: 2 }, { unit: '<second>', exponent: 2 }]);
+				expect(result.denominator).toEqual([]);
 			});
 
 			it("correctly parses multiplication units to the power of negative two", function() {
 				let result = parser.parse("(kg.s)^-2");
 
 				expect(result.scalar.eq(1)).toBe(true);
-				expect(result.numerator).toEqual(['<1>']);
-				expect(result.denominator).toEqual(['<kilogram>', '<second>', '<kilogram>', '<second>']);
+				expect(result.numerator).toEqual([]);
+				expect(result.denominator).toEqual([{ unit: '<kilogram>', exponent: 2 }, { unit: '<second>', exponent: 2 }]);
 			});
 
 			it("correctly parses multiplication units squared times a unit", function() {
 				let result = parser.parse("m*(kg.s)^2");
 
 				expect(result.scalar.eq(1)).toBe(true);
-				expect(result.numerator).toEqual(['<meter>', '<kilogram>', '<second>', '<kilogram>', '<second>']);
-				expect(result.denominator).toEqual(['<1>']);
+				expect(result.numerator).toEqual([{ unit: '<meter>', exponent: 1 }, { unit: '<kilogram>', exponent: 2 }, { unit: '<second>', exponent: 2 }]);
+				expect(result.denominator).toEqual([]);
 			});
 
 			it("correctly parses multiplication units to the power of negative two times a unit", function() {
 				let result = parser.parse("m*(kg.s)^-2");
 
 				expect(result.scalar.eq(1)).toBe(true);
-				expect(result.numerator).toEqual(['<meter>']);
-				expect(result.denominator).toEqual(['<kilogram>', '<second>', '<kilogram>', '<second>']);
+				expect(result.numerator).toEqual([{ unit: '<meter>', exponent: 1 }]);
+				expect(result.denominator).toEqual([{ unit: '<kilogram>', exponent: 2 }, { unit: '<second>', exponent: 2 }]);
 			});
 		});
 
@@ -64,16 +64,16 @@ import { NearleyQtyParser } from '../../dist/parsers/NearleyQtyParser.js'
 				let result = parser.parse("kg.m/s^2");
 
 				expect(result.scalar.eq(1)).toBe(true);
-				expect(result.numerator).toEqual(['<kilogram>', '<meter>']);
-				expect(result.denominator).toEqual(['<second>', '<second>']);
+				expect(result.numerator).toEqual([{ unit: '<kilogram>', exponent: 1 }, { unit: '<meter>', exponent: 1 }]);
+				expect(result.denominator).toEqual([{ unit: '<second>', exponent: 2 }]);
 			});
 
 			it("correctly parses a float squared, decimal point multiplier, division and power", function() {
 				let result = parser.parse("3.5^2 kg.m/s^2");
 
 				expect(result.scalar.eq(12.25)).toBe(true);
-				expect(result.numerator).toEqual(['<kilogram>',  '<meter>']);
-				expect(result.denominator).toEqual(['<second>', '<second>']);
+				expect(result.numerator).toEqual([{ unit: '<kilogram>', exponent: 1 }, { unit: '<meter>', exponent: 1 }]);
+				expect(result.denominator).toEqual([{ unit: '<second>', exponent: 2 }]);
 			});
 		});
 	});

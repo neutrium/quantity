@@ -63,6 +63,12 @@ try
 		run(process.execPath, [join(root, 'node_modules/typescript/bin/tsc'), '-p', 'tsconfig.json']);
 		console.log(`Packed consumer declarations passed: ${moduleResolution}`);
 	}
+
+	// CI publishes this exact consumer-tested archive, without packing a second time.
+	if (process.env.QUANTITY_PACKAGE_ARTIFACT)
+	{
+		await cp(join(directory, packed.filename), process.env.QUANTITY_PACKAGE_ARTIFACT);
+	}
 }
 finally
 {

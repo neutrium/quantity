@@ -13,11 +13,13 @@
 	"out": "./docs",
 	"name": "@neutrium/quantity",
 	"includeVersion": true,
+	"includeHierarchySummary": false,
 	"readme": "./guides/index.md",
 	"projectDocuments": [
 		"./guides/usage.md",
 		"./guides/temperatures.md",
 		"./guides/parsers.md",
+		"./guides/migrating-v5.md",
 		"./guides/benchmarks.md"
 	],
 	"categorizeByGroup": false,

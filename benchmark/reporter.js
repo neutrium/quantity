@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { cpus, release } from 'node:os';
 import { options } from './helpers.js';
+import { writeResults } from './write-results.js';
 
 export default class BenchmarkReporter
 {
@@ -42,9 +43,6 @@ export default class BenchmarkReporter
 			unhandledErrors: errors.map(error => ({ name: error.name, message: error.message })),
 			results: this.results,
 		};
-		const directory = new URL('./results/', import.meta.url);
-		mkdirSync(directory, { recursive: true });
-		writeFileSync(new URL('vitest.json', directory), JSON.stringify(report, null, 2) + '\n');
-		console.log('Benchmark report: benchmark/results/vitest.json');
+		writeResults('vitest.json', report);
 	}
 }

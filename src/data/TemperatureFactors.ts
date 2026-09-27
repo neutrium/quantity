@@ -1,6 +1,3 @@
-import { Decimal } from '@neutrium/decimal';
-
-// Keep registry factors and temperature operations consistent. Computing these
-// ratios as JavaScript numbers loses precision before Decimal sees the values.
-export const FIVE_NINTHS = new Decimal(5).div(9);
-export const NINE_FIFTHS = new Decimal(9).div(5);
+// Evaluate ratios with the current Decimal configuration, never at import time.
+export const FIVE_NINTHS = [5, 9] as const;
+export const NINE_FIFTHS = [9, 5] as const;

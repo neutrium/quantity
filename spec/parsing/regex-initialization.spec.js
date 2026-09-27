@@ -12,9 +12,9 @@ it('initializes patterns once across parsers and the regex Quantity entry', () =
 
 		// Distinct unit expressions exercise scans, not just parsed-unit cache hits.
 		const cases = [
-			['2 km/s', ['<kilo>', '<meter>'], ['<second>']],
-			['3 kg*m', ['<kilogram>', '<meter>'], ['<1>']],
-			['4 cm/min', ['<centi>', '<meter>'], ['<minute>']],
+			['2 km/s', [{ unit: '<meter>', prefix: '<kilo>', exponent: 1 }], [{ unit: '<second>', exponent: 1 }]],
+			['3 kg*m', [{ unit: '<kilogram>', exponent: 1 }, { unit: '<meter>', exponent: 1 }], []],
+			['4 cm/min', [{ unit: '<meter>', prefix: '<centi>', exponent: 1 }], [{ unit: '<minute>', exponent: 1 }]],
 		];
 		for (const [input, numerator, denominator] of cases) {
 			const result = new RegexQtyParser().parse(input);
@@ -23,7 +23,7 @@ it('initializes patterns once across parsers and the regex Quantity entry', () =
 			expect(new Quantity(input).scalar.toString()).toBe(input[0]);
 		}
 		expect(() => parser.parse('1 definitely_not_a_unit')).toThrow();
-		expect(new RegexQtyParser().parse('5 mm/h').numerator).toEqual(['<milli>', '<meter>']);
+		expect(new RegexQtyParser().parse('5 mm/h').numerator).toEqual([{ unit: '<meter>', prefix: '<milli>', exponent: 1 }]);
 		expect(getMap).not.toHaveBeenCalled();
 
 		// Preserve explicit initialization for existing callers.

@@ -45,6 +45,14 @@ jobs:
       - name: Install npm with trusted publishing support
         run: npm install --global npm@11.17.0
 
+      - name: Check trusted-publishing prerequisites
+        shell: bash
+        run: |
+          node --version
+          npm_version="$(npm --version)"
+          echo "npm $npm_version"
+          node -e "const [major, minor, patch] = process.argv[1].split('.').map(Number); if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) { console.error('npm 11.5.1 or newer is required for trusted publishing'); process.exit(1); }" "$npm_version"
+
       - name: Validate release metadata
         id: package
         shell: bash
@@ -77,14 +85,18 @@ jobs:
           echo "dist_tag=$dist_tag" >> "$GITHUB_OUTPUT"
           echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Download verified package
+        uses: actions/download-artifact@v4
+        with:
+          name: verified-package
+          path: ${{ runner.temp }}/verified-package
 
-      # prepublishOnly builds once and runs the full aggregate verification.
-      - name: Verify and publish package
+      # Publish the exact archive installed by the consumer tests in the verify job.
+      - name: Publish to npm
         env:
           NPM_DIST_TAG: ${{ steps.package.outputs.dist_tag }}
-        run: npm publish --access public --tag "${NPM_DIST_TAG}"
+          PACKAGE_ARCHIVE: ${{ runner.temp }}/verified-package/quantity-package.tgz
+        run: npm publish "$PACKAGE_ARCHIVE" --access public --ignore-scripts --tag "${NPM_DIST_TAG}"
 
   github-release:
     name: Create GitHub release

@@ -1,34 +1,40 @@
-import { typeguards, compareArray } from '@neutrium/utilities';
+import { typeguards } from '@neutrium/utilities';
+import { Decimal } from '@neutrium/decimal';
 
 import { Quantity } from '../QuantityCore.js'
 import { throwIncompatibleUnits } from './errors.js';
-import { inverse } from './maths.js';
+import { sameUnits } from './unit-identity.js';
+import { areInverseSignatures } from './unit-signatures.js';
+import { compareTemperatures } from './temperature.js';
+import { compareUnitValues } from './unit-scale.js';
 
-const UNITY_ARRAY = ["<1>"];
 
-export function eq(a: Quantity, b: string | number | Quantity): boolean
+
+export function eq(a: Quantity, b: string | number | Decimal | Quantity): boolean
 {
 	return compareTo(a, b) === 0;
 }
 
-export function lt(a: Quantity, b: string | number | Quantity): boolean
+export function lt(a: Quantity, b: string | number | Decimal | Quantity): boolean
 {
 	return compareTo(a, b) === -1;
 }
 
-export function lte(a: Quantity, b: string | number | Quantity): boolean
+export function lte(a: Quantity, b: string | number | Decimal | Quantity): boolean
 {
-	return compareTo(a, b) <= 0;
+	const comparison = compareTo(a, b);
+	return comparison !== undefined && comparison <= 0;
 }
 
-export function gt(a: Quantity, b: string | number | Quantity): boolean
+export function gt(a: Quantity, b: string | number | Decimal | Quantity): boolean
 {
 	return compareTo(a, b) === 1;
 }
 
-export function gte(a: Quantity, b: string | number | Quantity): boolean
+export function gte(a: Quantity, b: string | number | Decimal | Quantity): boolean
 {
-	return compareTo(a, b) >= 0;
+	const comparison = compareTo(a, b);
+	return comparison !== undefined && comparison >= 0;
 }
 
 // Return true if quantities and units match
@@ -36,12 +42,14 @@ export function gte(a: Quantity, b: string | number | Quantity): boolean
 // Quantity("100 cm").same(Quantity("1 m"))     # => false
 export function same(a: Quantity, b: Quantity): boolean
 {
-	return a.scalar.eq(b.scalar) && (a.units() === b.units());
+	return a.scalar.eq(b.scalar) && sameUnits(a, b);
 }
 
 export function isInverse(a: Quantity, b: string | Quantity) : boolean
 {
-	return isCompatible(inverse(a), b);
+	const other = typeguards.isString(b) ? a.createQuantity(b) : b;
+
+	return other instanceof Quantity && areInverseSignatures(a.signature, other.signature);
 }
 
 // Compare two Qty objects. Throws an exception if they are not of compatible types.
@@ -56,21 +64,45 @@ export function isInverse(a: Quantity, b: string | Quantity) : boolean
 //     Qty("10ohm").inverse().compareTo("10S") == -1
 //
 //   If including inverses in the sort is needed, I suggest writing: Qty.sort(qtyArray,units)
-export function compareTo(a: Quantity, b: string | number | Quantity)
+function comparisonResult(comparison: number): -1 | 0 | 1 | undefined
 {
-	if (typeguards.isString(b) || typeguards.isNumber(b))
+	return Number.isNaN(comparison) ? undefined : comparison < 0 ? -1 : comparison > 0 ? 1 : 0;
+}
+
+export function compareTo(a: Quantity, b: string | number | Decimal | Quantity): -1 | 0 | 1 | undefined
+{
+	// A numeric threshold is expressed in the receiver's units, including
+	// absolute-temperature readings. Do not parse or resolve a base quantity.
+	if (typeof b === 'number' || b instanceof Decimal)
+	{
+		return comparisonResult(a.scalar.cmp(b));
+	}
+
+	if (typeguards.isString(b))
 	{
 		return compareTo(a, a.createQuantity(b));
 	}
+	if (!(b instanceof Quantity))
+		throw new TypeError('Expected a number, Decimal, Quantity, or quantity expression');
 
 	if (!isCompatible(a, b))
 	{
 		throwIncompatibleUnits();
 	}
 
-	const comparison = a.baseScalar.cmp(b.baseScalar);
+	let comparison: number;
+
+	if (sameUnits(a, b))
+	{
+		comparison = a.scalar.cmp(b.scalar);
+	}
+	else
+	{
+		comparison = a.isTemperature() || b.isTemperature()
+			? compareTemperatures(a, b) : compareUnitValues(a, b);
+	}
 	// Preserve the existing undefined result for unordered (NaN) comparisons.
-	return Number.isNaN(comparison) ? undefined : comparison;
+	return comparisonResult(comparison);
 }
 
 //
@@ -108,5 +140,5 @@ export function isCompatible(a: Quantity, b: string | number | Quantity) : boole
 // false, even if the units are "unitless" like 'radians, each, etc'
 export function isUnitless(a: Quantity) : boolean
 {
-	return compareArray(a.numerator, UNITY_ARRAY) && compareArray(a.denominator, UNITY_ARRAY);
+	return a.numerator.length === 0 && a.denominator.length === 0;
 }

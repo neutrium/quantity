@@ -1,6 +1,13 @@
 import { FIVE_NINTHS } from './TemperatureFactors.js';
+import type { UnitCategory } from './Catalog.js';
 
-export const UNITS = {
+// Exact US liquid gallon (231 cubic inches); subdivisions share one definition.
+// NIST Handbook 133, Appendix E: https://nvlpubs.nist.gov/nistpubs/hb/2023/NIST.HB.133-2023.pdf
+const US_LIQUID_GALLON = '0.003785411784';
+const US_LIQUID_PINT = [US_LIQUID_GALLON, 8] as const;
+const US_LIQUID_QUART = [US_LIQUID_GALLON, 4] as const;
+
+export const UNITS: Record<string, UnitCategory> = {
 	"": {
 		"units": {
 			"<1>": [["1", "<1>"], 1]
@@ -180,7 +187,7 @@ export const UNITS = {
 			"<light-second>": [["ls", "light-second"], 299792458],
 			"<light-year>": [["ly", "light-year"], 9460730472580800],
 			"<micron>": [["micron"], 1e-6],
-			"<mil>": [["mil", "mils"], 0.0000254, ["<meter>"]],
+			"<mil>": [["mil", "mils"], 0.0000254],
 			"<mile>": [["mi", "mile", "miles"], 1609.344],
 			"<nail>": [["nail", "nails"], 0.05715],
 			"<naut-league>": [["nleague"], 5556],
@@ -227,7 +234,7 @@ export const UNITS = {
 			"<grain>": [["grain", "grains", "gr"], 6.479891E-5],
 			"<hundredweight-short>": [["cwt(s)"], 45.359237],
 			"<hundredweight-long>": [["cwt(l)"], 50.80234544],
-			"<ounce>": [["oz", "ounce", "ounces"], 0.0283495231],
+			"<ounce>": [["oz", "ounce", "ounces"], ['0.45359237', 16] as const],
 			"<ounce-troy>": [["ozt"], 0.031103477],
 			"<pennyweight>": [["dwt"], 0.00155517384],
 			"<pound>": [["lbs", "lb", "pound", "pounds", "#"], 0.45359237],
@@ -339,9 +346,9 @@ export const UNITS = {
 		"numerator": ["<meter>"],
 		"denominator": ["<second>"],
 		"units": {
-			"<kph>": [["kph"], 0.277777778],
+			"<kph>": [["kph"], [1000, 3600] as const],
 			"<mph>": [["mph"], 0.44704],
-			"<knot>": [["kn", "knot", "knots"], 0.514444444],
+			"<knot>": [["kn", "knot", "knots"], [1852, 3600] as const],
 			"<mach>": [["mach"], 295.0464],
 			"<light-speed>": [["lspeed", "light"], 299792458]
 		}
@@ -378,21 +385,21 @@ export const UNITS = {
 			"<drum-metric-petroleum>": [["drum(mp)"], 0.2],
 			"<drum-us-petroleum>": [["drum(usp)"], 0.208197648],
 			"<fluid-ounce>": [["floz", "fluid-ounce", "fluid-ounces"], 2.84130625e-5],
-			"<fluid-ounce-us>": [["oz(usl)", "oz(usf)", "floz(us)"], 2.95735296e-5],
+			"<fluid-ounce-us>": [["oz(usl)", "oz(usf)", "floz(us)"], [US_LIQUID_GALLON, 128]],
 			"<gallon-uk>": [["gal", "gal(imp)", "gal(uk)"], 0.00454609],
 			"<gallon-us-dry>": [["gal(usd)", "gal(us dry)"], 0.004404884],
-			"<gallon-us-liquid>": [["gal(us)", "gal(usl)", "gal(us fl)"], 0.003785412],
+			"<gallon-us-liquid>": [["gal(us)", "gal(usl)", "gal(us fl)"], US_LIQUID_GALLON],
 			"<liter>": [["l", "L", "liter", "liters", "litre", "litres"], 0.001],
 			"<pecks-uk>": [["peck(uk)", "pecks(uk)"], 0.00909218],
 			"<pecks-us>": [["peck(us)", "pecks(us)"], 0.008809768],
-			"<pint>": [["pt", "pint", "pints", "pint(us fl)"], 0.000473176475],
+			"<pint>": [["pt", "pint", "pints", "pint(us fl)"], US_LIQUID_PINT],
 			"<pint-uk>": [["pt(uk)", "pint(uk)", "pints(uk)"], 0.00056826125],
 			"<pint-us-dry>": [["pt(usd)", "pint(usd)", "pints(usd)"], 0.000550610475],
-			"<pint-us-liquid>": [["pt(usl)", "pint(usl)", "pints(usl)"], 0.000473176473],
-			"<quart>": [["qt", "quart", "quarts"], 0.00094635295],
+			"<pint-us-liquid>": [["pt(usl)", "pint(usl)", "pints(usl)"], US_LIQUID_PINT],
+			"<quart>": [["qt", "quart", "quarts"], US_LIQUID_QUART],
 			"<quart-uk>": [["qt(uk)", "quart(uk)", "quarts(uk)"], 0.0011365225],
 			"<quart-us-dry>": [["qt(usd)", "quart(usd)", "quarts(usd)"], 1.10122095e-3],
-			"<quart-us-liquid>": [["qt(usl)", "quart(usl)", "quarts(usl)"], 9.46352946e-4],
+			"<quart-us-liquid>": [["qt(usl)", "quart(usl)", "quarts(usl)"], US_LIQUID_QUART],
 			"<tablespoon-metric>": [["tb", "tbs", "tablespoon", "tablespoons"], 0.000015],
 			"<tablespoon-uk>": [["tb(uk)", "tbs(uk)", "tablespoon(uk)", "tablespoons(uk)"], 1.420653125e-5],
 			"<tablespoon-us>": [["tb(us)", "tbs(us)", "tablespoon(us)", "tablespoons(us)"], 1.478676478125e-5],

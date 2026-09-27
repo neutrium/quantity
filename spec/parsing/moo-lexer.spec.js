@@ -16,29 +16,30 @@ describe("Neutrium Quantity MooLexer Tests", function() {
 		expect(result.map((x) => x.type)).toEqual(["unit"]);
 	});
 
-	it("token type for 'km' should be a unit and a unit", function() {
+	it("token type for 'km' should be a complete prefixed unit", function() {
 		let result = lexer.tokenize("km");
 
-		expect(result.map((x) => x.type)).toEqual(["unit", "unit"]);
+		expect(result.map((x) => x.type)).toEqual(["unit"]);
+		expect(result[0].value).toBe('km');
 	});
 
-	it("token for 'km^2' should be a unit, unit, pwr, integer", function() {
+	it("token for 'km^2' should be a unit, pwr, integer", function() {
 		let result = lexer.tokenize("km^2");
 
-		expect(result.map((x) => x.type)).toEqual(["unit", "unit", "pwr", "integer"]);
+		expect(result.map((x) => x.type)).toEqual(["unit", "pwr", "integer"]);
 	});
 
 	it("token for 'kg.m/s^2' should be a correct", function() {
 		let result = lexer.tokenize("kg.m/s^2");
 
-		expect(result.map((x) => x.type)).toEqual(["unit", "mul", "unit", "div", "unit", "pwr", "integer"]);
+		expect(result.map((x) => x.type)).toEqual(["unit", "dot", "unit", "div", "unit", "pwr", "integer"]);
 	});
 
 
 	it("token for '1.3e-2 (kg.m)/s^2' should be a correct", function() {
 		let result = lexer.tokenize("1.3e-2 (kg.m)/s^2");
 
-		expect(result.map((x) => x.type)).toEqual(["signedFloat", "ws", "lParen", "unit", "mul", "unit", "rParen", "div", "unit", "pwr", "integer"]);
+		expect(result.map((x) => x.type)).toEqual(["signedFloat", "ws", "lParen", "unit", "dot", "unit", "rParen", "div", "unit", "pwr", "integer"]);
 	});
 
 });

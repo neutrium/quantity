@@ -1,34 +1,56 @@
 
-import { Lexer, Token } from 'moo'
-import moo from 'moo/moo.js'
+import type { Lexer, Token, Rules } from 'moo';
+import moo from 'moo';
 
 import { UnitTokenManager } from '../UnitTokenManager.js';
 
+// Moo supports clone() at runtime, but its upstream declarations omit it.
+export interface CloneableLexer extends Lexer
+{
+	clone(): CloneableLexer;
+}
+
 export class MooQtyLexer
 {
-	private _lexer: Lexer
+	private _lexer: CloneableLexer;
 
 	constructor()
 	{
-		let rules = {
-			"ws": " ",
-			"pwr": "^",
-			"mul": ["*", "."],
+		const rules: Rules = {
+			"ws": { match: /\s+/, lineBreaks: true },
+			// Numbers precede '.' multiplication so leading-point scalars such as .5 work.
+			// Keep integers separate: unit exponents must not accept floats/scientific notation.
+			"signedFloat" : { match: /(?:[-+]\s*)?(?:[0-9]*\.[0-9]+(?:[eE][-+]?[0-9]+)?|[0-9]+[eE][-+]?[0-9]+)/,
+				lineBreaks: true, value: text => text.replace(/\s/g, '') },
+			"integer": { match: /(?:[-+]\s*)?[0-9]+/, lineBreaks: true, value: text => text.replace(/\s/g, '') },
+			"pwr": ["^", "**"],
+			"superscript": { match: /[⁺⁻]?[⁰¹²³⁴⁵⁶⁷⁸⁹]+/, value: text =>
+				Array.from(text, char => '0123456789+-'['⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻'.indexOf(char)]).join('') },
+			"mul": ["*", "×"],
+			"dot": [".", "·", "⋅"],
 			"div": "/",
 			"lParen": '(',
-			"rParen": ')',
-			"signedFloat" : /[-+]?[0-9]*\.[0-9]+(?:[eE][-+]?[0-9]+)?/,
-			"integer": /[-+]?[0-9]+/
+			"rParen": ')'
 		}
 
 		const tm = UnitTokenManager.instance;
 
-		rules["unit"] = [
-			...Object.keys(tm.getMap('prefix')),
-			...Object.keys(tm.getMap('unit'))
-		].sort((a, b) => b.length - a.length)
+		const alternatives = (map: Record<string, string>) => Object.keys(map)
+			.sort((a, b) => b.length - a.length)
+			.map(alias => alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+		const units = alternatives(tm.getMap('unit'));
+		const prefixes = alternatives(tm.getMap('prefix'));
+		// Match a complete unit spelling, not a greedy fragment such as min in minch.
+		// Exact aliases win; otherwise the regex can backtrack to a valid prefix/unit pair.
+		// A suffix must be an operator, closing group, or complete compact power.
+		// '(' and '-' can belong to aliases such as y(j) and gram-force.
+		const boundary = '(?=$|[\\s^*/.)·⋅×⁺⁻⁰¹²³⁴⁵⁶⁷⁸⁹]|[+-]?\\d+(?=$|[\\s^*/.)·⋅×]))';
+		rules["unit"] = new RegExp(`(?:${units}|(?:${prefixes})(?:${units}))${boundary}`);
+		rules["sign"] = ['+', '-'];
+		// Give lexer failures a token and source offset for structured diagnostics.
+		rules["invalid"] = { match: /[^\s*/^.()·⋅×]+|[\s\S]/, error: true };
 
-		this._lexer = moo.compile(rules)
+		this._lexer = moo.compile(rules) as CloneableLexer;
 	}
 
 	get lexer()

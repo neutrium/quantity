@@ -1,14 +1,16 @@
-export const PREFIXES = {
-	"<kibi>": [["Ki", "Kibi", "kibi"], Math.pow(2, 10)],
-	"<mebi>": [["Mi", "Mebi", "mebi"], Math.pow(2, 20)],
-	"<gibi>": [["Gi", "Gibi", "gibi"], Math.pow(2, 30)],
-	"<tebi>": [["Ti", "Tebi", "tebi"], Math.pow(2, 40)],
-	"<pebi>": [["Pi", "Pebi", "pebi"], Math.pow(2, 50)],
-	"<exbi>": [["Ei", "Exbi", "exbi"], Math.pow(2, 60)],
-	"<zebi>": [["Zi", "Zebi", "zebi"], Math.pow(2, 70)],
-	"<yebi>": [["Yi", "Yebi", "yebi"], Math.pow(2, 80)],
-	"<robi>": [["Ri", "robi"], Math.pow(2, 90)],
-	"<quebi>": [["Qi", "quebi"], Math.pow(2, 100)],
+import type { CatalogEntry } from './Catalog.js';
+
+export const PREFIXES: Record<string, CatalogEntry> = {
+	"<kibi>": [["Ki", "Kibi", "kibi"], (2n ** 10n)],
+	"<mebi>": [["Mi", "Mebi", "mebi"], (2n ** 20n)],
+	"<gibi>": [["Gi", "Gibi", "gibi"], (2n ** 30n)],
+	"<tebi>": [["Ti", "Tebi", "tebi"], (2n ** 40n)],
+	"<pebi>": [["Pi", "Pebi", "pebi"], (2n ** 50n)],
+	"<exbi>": [["Ei", "Exbi", "exbi"], (2n ** 60n)],
+	"<zebi>": [["Zi", "Zebi", "zebi"], (2n ** 70n)],
+	"<yebi>": [["Yi", "Yebi", "yebi"], (2n ** 80n)],
+	"<robi>": [["Ri", "robi"], (2n ** 90n)],
+	"<quebi>": [["Qi", "quebi"], (2n ** 100n)],
 	"<googol>": [["googol"], 1e100],
 	"<quetta>": [["Q", "quetta"], 1e30],
 	"<ronna>": [["R", "ronna"], 1e27],

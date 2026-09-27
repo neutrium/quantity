@@ -1,78 +1,44 @@
-import type { Quantity } from "../QuantityCore.js";
-import { UnitTokenManager } from "../UnitTokenManager.js";
+import type { UnitStructure } from '../QuantityDefinition.js';
+import { UnitTokenManager } from '../UnitTokenManager.js';
+import { checkedExponent } from './unit-powers.js';
 
+// Derived units, including farads, use the base dimensions in the unit catalog.
+const DIMENSIONS = ['length', 'time', 'temperature', 'mass', 'current', 'substance', 'luminosity', 'currency', 'data', 'angle'];
+const INDEX = new Map(DIMENSIONS.map((dimension, index) => [dimension, index]));
+export const TEMPERATURE_SIGNATURE = DIMENSIONS.map(dimension => dimension === 'temperature' ? 1 : 0).join(',');
 
-//
-// Calculates the unit signature id for use in comparing compatible units and simplification
-// the signature is based on a simple classification of units and is based on the following publication
-//
-// Novak, G.S., Jr. "Conversion of units of measurement", IEEE Transactions on Software Engineering,
-// 21(8), Aug 1995, pp.651-661
-// doi://10.1109/32.403789
-// http://www.cs.utexas.edu/~novak/units95.html
-//
-export function unitSignature(a: Quantity)
+/** Compare dimensional exponents without constructing or numerically inverting a quantity. */
+export function areInverseSignatures(a: string, b: string): boolean
 {
-	if (a.signature)
-	{
-		return a.signature;
-	}
+	const left = a.split(','), right = b.split(',');
+	return left.length === right.length && left.every((exponent, index) => Number(exponent) === -Number(right[index]));
+}
 
-	let vector = unitSignatureVector(a);
-
-	for (let i = 0, len = vector.length; i < len; i++)
-	{
-		vector[i] *= Math.pow(20, i);	// Not sure if equation is correct
-	}
-
-	return vector.reduce(function (previous, current) { return previous + current; }, 0);
-};
-
-// calculates the unit signature vector used by unit_signature
-function unitSignatureVector(a: Quantity)
+// Input must already use base units. Keep the full dimensional vector: radix-20 encoding collides for large powers.
+export function unitSignature(a: UnitStructure): string
 {
-	const tokenMapper = UnitTokenManager.instance;
-	const SIGNATURE_VECTOR = ["length", "time", "temperature", "mass", "current", "substance", "luminosity", "currency", "data", "angle", "capacitance"];
+	const tm = UnitTokenManager.instance;
+	const vector = new Array(DIMENSIONS.length).fill(0);
 
-	if (!a.isBase())
+	for (const term of a.numerator)
 	{
-		return unitSignatureVector(a.toBase());
-	}
+		const index = INDEX.get(tm.getUnit(term.unit)!.category);
 
-	let vector = new Array(SIGNATURE_VECTOR.length),
-		r, n;
-
-	for (let i = 0; i < vector.length; i++)
-	{
-		vector[i] = 0;
-	}
-
-	// Numerator - ["<kilogram>","<meter>"]
-	for (let j = 0, len = a.numerator.length; j < len; j++)
-	{
-		if((r = tokenMapper.getUnit(a.numerator[j])))
+		if (index !== undefined)
 		{
-			n = SIGNATURE_VECTOR.indexOf(r.category);
-
-			if (n >= 0)
-			{
-				vector[n] = vector[n] + 1;
-			}
+			vector[index] = checkedExponent(vector[index] + term.exponent);
 		}
 	}
 
-	for (let k = 0, len = a.denominator.length; k < len; k++)
+	for (const term of a.denominator)
 	{
-		if ((r = tokenMapper.getUnit(a.denominator[k])))
-		{
-			n = SIGNATURE_VECTOR.indexOf(r.category);
+		const index = INDEX.get(tm.getUnit(term.unit)!.category);
 
-			if (n >= 0)
-			{
-				vector[n] = vector[n] - 1;
-			}
+		if (index !== undefined)
+		{
+			vector[index] = checkedExponent(vector[index] - term.exponent);
 		}
 	}
 
-	return vector;
-};
+	return vector.join(',');
+}

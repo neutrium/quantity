@@ -1,3 +1,6 @@
+import type { DecimalConstructor } from '../operations/numeric-context.js';
+import type { ParserConfig } from './ParserConfig.js';
+
 /**
  * Structural contract for a parser supplied to the Quantity constructor.
  * @typeParam Result - Parsed output; Quantity requires a QuantityDefinition shape.
@@ -8,12 +11,15 @@
  */
 export interface Parser<Result>
 {
+	/** Effective settings, when the implementation supports configurable parser caches. */
+	readonly config?: ParserConfig;
 	/**
 	 * Parse a scalar and unit expression.
 	 * @param val - Expression supplied by the constructor. With a separate scalar,
 	 * only the unit expression is passed and the returned scalar is replaced.
+	 * @param decimal - Optional arithmetic constructor; use it to preserve isolated Quantity settings.
 	 * @returns A complete result containing a Decimal scalar and normalized unit arrays.
 	 * @throws Implementations should throw when input is invalid or incomplete.
 	 */
-	parse(val: string): Result
+	parse(val: string, decimal?: DecimalConstructor): Result
 }
