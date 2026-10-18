@@ -1,8 +1,10 @@
+import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it } from 'vitest';
 import { Quantity } from '../../dist/Quantity.js';
 import { Quantity as RegexQuantity } from '../../dist/regex.js';
-import { NearleyQtyParser } from '../../dist/parsers/NearleyQtyParser.js';
-import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
+import { NearleyParser } from '../../dist/parsers/NearleyParser.js';
+import { RegexParser } from '../../dist/parsers/RegexParser.js';
 
 describe('shared multiplication and division precedence', () => {
 	it.each([
@@ -79,9 +81,9 @@ describe('shared multiplication and division precedence', () => {
 	});
 
 	it('keeps differently ordered operators separate in the regex cache', () => {
-		const parser = new RegexQtyParser();
+		const parser = new RegexParser();
 		for (const input of ['m/s*kg', 'm/s.kg', 'm/s/kg', 'm*s/kg', 'm/s*kg', 'm/s.kg']) {
-			const actual = new RegexQuantity(parser.parse(input));
+			const actual = new RegexQuantity(parser.parse(input, testNumeric));
 			expect(actual.same(new Quantity(input))).toBe(true);
 		}
 	});
@@ -95,12 +97,12 @@ describe('shared multiplication and division precedence', () => {
 	});
 
 	it('rejects missing operands and adjacent operators', () => {
-		for (const Parser of [NearleyQtyParser, RegexQtyParser]) {
+		for (const Parser of [NearleyParser, RegexParser]) {
 			const parser = new Parser();
 			for (const input of ['m/', 'm/s*', 'm/*s', 'm*/s', 'm//s', 'm/ /s', 'm/s/.kg', 'm/s*/kg', 'm/s^0/', 'kg/m.', 'kg/m..s', 'kg/m.*s', 'kg/m./s']) {
-				expect(() => parser.parse(input), input).toThrow();
+				expect(() => parser.parse(input, testNumeric), input).toThrow();
 			}
-			expect(new Quantity(parser.parse('m/s*kg')).units()).toBe('m*kg/s');
+			expect(new Quantity(parser.parse('m/s*kg', testNumeric)).units()).toBe('m*kg/s');
 		}
 	});
 });

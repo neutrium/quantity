@@ -1,93 +1,128 @@
-import { Decimal } from '@neutrium/decimal';
-import type { QuantityDefinition, UnitStructure } from '../QuantityDefinition.js';
+import { CacheScope, defaultCacheScope } from '../utils/CacheScope.js';
+import type { ArithmeticAdapter } from '@neutrium/utilities/numeric/arithmetic';
+import type { UnitStructure } from '../QuantityDefinition.js';
 import type { FactorValue, ScaleFactor } from '../data/ScaleFactor.js';
 import { UnitTokenManager } from '../UnitTokenManager.js';
-import { calculateScalar, type DecimalConstructor } from './numeric-context.js';
-import { unitKey } from './unit-identity.js';
-import { LruCache } from '../utils/LruCache.js';
-import { decimalTerm, scaleTerm, roundSum, compareSum, evaluateRational, negateValue, type RationalTerm, type RationalValue } from './exact-sum.js';
+import { unitKey, conversionKey } from './unit-identity.js';
+import { copyCacheText } from '../utils/cache-memory.js';
+import { BudgetCache } from '@neutrium/utilities/cache';
+import { scalarTerm, finish } from './exact-sum.js';
+import { addFactor, reduceFactors, factorRatio, factoredValue, type Factors, type RationalValue } from '@neutrium/utilities/numeric/factors';
+import { parseRationalTerm, scaleTerm, negateValue, evaluateRational, hasRationalArithmetic, type RationalArithmeticAdapter } from '@neutrium/utilities/numeric/rational';
 
-type Factors = Map<bigint, bigint>;
-interface ScaledValue { coefficient: Decimal; exponent: bigint; }
-// Exact input serialization must not depend on public formatting or exponent limits.
-const Exact = Decimal.clone({ precision: 64, maxOutputDigits: Decimal.limits.maxDigits,
-	minE: -Decimal.limits.maxExponent, maxE: Decimal.limits.maxExponent });
-const plans = new LruCache<string, ReadonlyMap<bigint, bigint>>();
-const exactBaseFactors = new WeakMap<object, LruCache<string, Decimal | null>>();
-
-function addFactor(factors: Factors, value: bigint, power: bigint): void
+function factorBytes(factors: ReadonlyMap<bigint, bigint>): number
 {
-	if (value === 1n || power === 0n)
+	let bytes = 128;
+
+	for (const [factor, power] of factors)
 	{
-		return;
+		bytes += 96 + 2 * (factor.toString().length + power.toString().length);
 	}
 
-	const count = (factors.get(value) ?? 0n) + power;
+	return bytes;
+}
 
-	if (count)
+const plansKey = Symbol();
+const conversionsKey = Symbol();
+const adapterFactorsKey = Symbol();
+
+interface ConversionPlan
+{
+	readonly factors: ReadonlyMap<bigint, bigint>;
+	readonly exponent: bigint;
+	readonly exact?: readonly [bigint, bigint];
+}
+
+/** Catalog factors may be exact; live scalars and calculated factors stay in the backend. */
+function adapterFactor<T>(plan: ConversionPlan, n: ArithmeticAdapter<T>, scope: CacheScope): T
+{
+	const adapters = scope.get('conversionPlans', adapterFactorsKey, () => new WeakMap<object, WeakMap<ConversionPlan, number>>());
+	let factors = adapters?.get(n);
+	const cached = factors?.get(plan);
+	if (cached !== undefined) return cached as T;
+	let value: T;
+	if (plan.exact)
 	{
-		factors.set(value, count);
+		value = n.div(n.from(plan.exact[0]), n.from(plan.exact[1]));
 	}
 	else
 	{
-		factors.delete(value);
+		value = n.from(1);
+		for (const [factor, count] of plan.factors)
+		{
+			value = n.mul(value, n.powInteger(n.from(factor), Number(count)));
+		}
 	}
+
+	if (plan.exponent)
+	{
+		value = n.mul(value, n.powInteger(n.from(10), Number(plan.exponent)));
+	}
+
+	// Unknown object scalars have no reliable size estimate; retain only fixed-size primitives.
+	if (adapters && typeof value === 'number')
+	{
+		if (!factors)
+		{
+			adapters.set(n, factors = new WeakMap());
+		}
+
+		factors.set(plan, value);
+	}
+
+	return value;
+}
+// Cache only catalog data, never scalars or backend-rounded results. A byte
+// budget also bounds retention of long unit keys and large exact coefficients.
+function conversionCache(scope: CacheScope)
+{
+	return scope.get('conversionPlans', conversionsKey, () => new BudgetCache<ConversionPlan>(scope.config.conversionPlans, {
+		detachKey: copyCacheText,
+		measure: plan => factorBytes(plan.factors) + 2 * plan.exponent.toString().length
+			+ (plan.exact ? 2 * (plan.exact[0].toString().length + plan.exact[1].toString().length) : 0),
+	}));
+}
+
+function conversionPlan(source: UnitStructure, target: UnitStructure | undefined, reciprocal: boolean, scope: CacheScope): ConversionPlan
+{
+	const conversions = conversionCache(scope);
+	const key = conversions ? conversionKey(source, target, reciprocal, scope) : '';
+	const cached = conversions?.get(key);
+
+	if (cached)
+	{
+		return cached;
+	}
+
+	const factors: Factors = new Map();
+	appendUnits(factors, source, reciprocal ? -1n : 1n, scope);
+
+	if (target)
+	{
+		appendUnits(factors, target, -1n, scope);
+	}
+
+	reduceFactors(factors);
+	const exponent = factors.get(10n) ?? 0n;
+	factors.delete(10n);
+	const plan = { factors, exponent, exact: factorRatio(factors) };
+	conversions?.set(key, plan);
+
+	return plan;
 }
 
 function accumulate(factors: Factors, value: FactorValue, power: bigint): void
 {
-	const [mantissa, exponent] = new Exact(value).abs().toExponential().split('e');
-	const digits = mantissa.replace('.', '');
-	addFactor(factors, BigInt(digits), power);
-	addFactor(factors, 10n, (BigInt(exponent) - BigInt(digits.length - 1)) * power);
+	const term = parseRationalTerm(String(value));
+	addFactor(factors, term.numerator < 0n ? -term.numerator : term.numerator, power);
+	addFactor(factors, 10n, term.exponent * power);
 }
 
-function gcd(a: bigint, b: bigint): bigint
+function unitFactors(units: UnitStructure, scope: CacheScope): ReadonlyMap<bigint, bigint>
 {
-	while (b)
-	{
-		[a, b] = [b, a % b];
-	}
-
-	return a;
-}
-
-/** Cancel exact integer factors without ever expanding large unit powers. */
-function reduce(factors: Factors): Factors
-{
-	for (;;)
-	{
-		let changed = false;
-		outer: for (const [a, pa] of factors) {
-			if (pa < 0n) continue;
-
-			for (const [b, pb] of factors)
-			{
-				if (pb > 0n) continue;
-				const common = gcd(a, b);
-
-				if (common === 1n) continue;
-
-				factors.delete(a); factors.delete(b);
-				addFactor(factors, a / common, pa);
-				addFactor(factors, b / common, pb);
-				addFactor(factors, common, pa + pb);
-				changed = true;
-				break outer;
-			}
-		}
-
-		if (!changed)
-		{
-			return factors;
-		}
-	}
-}
-
-function unitFactors(units: UnitStructure): ReadonlyMap<bigint, bigint>
-{
-	const key = unitKey(units);
-	let plan = plans.get(key);
+	const plans = scope.get('unitFactors', plansKey, () => new BudgetCache<ReadonlyMap<bigint, bigint>>(scope.config.unitFactors, { detachKey: copyCacheText, measure: factorBytes }));
+	const key = plans ? unitKey(units, scope) : '';
+	let plan = plans?.get(key);
 
 	if (plan)
 	{
@@ -121,24 +156,24 @@ function unitFactors(units: UnitStructure): ReadonlyMap<bigint, bigint>
 		}
 	}
 
-	plan = reduce(factors);
-	plans.set(key, plan);
+	plan = reduceFactors(factors);
+	plans?.set(key, plan);
 
 	return plan;
 }
 
-function appendUnits(factors: Factors, units: UnitStructure, sign: bigint): void
+function appendUnits(factors: Factors, units: UnitStructure, sign: bigint, scope: CacheScope): void
 {
-	for (const [factor, count] of unitFactors(units))
+	for (const [factor, count] of unitFactors(units, scope))
 	{
 		addFactor(factors, factor, count * sign);
 	}
 }
 
 /** Prepare a finite value or reciprocal in target units, without rounding or range checks. */
-export function unitValue(value: QuantityDefinition, target?: UnitStructure, reciprocal = false): RationalValue
+export function unitValue<T>(value: UnitStructure & {scalar: T}, target: UnitStructure | undefined, n: RationalArithmeticAdapter<T>, reciprocal = false, scope: CacheScope = defaultCacheScope): RationalValue
 {
-	const term = decimalTerm(value.scalar);
+	const term = scalarTerm(value.scalar, n, scope);
 
 	if (!term.numerator)
 	{
@@ -150,18 +185,8 @@ export function unitValue(value: QuantityDefinition, target?: UnitStructure, rec
 		return { exact: term };
 	}
 
-	const factors: Factors = new Map();
-	appendUnits(factors, value, reciprocal ? -1n : 1n);
-
-	if (target)
-	{
-		appendUnits(factors, target, -1n);
-	}
-
-	reduce(factors);
-	const exponent = factors.get(10n) ?? 0n;
-	factors.delete(10n);
-	const exact = smallRatio(factors);
+	const plan = conversionPlan(value, target, reciprocal, scope);
+	const { exact, exponent } = plan;
 
 	if (exact)
 	{
@@ -177,290 +202,162 @@ export function unitValue(value: QuantityDefinition, target?: UnitStructure, rec
 			}
 		};
 	}
-	// Build and reduce the plan once; precision refinement reuses it.
+	// Copy before adding scalar factors; cached catalog plans must stay immutable.
+	const factors = new Map(plan.factors);
 	addFactor(factors, 10n, exponent);
-	accumulate(factors, value.scalar, reciprocal ? -1n : 1n);
-	return factoredValue(factors, value.scalar.isNeg());
+	addFactor(factors, term.numerator < 0n ? -term.numerator : term.numerator, reciprocal ? -1n : 1n);
+	addFactor(factors, term.denominator, reciprocal ? 1n : -1n);
+	addFactor(factors, 10n, term.exponent * (reciprocal ? -1n : 1n));
+
+	return factoredValue(factors, term.numerator < 0n);
 }
 
-/** Directed enclosures keep scientific exponents outside Decimal's range. */
-function factorBounds(factors: Factors, negative: boolean, exponent: bigint, precision: number): [RationalTerm, RationalTerm]
+export function scale<T>(value: T, source: UnitStructure, target: UnitStructure | undefined, n: ArithmeticAdapter<T>, reciprocal = false, scope: CacheScope = defaultCacheScope): T
 {
-	const Lower = Exact.clone({ precision, rounding: 'down' });
-	const Upper = Exact.clone({ precision, rounding: 'up' });
-	const nl = side(factors, true, Lower), nh = side(factors, true, Upper);
-	const dl = side(factors, false, Lower), dh = side(factors, false, Upper);
-	const bound = (a: ScaledValue, b: ScaledValue) => {
-		const term = decimalTerm(a.coefficient.div(b.coefficient));
-
-		return {
-			...term,
-			exponent: term.exponent + a.exponent - b.exponent + exponent
-		};
-	};
-	const low = bound(nl, dh), high = bound(nh, dl);
-
-	return negative ? [scaleTerm(high, -1n), scaleTerm(low, -1n)] : [low, high];
-}
-
-function factoredValue(factors: Factors, negative: boolean): RationalValue
-{
-	reduce(factors);
-	const exponent = factors.get(10n) ?? 0n;
-	factors.delete(10n);
-	const exact = smallRatio(factors);
-
-	return exact ? { exact: { numerator: negative ? -exact[0] : exact[0], denominator: exact[1], exponent } }
-		: { bounds: precision => factorBounds(factors, negative, exponent, precision) };
-}
-
-function normalize(value: Decimal, exponent: bigint, Numeric: DecimalConstructor): ScaledValue
-{
-	const [coefficient, offset] = value.toExponential().split('e');
-
-	return {
-		coefficient: new Numeric(coefficient),
-		exponent: exponent + BigInt(offset)
-	};
-}
-
-function multiply(a: ScaledValue, b: ScaledValue, Numeric: DecimalConstructor): ScaledValue
-{
-	return normalize(a.coefficient.mul(b.coefficient), a.exponent + b.exponent, Numeric);
-}
-
-function power(value: bigint, count: bigint, Numeric: DecimalConstructor): ScaledValue
-{
-	let factor = normalize(new Numeric(value), 0n, Numeric);
-	let result: ScaledValue = { coefficient: new Numeric(1), exponent: 0n };
-
-	while (count)
+	if (!n.isFinite(value) || n.compare(value, n.from(0)) === 0)
 	{
-		if (count & 1n)
-		{
-			result = multiply(result, factor, Numeric);
-		}
-
-		count >>= 1n;
-
-		if (count)
-		{
-			factor = multiply(factor, factor, Numeric);
-		}
+		return reciprocal ? n.div(n.from(1), value) : value;
 	}
 
-	return result;
+	if (!hasRationalArithmetic(n))
+	{
+		const factor = adapterFactor(conversionPlan(source, target, reciprocal, scope), n, scope);
+		return reciprocal ? n.div(factor, value) : n.mul(value, factor);
+	}
+
+	return finish(unitValue({ numerator: source.numerator, denominator: source.denominator, scalar: value }, target, n, reciprocal, scope), n);
 }
 
-function side(factors: Factors, positive: boolean, Numeric: DecimalConstructor): ScaledValue
+/** Add/subtract in the left operand's units, rounding the complete sum once. */
+export function scaledSum<T>(a: UnitStructure & {scalar: T}, b: UnitStructure & {scalar: T}, subtract: boolean, n: ArithmeticAdapter<T>, scope: CacheScope = defaultCacheScope): T
 {
-	let result: ScaledValue = { coefficient: new Numeric(1), exponent: 0n };
-
-	for (const [factor, count] of factors)
+	if (!hasRationalArithmetic(n))
 	{
-		if ((count > 0n) === positive)
-		{
-			result = multiply(result, power(factor, count > 0n ? count : -count, Numeric), Numeric);
-		}
+		const right = scale(b.scalar, b, a, n, false, scope);
+		return subtract ? n.sub(a.scalar, right) : n.add(a.scalar, right);
 	}
 
-	return result;
+	const zero = n.from(0);
+
+	if (!n.isFinite(a.scalar) || !n.isFinite(b.scalar) ||
+		n.compare(a.scalar, zero) === 0 && n.compare(b.scalar, zero) === 0)
+	{
+		return subtract ? n.sub(a.scalar, b.scalar) : n.add(a.scalar, b.scalar);
+	}
+
+	const left = { exact: scalarTerm(a.scalar, n, scope) };
+	const right = unitValue(b, a, n, false, scope);
+	// Independent bounds cannot prove exact cancellation of huge powers.
+	// Cancel their magnitude symbolically before attempting refinement.
+	if (left.exact.numerator !== 0n && !('exact' in right) &&
+		(n.compare(a.scalar, zero) < 0) !== ((n.compare(b.scalar, zero) < 0) !== subtract) &&
+		compareMagnitudes(a, b, n, scope) === 0)
+	{
+		return n.sub(n.from(1), n.from(1));
+	}
+
+	return evaluateRational([left, subtract ? negateValue(right) : right], terms => n.fromRationalSum(terms),
+		{ equal: (a, b) => n.compare(a, b) === 0 });
 }
 
-/** Small exact products avoid intermediate rounding, including decimal ties. */
-function smallRatio(factors: Factors): [bigint, bigint] | undefined
+/** Multiply/divide both scalars and their relative unit scale before final rounding. */
+export function scaledProduct<T>(a: UnitStructure & {scalar: T}, b: UnitStructure & {scalar: T}, divide: boolean, n: ArithmeticAdapter<T>, scope: CacheScope = defaultCacheScope): T
 {
-	let digits = 0n;
-
-	for (const [factor, count] of factors)
+	if (!hasRationalArithmetic(n))
 	{
-		digits += BigInt(factor.toString().length) * (count < 0n ? -count : count);
-
-		if (digits > 4096n)
-		{
-			return undefined;
-		}
+		const factor = adapterFactor(conversionPlan(b, a, false, scope), n, scope);
+		return divide ? n.div(n.div(a.scalar, b.scalar), factor) : n.mul(n.mul(a.scalar, b.scalar), factor);
 	}
 
-	let numerator = 1n, denominator = 1n;
-
-	for (const [factor, count] of factors)
+	const zero = n.from(0);
+	// Positive catalog scales preserve signs, zero and infinity. Let the
+	// backend handle exceptional arithmetic without materializing the scale.
+	if (!n.isFinite(a.scalar) || !n.isFinite(b.scalar) ||
+		n.compare(a.scalar, zero) === 0 || n.compare(b.scalar, zero) === 0)
 	{
-		if (count > 0n)
-		{
-			numerator *= factor ** count;
-		}
-		else
-		{
-			denominator *= factor ** -count;
-		}
+		return divide ? n.div(a.scalar, b.scalar) : n.mul(a.scalar, b.scalar);
 	}
 
-	return [numerator, denominator];
+	const left = scalarTerm(a.scalar, n, scope), right = scalarTerm(b.scalar, n, scope);
+	const plan = conversionPlan(b, a, false, scope);
+
+	if (plan.exact)
+	{
+		const [num, den] = plan.exact;
+		const term = divide
+			? scaleTerm({ ...left, exponent: left.exponent - right.exponent - plan.exponent }, right.denominator * den, right.numerator * num)
+			: scaleTerm({ ...left, exponent: left.exponent + right.exponent + plan.exponent }, right.numerator * num, right.denominator * den);
+		return n.fromRationalSum([term]);
+	}
+
+	const direction = divide ? -1n : 1n;
+	const factors: Factors = new Map();
+
+	for (const [factor, count] of plan.factors)
+	{
+		factors.set(factor, divide ? -count : count);
+	}
+
+	addFactor(factors, 10n, left.exponent + direction * (right.exponent + plan.exponent));
+	addFactor(factors, left.numerator < 0n ? -left.numerator : left.numerator, 1n);
+	addFactor(factors, left.denominator, -1n);
+	addFactor(factors, right.numerator < 0n ? -right.numerator : right.numerator, direction);
+	addFactor(factors, right.denominator, -direction);
+
+	return finish(factoredValue(factors, (left.numerator < 0n) !== (right.numerator < 0n)), n);
 }
 
-function finish(factors: Factors, negative: boolean, Output: DecimalConstructor): Decimal
+/** Compare the exact ratio, cancelling common factors before bounded evaluation. */
+export function compareUnitValues<T>(a: UnitStructure & {scalar: T}, b: UnitStructure & {scalar: T}, n: ArithmeticAdapter<T>, scope: CacheScope = defaultCacheScope): number
 {
-	return evaluateRational([factoredValue(factors, negative)], terms => roundSum(terms, Output));
+	if (!hasRationalArithmetic(n))
+	{
+		return n.compare(a.scalar, scale(b.scalar, b, a, n, false, scope));
+	}
+
+	const zero = n.from(0), sa = n.compare(a.scalar, zero), sb = n.compare(b.scalar, zero);
+
+	if (!n.isFinite(a.scalar) || !n.isFinite(b.scalar) || !sa || !sb || sa !== sb)
+	{
+		return n.compare(a.scalar, b.scalar);
+	}
+
+	return sa * compareMagnitudes(a, b, n, scope);
 }
 
-// Reuse exact terminating factors (feet, pounds, ounces, metric prefixes). Multiplying
-// once in the output context is correctly rounded and avoids rebuilding rational plans.
-function exactBaseFactor(units: UnitStructure, Output: DecimalConstructor): Decimal | null
+/** Inputs are finite and nonzero; compare magnitudes without adapter negation. */
+function compareMagnitudes<T>(a: UnitStructure & {scalar: T}, b: UnitStructure & {scalar: T}, n: RationalArithmeticAdapter<T>, scope: CacheScope): number
 {
-	let cache = exactBaseFactors.get(Output.config);
+	const plan = conversionPlan(a, b, false, scope);
 
-	if (!cache)
+	if (plan.exact)
 	{
-		exactBaseFactors.set(Output.config, cache = new LruCache());
-	}
-
-	const key = unitKey(units), cached = cache.get(key);
-
-	if (cached !== undefined)
-	{
-		return cached;
-	}
-
-	const factors = new Map(unitFactors(units));
-	const exponent = factors.get(10n) ?? 0n;
-	factors.delete(10n);
-	const exact = smallRatio(factors);
-	let result: Decimal | null = null;
-
-	if (exact)
-	{
-		let denominator = exact[1], twos = 0n, fives = 0n;
-		while (denominator % 2n === 0n)
-		{
-			denominator /= 2n; twos++;
-		}
-
-		while (denominator % 5n === 0n)
-		{
-			denominator /= 5n; fives++;
-		}
-
-		if (denominator === 1n)
-		{
-			const places = twos > fives ? twos : fives;
-			const coefficient = exact[0] * 2n ** (places - twos) * 5n ** (places - fives);
-			const value = new Output(`${coefficient}e${exponent - places}`);
-
-			if (value.isFinite() && !value.isZero())
+		const left = scalarTerm(a.scalar, n, scope), right = scalarTerm(b.scalar, n, scope);
+		// Compare |a| in b's units directly with |b|, without forming or reducing a ratio.
+		return n.compareRationalSum([
 			{
-				result = value;
-			}
-		}
-	}
-
-	cache.set(key, result);
-	return result;
-}
-
-export function resolveUnitValue(value: QuantityDefinition, target?: UnitStructure, Output: DecimalConstructor = Decimal): Decimal
-{
-	if (value.scalar.isZero() || !value.scalar.isFinite())
-	{
-		return new Output(value.scalar);
-	}
-
-	if (!target)
-	{
-		const factor = exactBaseFactor(value, Output);
-
-		if (factor)
-		{
-			const scalar = value.scalar.constructor === Output ? value.scalar : new Output(value.scalar);
-
-			if (scalar.eq(value.scalar))
+				numerator: (left.numerator < 0n ? -left.numerator : left.numerator) * plan.exact[0],
+				denominator: left.denominator * plan.exact[1],
+				exponent: left.exponent + plan.exponent,
+			},
 			{
-				return scalar.mul(factor);
-			}
-		}
+				numerator: right.numerator < 0n ? right.numerator : -right.numerator,
+				denominator: right.denominator,
+				exponent: right.exponent,
+			},
+		]);
 	}
+	const factors = new Map(plan.factors);
+	addFactor(factors, 10n, plan.exponent);
 
-	return evaluateRational([unitValue(value, target)], terms => roundSum(terms, Output));
-}
-
-/** Evaluate both scalar operands and all unit factors before rounding or range checks. */
-export function resolveProduct(a: QuantityDefinition, b: QuantityDefinition, target: UnitStructure,
-	divide: boolean, Output: DecimalConstructor = Decimal): Decimal
-{
-	if (!a.scalar.isFinite() || !b.scalar.isFinite() || a.scalar.isZero() || b.scalar.isZero())
+	for (const [value, sign] of [[a.scalar, 1n], [b.scalar, -1n]] as const)
 	{
-		return calculateScalar(a.scalar, divide ? 'div' : 'mul', b.scalar, Output);
+		const term = scalarTerm(value, n, scope);
+		addFactor(factors, term.numerator < 0n ? -term.numerator : term.numerator, sign);
+		addFactor(factors, term.denominator, -sign);
+		addFactor(factors, 10n, term.exponent * sign);
 	}
 
-	const factors = new Map(unitFactors(a));
-	appendUnits(factors, b, divide ? -1n : 1n);
-	appendUnits(factors, target, -1n);
-	accumulate(factors, a.scalar, 1n);
-	accumulate(factors, b.scalar, divide ? -1n : 1n);
-
-	return finish(factors, a.scalar.isNeg() !== b.scalar.isNeg(), Output);
-}
-
-export function resolveReciprocal(value: QuantityDefinition, target: UnitStructure, Output: DecimalConstructor): Decimal
-{
-	if (value.scalar.isZero())
-	{
-		throw new Error('Divide by zero');
-	}
-
-	if (!value.scalar.isFinite())
-	{
-		return new Output(1).div(value.scalar);
-	}
-
-	return evaluateRational([unitValue(value, target, true)], terms => roundSum(terms, Output));
-}
-
-/** Exact cancellation plus directed bounds makes comparison independent of user precision. */
-export function compareUnitValues(a: QuantityDefinition, b: QuantityDefinition): number
-{
-	if (a.scalar.isNaN() || b.scalar.isNaN())
-	{
-		return NaN;
-	}
-
-	if (
-		!a.scalar.isFinite() || !b.scalar.isFinite()
-		|| a.scalar.isZero() || b.scalar.isZero()
-		|| a.scalar.isNeg() !== b.scalar.isNeg()
-	){
-		return a.scalar.cmp(b.scalar);
-	}
-
-	const factors = new Map(unitFactors(a));
-	appendUnits(factors, b, -1n);
-	accumulate(factors, a.scalar, 1n); accumulate(factors, b.scalar, -1n);
-	const comparison = evaluateRational([factoredValue(factors, false)], ([term]) =>
-		compareSum([term, { numerator: -1n, denominator: 1n, exponent: 0n }]));
-
-	return a.scalar.isNeg() ? -comparison : comparison;
-}
-
-/** Cancel and round the complete sum once, preserving arbitrarily distant signed tails. */
-export function resolveSum(a: QuantityDefinition, b: QuantityDefinition, target: UnitStructure,
-	subtract: boolean, Output: DecimalConstructor = Decimal): Decimal
-{
-	if (!a.scalar.isFinite() || !b.scalar.isFinite() || a.scalar.isZero() && b.scalar.isZero())
-	{
-		return calculateScalar(a.scalar, subtract ? 'sub' : 'add', b.scalar, Output);
-	}
-
-	const left = unitValue(a, target), right = unitValue(b, target);
-	// Equal large factored values must cancel symbolically: independent enclosures
-	// would straddle zero at every precision. Ordinary exact sums skip this work.
-	if ((!('exact' in left) || !('exact' in right)) && a.scalar.isNeg() !== (b.scalar.isNeg() !== subtract))
-	{
-		const magnitude = { numerator: b.numerator, denominator: b.denominator, scalar: a.scalar.isNeg() === b.scalar.isNeg() ? b.scalar : new Exact(b.scalar).neg() };
-		if (compareUnitValues(a, magnitude) === 0)
-		{
-			return new Output(1).sub(1);
-		}
-	}
-
-	return evaluateRational([left, subtract ? negateValue(right) : right], terms => roundSum(terms, Output));
+	return evaluateRational([factoredValue(factors, false)], ([term]) =>
+		n.compareRationalSum([term, { numerator: -1n, denominator: 1n, exponent: 0n }]));
 }

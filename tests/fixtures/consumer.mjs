@@ -1,40 +1,37 @@
 import assert from 'node:assert/strict';
-import { Decimal } from '@neutrium/decimal';
 import { Quantity } from '@neutrium/quantity';
-import { NearleyQtyParser, RegexQtyParser } from '@neutrium/quantity/parsers.js';
+import { Quantity as RegexQuantity } from '@neutrium/quantity/regex';
+import { Quantity as DoubleQuantity } from '@neutrium/quantity/number';
+import { createQuantityClass, Quantity as SharedQuantity } from '@neutrium/quantity/factory';
+import { NearleyParser, RegexParser } from '@neutrium/quantity/parsers.js';
 import { isQuantity, isQuantityDefinition } from '@neutrium/quantity/guards.js';
+import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+const decimalAdapter = new DecimalScientificAdapter();
+import { NumberAdapter } from '@neutrium/utilities/number';
+const numberAdapter = new NumberAdapter();
 
 assert.equal(new Quantity('1 km').to('m').scalar.toString(), '1000');
-assert.equal(new Quantity(new Decimal('0.1'), 'm').mul(3).scalar.toString(), '0.3');
-assert(new Quantity('10 m').pow(-1).eq(new Quantity('0.1 m^-1')));
-assert(new Quantity('32 tempF').eq(new Quantity('0 tempC')));
+assert.equal(new Quantity('0.1').add('0.2').scalar.toString(), '0.3');
+assert(new Quantity('32 tempF').eq(new RegexQuantity('0 tempC')));
+assert.equal(new DoubleQuantity('1 km').to('m').scalar, 1000);
 
-for (const Parser of [NearleyQtyParser, RegexQtyParser])
+for (const numeric of [decimalAdapter, numberAdapter])
 {
-	const definition = new Parser().parse('2 kg.m/s^2');
-	assert(isQuantityDefinition(definition));
-	const quantity = new Quantity(definition);
-	assert(isQuantity(quantity));
-	assert(quantity.eq(new Quantity('2 N')));
+	for (const Parser of [NearleyParser, RegexParser])
+	{
+		const Q = createQuantityClass({ numeric, parser: c => new Parser(c) });
+		const definition = new Parser().parse('2 kg.m/s^2', numeric);
+		assert(isQuantityDefinition(definition, numeric));
+		const q = new Q(definition);
+		assert(isQuantity(q));
+		assert(q instanceof SharedQuantity);
+		assert(q.eq('2 N'));
+		assert.equal(numeric.toNumber(q.add('1 N').scalar), 3);
+		assert(q.clone() instanceof Q);
+	}
 }
-
-await assert.rejects(import('@neutrium/quantity/dist/Quantity.js'), {
-	code: 'ERR_PACKAGE_PATH_NOT_EXPORTED',
-});
-
+for (const path of ['dist/Quantity.js', 'core', 'numeric/decimal', 'numeric/number', 'parsers/nearley-generic'])
+{
+	await assert.rejects(import('@neutrium/quantity/' + path), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
+}
 console.log('Packed consumer runtime passed');
-
-// Configured entry points share the same core type and runtime guard.
-import { Quantity as RegexQuantity } from '@neutrium/quantity/regex';
-import { createQuantityClass, QuantityCore } from '@neutrium/quantity/core';
-import { RegexQtyParser as DirectRegexParser } from '@neutrium/quantity/parsers/regex';
-import { NearleyQtyParser as DirectNearleyParser } from '@neutrium/quantity/parsers/nearley';
-const CustomQuantity = createQuantityClass(() => new DirectRegexParser());
-const customQuantity = new CustomQuantity('1e3 m').clone().add('1e3 m');
-const regexQuantity = new RegexQuantity('1e3 m');
-new DirectNearleyParser().parse('m');
-assert(customQuantity instanceof CustomQuantity);
-assert(customQuantity instanceof QuantityCore);
-assert(isQuantity(regexQuantity));
-assert.equal(customQuantity.scalar.toString(), '2000');
-assert(regexQuantity.eq(new Quantity('1000 m')));

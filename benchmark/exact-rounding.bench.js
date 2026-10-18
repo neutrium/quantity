@@ -7,7 +7,7 @@ for (const [source, target, expected] of [['1 m', 'cm', '100'], ['3 in', 'ft', '
 {
 	test(`exact rounding: ${source} -> ${target}`, async ({ bench }) => {
 		await compare(bench, [20, 100000].map(precision => {
-			const Q = Quantity.withConfig({ precision });
+			const Q = Quantity.withConfig({ numeric: { precision } });
 
 			return {
 				name: `precision ${precision}`,

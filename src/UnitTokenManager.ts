@@ -1,16 +1,39 @@
+import { CacheScope, defaultCacheScope } from './utils/CacheScope.js';
 import type { CatalogEntry, UnitDefinition } from './data/Catalog.js';
-import { LruCache } from './utils/LruCache.js';
+import type { UnitPower } from './QuantityDefinition.js';
+import { LruCache } from '@neutrium/utilities/cache';
 import { PREFIXES } from './data/Prefixes.js'
 import { UNITS } from './data/Units.js'
 
 type KeyValue  = {[key: string]: string}
+const unprefixedAliases = Object.freeze(['']);
+const emptyDimensions: readonly UnitPower[] = Object.freeze([]);
+
+/** Count trusted catalog tokens once per category, preserving their first occurrence. */
+function countDimensions(tokens: readonly string[] | undefined): readonly UnitPower[]
+{
+	if (!tokens?.length)
+	{
+		return emptyDimensions;
+	}
+
+	const counts = new Map<string, number>();
+
+	for (const unit of tokens)
+	{
+		if (unit !== '<1>')
+		{
+			counts.set(unit, (counts.get(unit) ?? 0) + 1);
+		}
+	}
+
+	return counts.size ? Object.freeze(Array.from(counts, ([unit, exponent]) => Object.freeze({ unit, exponent })))
+		: emptyDimensions;
+}
 
 export class UnitTokenManager
 {
 	private static _instance: UnitTokenManager;
-
-	// Precompile gets rid of PREFIX_MAP and UNIT_MAP - incorrect used for normalising units
-
 
 	// Maps all the variants for a prefix back to their token
 	// It has the same structure as UNIT_MAP
@@ -30,33 +53,21 @@ export class UnitTokenManager
 	// {
 	//		<gee>: {
 	//			category: "acceleration",
-	//			denominator: ["<second>", "<second>"],
-	//			numerator: ["<meter>"],
+	//			denominator: [{ unit: "<second>", exponent: 2 }],
+	//			numerator: [{ unit: "<meter>", exponent: 1 }],
 	//			scalar: 9.80665
 	//		}
 	// }
 	private static VALUES_MAP: Record<string, UnitDefinition> = Object.create(null);
 
-	// Maps a token to the default form of that unit e.g.
-	// {
-	// 		<radian>: "rad",
-	// 		<rev>: "rev",
-	// 		<sextant>: "sextant"
-	// 	}
-	private static OUTPUT_MAP: KeyValue = Object.create(null);
 	private static ALIASES: Record<string, string[]> = Object.create(null);
 	private static lexicalAliases = new Set<string>();
 	private static maxAliasLength = 0;
-	private static unitOutputs = new LruCache<string, string>();
+	private static unitOutputsKey = Symbol();
 
 	private constructor() { }
 
-	/**
-	 * The static getter that controls access to the singleton instance.
-	 *
-	 * This implementation allows you to extend the Singleton class while
-	 * keeping just one instance of each subclass around.
-	 */
+	/** Shared catalog token lookup. */
 	public static get instance(): UnitTokenManager
 	{
 		if (!UnitTokenManager._instance)
@@ -82,11 +93,10 @@ export class UnitTokenManager
 
 			UnitTokenManager.VALUES_MAP[prefix] = {
 				scalar: definition[1],
-				numerator: null,
-				denominator: null,
+				numerator: emptyDimensions,
+				denominator: emptyDimensions,
 				category: "prefix"
 			};
-			UnitTokenManager.OUTPUT_MAP[prefix] = definition[0][0];
 
 			for (let i = 0; i < definition[0].length; i++)
 			{
@@ -97,6 +107,7 @@ export class UnitTokenManager
 		for (let categoryDef in UNITS)
 		{
 			let category = UNITS[categoryDef];
+			const numerator = countDimensions(category.numerator), denominator = countDimensions(category.denominator);
 
 			for (let unitDef in category.units)
 			{
@@ -105,8 +116,8 @@ export class UnitTokenManager
 
 				UnitTokenManager.VALUES_MAP[unitDef] = {
 					scalar: definition[1],
-					numerator: category.numerator,
-					denominator: category.denominator,
+					numerator,
+					denominator,
 					category: categoryDef
 				};
 
@@ -115,8 +126,6 @@ export class UnitTokenManager
 					UnitTokenManager.UNIT_MAP[definition[0][j]] = unitDef;
 				}
 
-				// Might not need output map
-				UnitTokenManager.OUTPUT_MAP[unitDef] = definition[0][0];
 			}
 		}
 
@@ -136,23 +145,38 @@ export class UnitTokenManager
 	}
 
 	/** Choose an output alias that both bundled parsers resolve to this unit/prefix pair. */
-	public getUnitOutput(unit: string, prefix?: string): string
+	public getUnitOutput(unit: string, prefix?: string, scope: CacheScope = defaultCacheScope): string
 	{
+		const outputs = scope.get('metadata', UnitTokenManager.unitOutputsKey, () => new LruCache<string, string>());
 		const key = (prefix ?? '') + unit;
-		const cached = UnitTokenManager.unitOutputs.get(key);
-		if (cached !== undefined) return cached;
-		const unitAliases = UnitTokenManager.ALIASES[unit].filter(alias =>
-			this.getUnitToken(alias) === unit && !/^[0-9]/.test(alias));
-		const prefixes = prefix ? UnitTokenManager.ALIASES[prefix] : [''];
+		const cached = outputs?.get(key);
+
+		if (cached !== undefined)
+		{
+			return cached;
+		}
+
+		const unitAliases = UnitTokenManager.ALIASES[unit];
+		const prefixes = prefix ? UnitTokenManager.ALIASES[prefix] : unprefixedAliases;
+
 		for (const prefixAlias of prefixes)
 		{
-			if (prefix && this.getPrefixToken(prefixAlias) !== prefix) continue;
+			if (prefix && this.getPrefixToken(prefixAlias) !== prefix)
+			{
+				continue;
+			}
+
 			for (const unitAlias of unitAliases)
 			{
+				if (this.getUnitToken(unitAlias) !== unit || /^[0-9]/.test(unitAlias)) continue;
+
 				const output = prefixAlias + unitAlias;
+
 				// Avoid exact-alias collisions (m + in = min) and preserve established output spellings.
 				if (this.firstAlias(output) !== (prefix ? prefixAlias : unitAlias)) continue;
-				UnitTokenManager.unitOutputs.set(key, output);
+
+				outputs?.set(key, output);
+
 				return output;
 			}
 		}
@@ -179,17 +203,13 @@ export class UnitTokenManager
 		return UnitTokenManager.VALUES_MAP[token];
 	}
 
-	public getTokenDefaultValue(token: string): string | undefined
-	{
-		return UnitTokenManager.OUTPUT_MAP[token]
-	}
-
 	public getMap(type: 'unit' | 'prefix' = 'unit') : KeyValue
 	{
 		if(type === 'unit')
 		{
 			return UnitTokenManager.UNIT_MAP;
 		}
+
 		return UnitTokenManager.PREFIX_MAP;
 	}
 }

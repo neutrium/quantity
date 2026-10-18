@@ -1,10 +1,12 @@
+import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it } from 'vitest';
 import { parseExpression } from '../helpers/nearley.js';
-import { NearleyQtyParser } from '../../dist/parsers/NearleyQtyParser.js';
+import { NearleyParser } from '../../dist/parsers/NearleyParser.js';
 import { Quantity } from '../../dist/Quantity.js';
 import { Quantity as RegexQuantity } from '../../dist/regex.js';
 
-const parser = new NearleyQtyParser();
+const parser = new NearleyParser();
 
 describe('Nearley reciprocal quantities and bare groups', () => {
 	it.each([
@@ -48,7 +50,7 @@ describe('Nearley reciprocal quantities and bare groups', () => {
 		['ton(l)/(m*s)', '1', 'tnl/m.s'],
 	])('parses %s once, with scalar %s and units %s', (input, scalar, units) => {
 		parseExpression(input);
-		const actual = new Quantity(parser.parse(input));
+		const actual = new Quantity(parser.parse(input, testNumeric));
 		expect(actual.scalar.toString()).toBe(scalar);
 		const expected = new Quantity(`${scalar} ${units}`);
 		expect(actual.numerator).toEqual(expected.numerator);
@@ -66,7 +68,7 @@ describe('Nearley reciprocal quantities and bare groups', () => {
 
 	it.each(['2/', '2//s', '2/ /s', '2/*s', '2/.s', '()', '( )', '(m', 'm)', 'm/()', '(m/)', '(m//s)', '2/(m*s', '2/(m*s))', '(unknown)^0', '(m/s)^', '(m/s)^0.5', '(m/s)^9007199254740992'])
 		('rejects malformed expression %j and recovers', input => {
-			expect(() => parser.parse(input)).toThrow();
-			expect(new Quantity(parser.parse('2/(m*s)')).units()).toBe('1/m.s');
+			expect(() => parser.parse(input, testNumeric)).toThrow();
+			expect(new Quantity(parser.parse('2/(m*s)', testNumeric)).units()).toBe('1/m.s');
 		});
 });

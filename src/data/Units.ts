@@ -129,7 +129,8 @@ export const UNITS: Record<string, UnitCategory> = {
 			"<calorie-IUNS>": [["cal(N)"], 4.182],
 			"<calorie-thermo>": [["cal(th)"], 4.184],
 			"<erg>": [["erg", "ergs"], 1e-7],
-			"<electron-volts>": [["eV"], 1.60217653e-19],
+			// Exact SI definition: https://www.nist.gov/si-redefinition/meet-constants
+			"<electron-volts>": [["eV"], '1.602176634e-19'],
 			"<joule>": [["J", "joule", "Joule", "joules"], 1.0],
 			"<therm-euro>": [["thm", "therm", "therms", "Therm"], 105505590],
 			"<therm-US>": [["thm(us)", "therm(us)", "therms(us)", "Therm(us)"], 105480400],
@@ -284,8 +285,16 @@ export const UNITS: Record<string, UnitCategory> = {
 		"denominator": ["<second>", "<second>"],
 		"units": {
 			"<gray>": [["Gy", "gray", "grays"], 1.0],
-			"<roentgen>": [["R", "roentgen"], 0.009330],
 			"<sievert>": [["Sv", "sievert", "sieverts"], 1.0]
+		}
+	},
+	"radiationExposure": {
+		"numerator": ["<ampere>", "<second>"],
+		"denominator": ["<kilogram>"],
+		"units": {
+			// Exposure, not absorbed dose: 1 roentgen = 2.58e-4 C/kg exactly.
+			// https://www.nist.gov/pml/special-publication-811/nist-guide-si-appendix-b-conversion-factors/nist-guide-si-appendix-b9
+			"<roentgen>": [["R", "roentgen"], '0.000258']
 		}
 	},
 	"radioactivity": {

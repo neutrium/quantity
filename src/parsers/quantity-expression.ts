@@ -1,7 +1,9 @@
+import { CacheScope, defaultCacheScope } from '../utils/CacheScope.js';
+import { BudgetCache } from '@neutrium/utilities/cache';
+import { unitPlanBytes, copyCacheText } from '../utils/cache-memory.js';
 import type { Token } from 'moo';
 import type { UnitStructure } from '../QuantityDefinition.js';
 import { UnitTokenManager } from '../UnitTokenManager.js';
-import { LruCache } from '../utils/LruCache.js';
 import { normalizePowers, scalePowers, checkedExponent, UNITY } from '../operations/unit-powers.js';
 import { combineUnitExpressions, resolveUnitExpression, type QuantityExpression } from './unit-expression.js';
 import { scalarToken, scalarOperation, scalarPower, ONE } from './scalar-expression.js';
@@ -9,7 +11,7 @@ import { ExpressionIssue } from './QuantityParseError.js';
 
 const tm = UnitTokenManager.instance;
 const prefixAliases = Object.keys(tm.getMap('prefix')).sort((a, b) => b.length - a.length);
-const unitDefinitions = new LruCache<string, UnitStructure>();
+const unitDefinitionsKey = Symbol();
 
 export function numberExpression(token: Token): QuantityExpression
 {
@@ -20,9 +22,17 @@ export function numberExpression(token: Token): QuantityExpression
 	};
 }
 
-export function unitExpression(token: Token): QuantityExpression
+export function unitExpression(token: Token & { cacheScope?: CacheScope }): QuantityExpression
 {
-	let units = unitDefinitions.get(token.value);
+	const scope = token.cacheScope ?? defaultCacheScope;
+	const unitDefinitions = scope.get('parser', unitDefinitionsKey, () => new BudgetCache<UnitStructure>(
+		scope.config.parser,
+		{
+			detachKey: copyCacheText,
+			measure: units => unitPlanBytes(units.numerator) + unitPlanBytes(units.denominator)
+		}
+	));
+	let units = unitDefinitions?.get(token.value);
 
 	if (!units)
 	{
@@ -52,7 +62,7 @@ export function unitExpression(token: Token): QuantityExpression
 		}
 
 		units = { numerator: normalizePowers([{ unit, ...(prefix ? { prefix } : {}), exponent: 1 }]), denominator: UNITY };
-		unitDefinitions.set(token.value, units);
+		unitDefinitions?.set(token.value, units);
 	}
 
 	return {

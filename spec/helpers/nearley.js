@@ -3,6 +3,8 @@ import Nearley from 'nearley';
 import grammar from '../../dist/parsers/qty-grammar.js';
 import { resolveUnitExpression } from '../../dist/parsers/unit-expression.js';
 import { compileScalar, evaluateScalar } from '../../dist/parsers/scalar-expression.js';
+import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+const decimalAdapter = new DecimalScientificAdapter();
 
 const compiled = Nearley.Grammar.fromCompiled(grammar);
 
@@ -19,7 +21,7 @@ export function fullParse(input)
 	const expression = parseExpression(input);
 
 	return {
-		scalar: evaluateScalar(compileScalar(expression.scalar)),
+		scalar: evaluateScalar(compileScalar(expression.scalar), '1', decimalAdapter),
 		...resolveUnitExpression(expression.units),
 	};
 }

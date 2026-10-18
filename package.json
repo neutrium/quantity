@@ -1,6 +1,6 @@
 {
 	"name": "@neutrium/quantity",
-	"version": "5.0.0",
+	"version": "6.0.0",
 	"type": "module",
 	"exports": {
 		".": {
@@ -15,21 +15,25 @@
 			"types": "./dist/guards.d.ts",
 			"import": "./dist/guards.js"
 		},
-		"./core": {
-			"types": "./dist/core.d.ts",
-			"import": "./dist/core.js"
-		},
 		"./regex": {
 			"types": "./dist/regex.d.ts",
 			"import": "./dist/regex.js"
 		},
 		"./parsers/nearley": {
-			"types": "./dist/parsers/NearleyQtyParser.d.ts",
-			"import": "./dist/parsers/NearleyQtyParser.js"
+			"types": "./dist/parsers/NearleyParser.d.ts",
+			"import": "./dist/parsers/NearleyParser.js"
 		},
 		"./parsers/regex": {
-			"types": "./dist/parsers/RegexQtyParser.d.ts",
-			"import": "./dist/parsers/RegexQtyParser.js"
+			"types": "./dist/parsers/RegexParser.d.ts",
+			"import": "./dist/parsers/RegexParser.js"
+		},
+		"./factory": {
+			"types": "./dist/factory.d.ts",
+			"import": "./dist/factory.js"
+		},
+		"./number": {
+			"types": "./dist/number.d.ts",
+			"import": "./dist/number.js"
 		}
 	},
 	"description": "The NeutriumJS unit conversion module.",
@@ -39,7 +43,7 @@
 		"conversion"
 	],
 	"license": "MIT",
-	"author:": "Trevor Walker <trevorw@neutrium.net> (https://neutrium.net)",
+	"author": "Trevor Walker <trevorw@neutrium.net> (https://neutrium.net)",
 	"private": false,
 	"engines": {
 		"node": ">=24.0.0"
@@ -53,8 +57,8 @@
 	},
 	"homepage": "https://neutrium.github.io/quantity/",
 	"dependencies": {
-		"@neutrium/decimal": "^2.2.0",
-		"@neutrium/utilities": "^2.0.0",
+		"@neutrium/decimal": "^2.3.0",
+		"@neutrium/utilities": "^4.0.0",
 		"moo": "^0.5.3",
 		"nearley": "^2.20.1"
 	},

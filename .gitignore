@@ -8,6 +8,8 @@ npm-debug.log
 node_modules/
 bower_components/
 /benchmark/results/
+.pnpm-store/
+.pnpm-debug.log*
 
 # Generated build and package artifacts
 dist/

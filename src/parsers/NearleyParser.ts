@@ -1,9 +1,9 @@
-import { Decimal } from '@neutrium/decimal';
-import type { DecimalConstructor } from '../operations/numeric-context.js';
-import { BudgetCache } from '../utils/BudgetCache.js';
-import { WeakCacheRegistry } from '../utils/WeakCacheRegistry.js';
+import type { CacheScope } from '../utils/CacheScope.js';
+
+import type { ArithmeticAdapter } from '@neutrium/utilities/numeric/arithmetic';
+import { BudgetCache, WeakCacheRegistry } from '@neutrium/utilities/cache';
 import { unitPlanBytes, copyCacheText } from '../utils/cache-memory.js';
-import { parserConfig, type ParserConfigInput, type ParserConfig, type ParserCacheStats } from './ParserConfig.js';
+import { parserConfig, parserScope, type ParserConfigInput, type ParserConfig, type ParserCacheStats } from './ParserConfig.js';
 import Nearley from 'nearley';
 import grammar, { lexer as lexerTemplate } from './qty-grammar.js';
 import type { QuantityDefinition, UnitStructure } from '../QuantityDefinition.js';
@@ -20,6 +20,7 @@ type ExpressionPlan = UnitStructure & { scalar: ScalarProgram };
 function createCache(config: ParserConfig): BudgetCache<ExpressionPlan>
 {
 	return new BudgetCache(config.cache, {
+		detachKey: copyCacheText,
 		measure: plan => {
 			let bytes = unitPlanBytes(plan.numerator) + unitPlanBytes(plan.denominator) + 64;
 
@@ -41,60 +42,74 @@ function createCache(config: ParserConfig): BudgetCache<ExpressionPlan>
  * Parser for scalar products/division, compound units, powers, and nested groups.
  * Powers bind first, then dot products; * / and whitespace evaluate left to right.
  * Compiled expression plans are shared within a configuration; scalar evaluation follows
- * the original operation order and the current Decimal configuration on every call.
+ * the original operation order and the selected numeric adapter on every call.
  */
-export class NearleyQtyParser
+export class NearleyParser
 {
 	private static compiledGrammar: ReturnType<typeof Nearley.Grammar.fromCompiled>;
 	private static readonly caches = new WeakCacheRegistry(createCache);
 	private readonly options: ParserConfig;
 
-	/** Create a parser; omitted options share the default cache, supplied options create an isolated scope. */
+	/**
+	 * Create a parser with optional cache limits.
+	 * Omitted options share the default configuration. Separately supplied option
+	 * objects isolate retention; passing an already resolved configuration reuses it.
+	 * @example
+	 * ```ts
+	 * const parser = new NearleyParser({ cache: { maxEntries: 128 } });
+	 * parser.config.cache.maxEntries; // 128
+	 * ```
+	 */
 	constructor(config?: ParserConfigInput)
 	{
 		this.options = parserConfig(config);
 	}
+
 	/** Immutable effective parser settings. */
 	get config(): ParserConfig
 	{
 		return this.options;
 	}
-	/** Estimated retention for the cache shared by this configuration. */
+
+	/** Estimated retained expression plans and limits; excludes the separate token cache. */
 	get cacheStats(): ParserCacheStats
 	{
-		return this.cache.stats;
-	}
-	/** Release all plans shared by this parser configuration. */
-	clearCache(): void
-	{
-		this.cache.clear();
+		return this.cache?.stats ?? Object.freeze({ ...this.options.cache, entries: 0, estimatedBytes: 0 });
 	}
 
-	private get cache(): BudgetCache<ExpressionPlan>
+	/** Release expression plans shared by this configuration; does not clear token or Quantity result caches. */
+	clearCache(): void
 	{
-		return NearleyQtyParser.caches.get(this.options);
+		this.cache?.clear();
+	}
+
+	private get cache(): BudgetCache<ExpressionPlan> | undefined
+	{
+		return this.options.cache.maxEntries && this.options.cache.maxBytes ? NearleyParser.caches.get(this.options) : undefined;
 	}
 
 	/**
 	 * Parse and evaluate a complete scalar/unit expression.
 	 * @param input - Expression supporting products, division, powers, groups,
 	 * scientific notation, and Unicode multiplication/superscript notation.
-	 * @param Numeric - Decimal constructor for evaluation; defaults to the shared
-	 * Decimal context. Quantity supplies its configured context automatically.
-	 * @returns A fresh definition with a Decimal scalar and frozen counted units.
+	 * @param Numeric - Adapter used to evaluate scalars; supplied automatically by a configured Quantity.
+	 * @param scope - Optional Quantity cache scope; wrappers should forward it unchanged.
+	 * @returns A fresh definition with a backend scalar and frozen counted units.
 	 * Unit arrays may be shared with cached plans.
 	 * @throws {@link QuantityParseError} for invalid or incomplete syntax, unknown
 	 * units, invalid exponents, and scalar-evaluation failures.
 	 * @remarks Physical checks such as absolute zero belong to Quantity construction.
 	 * @example
 	 * ```ts
-	 * import { NearleyQtyParser } from '@neutrium/quantity/parsers/nearley';
+	 * import { NearleyParser } from '@neutrium/quantity/parsers/nearley';
+	 * import { NumberAdapter } from '@neutrium/utilities/number';
+	 * const numberAdapter = new NumberAdapter();
 	 *
-	 * const parsed = new NearleyQtyParser().parse('1/2 m');
-	 * parsed.scalar.toString(); // "0.5"
+	 * const parsed = new NearleyParser().parse('1/2 m', numberAdapter);
+	 * parsed.scalar; // 0.5
 	 * ```
 	 */
-	public parse(input: string, Numeric: DecimalConstructor = Decimal): QuantityDefinition
+	public parse<T>(input: string, Numeric: ArithmeticAdapter<T>, scope?: CacheScope): QuantityDefinition<T>
 	{
 		if (typeof input !== 'string')
 		{
@@ -106,13 +121,18 @@ export class NearleyQtyParser
 
 		try
 		{
-			prepared = new PreparedExpression(lexerTemplate.clone(), input);
-			let plan = this.cache.get(prepared.key);
+			scope ??= parserScope(this.options);
+			const cache = scope.enabled('parser') ? this.cache : undefined;
+			// Explicit parsers retain their own plan/token limits; the receiver can
+			// disable both without altering the parser or its standalone use.
+			const parsingScope = scope.enabled('parser') ? parserScope(this.options) : scope;
+			prepared = new PreparedExpression(lexerTemplate.clone(), input, parsingScope);
+			let plan = cache?.get(prepared.key);
 			const cached = plan !== undefined;
 
 			if (!plan)
 			{
-				const compiled = NearleyQtyParser.compiledGrammar ??= Nearley.Grammar.fromCompiled({
+				const compiled = NearleyParser.compiledGrammar ??= Nearley.Grammar.fromCompiled({
 					...grammar, Lexer: undefined,
 				});
 				parser = new Nearley.Parser(compiled, { lexer: prepared });
@@ -138,7 +158,7 @@ export class NearleyQtyParser
 
 			if (!cached)
 			{
-				this.cache.set(prepared.key, plan);
+				cache?.set(prepared.key, plan);
 			}
 
 			return {
@@ -153,8 +173,24 @@ export class NearleyQtyParser
 		}
 	}
 
-	/** Non-throwing form of parse(), with the same validation and structured errors. */
-	public tryParse(input: string, Numeric: DecimalConstructor = Decimal): QuantityParseResult<QuantityDefinition>
+	/**
+	 * Parse without throwing for syntax or expression-evaluation failures.
+	 * @param input - Complete scalar/unit expression.
+	 * @param Numeric - Backend used to evaluate the scalar.
+	 * @returns A definition on success, or a structured error at the original location.
+	 * @remarks Like `parse`, this does not check absolute-temperature physics;
+	 * construct a Quantity from the successful definition for those checks.
+	 * @example
+	 * ```ts
+	 * import { Quantity } from '@neutrium/quantity/number';
+	 * const result = new NearleyParser().tryParse('kg/(m*s', new Quantity(1).numeric);
+	 * if (!result.success) {
+	 *     result.error.code; // "UNEXPECTED_END"
+	 *     result.error.offset; // 7 (the end of the input)
+	 * }
+	 * ```
+	 */
+	public tryParse<T>(input: string, Numeric: ArithmeticAdapter<T>): QuantityParseResult<QuantityDefinition<T>>
 	{
 		try
 		{

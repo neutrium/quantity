@@ -1,11 +1,13 @@
+import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it } from 'vitest';
-import { NearleyQtyParser } from '../../dist/parsers/NearleyQtyParser.js'
-import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
+import { NearleyParser } from '../../dist/parsers/NearleyParser.js'
+import { RegexParser } from '../../dist/parsers/RegexParser.js';
 
 
 [
-	["NearleyQtyParser Unit Tests", new NearleyQtyParser()],
-	["RegexQtyParser Unit Tests", new RegexQtyParser()]
+	["NearleyParser Unit Tests", new NearleyParser()],
+	["RegexParser Unit Tests", new RegexParser()]
 ]
 .forEach(([description, parser]) => {
 	describe("Neutrium Quantity - " + description, function() {
@@ -14,7 +16,7 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 
 			it("can default to unity", function() {
 
-				let x = parser.parse("m");
+				let x = parser.parse("m", testNumeric);
 
 				expect(x.scalar.toString()).toEqual('1');
 				expect(x.numerator).toEqual([{ unit: '<meter>', exponent: 1 }]);
@@ -22,7 +24,7 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 			});
 
 			it("correctly parses a unit", function() {
-				let result = parser.parse("metre");
+				let result = parser.parse("metre", testNumeric);
 
 				expect(result.scalar.eq(1)).toBe(true);
 				expect(result.numerator).toEqual([{ unit: '<meter>', exponent: 1 }]);
@@ -30,7 +32,7 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 			});
 
 			it("correctly parses a prefixed unit", function() {
-				let result = parser.parse("km");
+				let result = parser.parse("km", testNumeric);
 
 				expect(result.scalar.eq(1)).toBe(true);
 				expect(result.numerator).toEqual([{ unit: '<meter>', prefix: '<kilo>', exponent: 1 }]);
@@ -38,7 +40,7 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 			});
 
 			it("correctly parses an ambigious prefixed unit", function() {
-				let result = parser.parse("mm");
+				let result = parser.parse("mm", testNumeric);
 
 				expect(result.scalar.eq(1)).toBe(true);
 				expect(result.numerator).toEqual([{ unit: '<meter>', prefix: '<milli>', exponent: 1 }]);
@@ -46,7 +48,7 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 			});
 
 			it("correctly parses a unit with parenthesis in the name", function() {
-				let result = parser.parse("ton(l)");
+				let result = parser.parse("ton(l)", testNumeric);
 
 				expect(result.scalar.eq(1)).toBe(true);
 				expect(result.numerator).toEqual([{ unit: '<ton-long>', exponent: 1 }]);
@@ -57,7 +59,7 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 		describe("unit to the power logic", function() {
 
 			it("correctly parses a unit squared", function() {
-				let result = parser.parse("m^2");
+				let result = parser.parse("m^2", testNumeric);
 
 				expect(result.scalar.eq(1)).toBe(true);
 				expect(result.numerator).toEqual([{ unit: '<meter>', exponent: 2 }]);
@@ -65,7 +67,7 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 			});
 
 			it("correctly parses a unit squared without a ^", function() {
-				let result = parser.parse("m2");
+				let result = parser.parse("m2", testNumeric);
 
 				expect(result.scalar.eq(1)).toBe(true);
 				expect(result.numerator).toEqual([{ unit: '<meter>', exponent: 2 }]);
@@ -73,7 +75,7 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 			});
 
 			it("correctly parses a unit to the power of a negative integer", function() {
-				let result = parser.parse("m^-2");
+				let result = parser.parse("m^-2", testNumeric);
 
 				expect(result.scalar.eq(1)).toBe(true);
 				expect(result.numerator).toEqual([]);
@@ -81,7 +83,7 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 			});
 
 			it("correctly parses a prefixed unit squared", function() {
-				let result = parser.parse("km^2");
+				let result = parser.parse("km^2", testNumeric);
 
 				expect(result.scalar.eq(1)).toBe(true);
 				expect(result.numerator).toEqual([{ unit: '<meter>', prefix: '<kilo>', exponent: 2 }]);
@@ -89,7 +91,7 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 			});
 
 			it("correctly parses division units to the power of two", function() {
-				let result = parser.parse("m/s^2");
+				let result = parser.parse("m/s^2", testNumeric);
 
 				expect(result.scalar.eq(1)).toBe(true);
 				expect(result.numerator).toEqual([{ unit: '<meter>', exponent: 1 }]);
@@ -100,7 +102,7 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 		describe("unit multiplication and division logic", function() {
 
 			it("correctly parses a decimal point as a multiplier", function() {
-				let result = parser.parse("kg.m");
+				let result = parser.parse("kg.m", testNumeric);
 
 				expect(result.scalar.eq(1)).toBe(true);
 				expect(result.numerator).toEqual([{ unit: '<kilogram>', exponent: 1 }, { unit: '<meter>', exponent: 1 }]);
@@ -108,7 +110,7 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 			});
 
 			it("correctly parses a * as a multiplier", function() {
-				let result = parser.parse("kg*m");
+				let result = parser.parse("kg*m", testNumeric);
 
 				expect(result.scalar.eq(1)).toBe(true);
 				expect(result.numerator).toEqual([{ unit: '<kilogram>', exponent: 1 }, { unit: '<meter>', exponent: 1 }]);
@@ -116,7 +118,7 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 			});
 
 			it("correctly parses a space as a multiplier", function() {
-				let result = parser.parse("kg m");
+				let result = parser.parse("kg m", testNumeric);
 
 				expect(result.scalar.eq(1)).toBe(true);
 				expect(result.numerator).toEqual([{ unit: '<kilogram>', exponent: 1 }, { unit: '<meter>', exponent: 1 }]);
@@ -124,7 +126,7 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 			});
 
 			it("correctly parses ambigious prefixed unit in a multiplication", function() {
-				let result = parser.parse("mm.s");
+				let result = parser.parse("mm.s", testNumeric);
 
 				expect(result.scalar.eq(1)).toBe(true);
 				expect(result.numerator).toEqual([{ unit: '<meter>', prefix: '<milli>', exponent: 1 }, { unit: '<second>', exponent: 1 }]);
@@ -132,7 +134,7 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 			});
 
 			it("correctly parses a divison", function() {
-				let result = parser.parse("m/s");
+				let result = parser.parse("m/s", testNumeric);
 
 				expect(result.scalar.eq(1)).toBe(true);
 				expect(result.numerator).toEqual([{ unit: '<meter>', exponent: 1 }]);
@@ -140,7 +142,7 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 			});
 
 			it("correctly parses ambigious prefixed unit in a divison", function() {
-				let result = parser.parse("mm/s");
+				let result = parser.parse("mm/s", testNumeric);
 
 				expect(result.scalar.eq(1)).toBe(true);
 				expect(result.numerator).toEqual([{ unit: '<meter>', prefix: '<milli>', exponent: 1 }]);
@@ -148,7 +150,7 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 			});
 
 			it("correctly parses multiplication and divison", function() {
-				let result = parser.parse("kg.m/s");
+				let result = parser.parse("kg.m/s", testNumeric);
 
 				expect(result.scalar.eq(1)).toBe(true);
 				expect(result.numerator).toEqual([{ unit: '<kilogram>', exponent: 1 }, { unit: '<meter>', exponent: 1 }]);
@@ -161,7 +163,7 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 		describe("number and unit combination logic", function() {
 
 			it("correctly parses a decimal point multiplier, division and power", function() {
-				let result = parser.parse("kg.m/s^2");
+				let result = parser.parse("kg.m/s^2", testNumeric);
 
 				expect(result.scalar.eq(1)).toBe(true);
 				expect(result.numerator).toEqual([{ unit: '<kilogram>', exponent: 1 }, { unit: '<meter>', exponent: 1 }]);
@@ -169,7 +171,7 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 			});
 
 			it("correctly parses a float, decimal point multiplier, division and power", function() {
-				let result = parser.parse("3.5 kg.m/s^2");
+				let result = parser.parse("3.5 kg.m/s^2", testNumeric);
 
 				expect(result.scalar.eq(3.5)).toBe(true);
 				expect(result.numerator).toEqual([{ unit: '<kilogram>', exponent: 1 }, { unit: '<meter>', exponent: 1 }]);

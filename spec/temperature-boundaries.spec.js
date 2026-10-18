@@ -1,64 +1,90 @@
 import { describe, expect, it } from 'vitest';
-import { Decimal } from '@neutrium/decimal';
-import { Quantity } from '@neutrium/quantity';
-import { Quantity as RegexQuantity } from '@neutrium/quantity/regex';
+import { createQuantityClass } from '../dist/factory.js';
+import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+const decimalAdapter = new DecimalScientificAdapter();
+import { NumberAdapter } from '@neutrium/utilities/number';
+const numberAdapter = new NumberAdapter();
+import { floatAdapter } from './helpers/numeric.js';
+import { NearleyParser } from '../dist/parsers/NearleyParser.js';
+import { RegexParser } from '../dist/parsers/RegexParser.js';
 
-const modes = ['up', 'down', 'ceil', 'floor', 'half-up', 'half-down', 'half-even', 'half-ceil', 'half-floor'];
-const boundaries = { tempK: '0', tempC: '-273.15', tempF: '-459.67', tempR: '0' };
-
-for (const Entry of [Quantity, RegexQuantity]) {
-    describe(`temperature boundaries: ${Entry === Quantity ? 'Nearley' : 'Regex'}`, () => {
-        it.each(modes)('preserves exact absolute zero with %s rounding at low precision', rounding => {
-            for (const precision of [1, 3, 4, 5]) {
-                const Q = Entry.withConfig({ precision, rounding });
-                for (const [source, scalar] of Object.entries(boundaries)) {
-                    const value = new Q(scalar, source);
-                    expect(value.baseScalar.isZero()).toBe(true);
-                    for (const [target, expected] of Object.entries(boundaries)) {
-                        const result = value.to(target);
-                        expect(result.scalar.toString(), `${source} -> ${target}`).toBe(expected);
-                        expect(result.config).toBe(Q.config);
-                        expect(result.to('tempK').scalar.isZero()).toBe(true);
-                    }
-                }
-            }
-        });
-
-        it.each(modes)('keeps nearby valid temperatures above the boundary with %s rounding', rounding => {
-            const Q = Entry.withConfig({ precision: 4, rounding });
-            const Reference = Decimal.clone({ precision: 80, rounding });
-            for (const input of ['0.000001', '0.001', '0.1', '1']) {
-                for (const target of ['tempC', 'tempF']) {
-                    const exact = target === 'tempC' ? new Reference(input).sub('273.15')
-                        : new Reference(input).mul(9).div(5).sub('459.67');
-                    const rounded = exact.toSD(4);
-                    const expected = rounded.lt(boundaries[target]) ? boundaries[target] : rounded.toString();
-                    const result = new Q(input, 'tempK').to(target);
-                    expect(result.scalar.toString()).toBe(expected);
-                    expect(result.gte(new Q('0 tempK'))).toBe(true);
-                }
-            }
-        });
-
-        it('validates unrounded interval and reciprocal sources before applying the boundary policy', () => {
-            const Q = Entry.withConfig({ precision: 3, rounding: 'floor' });
-            for (const target of ['tempC', 'tempF']) {
-                expect(() => new Q('-1e-100 degK').to(target)).toThrow('absolute zero');
-                expect(() => new Q('-1e100/degK').to(target)).toThrow('absolute zero');
-                expect(new Q('1e-100 degK').to(target).scalar.toString()).toBe(boundaries[target]);
-                expect(new Q('1e100/degK').to(target).scalar.toString()).toBe(boundaries[target]);
-            }
-            expect(() => new Q('-273.15000000000000000001 tempC')).toThrow('absolute zero');
-            for (const input of ['-0.01 tempK', '-273.16 tempC', '-459.68 tempF', '-0.01 tempR'])
-                expect(() => new Entry(input)).toThrow('absolute zero');
-        });
-
-        it('applies the same policy after shared settings change, including cached targets', () => {
-            const value = new Entry('0 tempK');
-            value.to('tempC');
-            Decimal.config = { precision: 4, rounding: 'half-up' };
-            expect(value.to('tempC').scalar.toString()).toBe('-273.15');
-            expect(value.to(new Entry('0 tempF')).scalar.toString()).toBe('-459.67');
-        });
-    });
+for (const numeric of [decimalAdapter, numberAdapter, floatAdapter])
+{
+	for (const Parser of [NearleyParser, RegexParser])
+	{
+		describe(`${numeric.id} temperature boundaries with ${Parser.name}`, () => {
+			const Q = createQuantityClass({ numeric, parser: c => new Parser(c) });
+			it('accepts the represented boundary and rejects colder readings', () => {
+				for (const [unit, boundary] of [['tempC', '-273.15'], ['tempF', '-459.67'], ['tempK', '0'], ['tempR', '0']]) {
+					const value = new Q(numeric.from(boundary), unit);
+					expect(numeric.toNumber(value.to('tempK').scalar)).toBeCloseTo(0, 4);
+					expect(() => new Q(numeric.sub(numeric.from(boundary), numeric.from(1)), unit)).toThrow('absolute zero');
+				}
+			});
+			it('checks arithmetic results and reciprocal absolute targets', () => {
+				expect(() => new Q('0 tempK').sub('1 degK')).toThrow('absolute zero');
+				expect(() => new Q('0 tempK').add('-1 degK')).toThrow('absolute zero');
+				expect(() => new Q('-0.01/degK').to('tempK')).toThrow('absolute zero');
+				expect(numeric.toNumber(new Q('0.01/degK').to('tempC').scalar)).toBeCloseTo(-173.15, 4);
+			});
+		});
+	}
 }
+
+for (const Parser of [NearleyParser, RegexParser])
+{
+	for (const rounding of ['up', 'down', 'ceil', 'floor', 'half-up', 'half-down', 'half-even', 'half-ceil', 'half-floor'])
+	{
+		it(`preserves absolute zero and clamps rounded conversions: ${Parser.name}, ${rounding}`, () => {
+			const numeric = decimalAdapter.withConfig({ precision: 2, rounding });
+			const Q = createQuantityClass({ numeric, parser: c => new Parser(c) });
+			const boundaries = [['tempK', '0'], ['tempR', '0'], ['tempC', '-273.15'], ['tempF', '-459.67']];
+
+			for (const [source, minimum] of boundaries)
+			{
+				for (const [target, expected] of boundaries)
+				{
+					expect(new Q(minimum, source).to(target).scalar.toString()).toBe(expected);
+				}
+			}
+			for (const [target, minimum] of boundaries)
+			{
+				const result = new Q('0.00001 tempK').to(target);
+				expect(numeric.compare(result.scalar, numeric.from(minimum))).toBeGreaterThanOrEqual(0);
+			}
+			// Warming a valid reading must not fail because output rounding crosses the boundary.
+			expect(new Q('-273.15 tempC').add('1 degC').scalar.gte('-273.15')).toBe(true);
+			expect(() => new Q('-273.15 tempC').sub('0.000001 degC')).toThrow('absolute zero');
+		});
+	}
+	for (const [numeric, input] of [
+		[decimalAdapter.withConfig({ minE: -20 }), '1e-20'],
+		[numberAdapter, '5e-324'],
+		[floatAdapter, '1e-44'],
+	]) {
+		it(`converts physical underflow to absolute zero: ${Parser.name}, ${numeric.id}`, () => {
+			const Q = createQuantityClass({ numeric, parser: c => new Parser(c) });
+			for (const [target, minimum] of [['tempK', '0'], ['tempR', '0'], ['tempC', '-273.15'], ['tempF', '-459.67']])
+			{
+				const result = new Q(input, 'mdegK').to(target);
+				expect(() => new Q(minimum, target).sub(new Q(input, 'mdegK'))).toThrow('absolute zero');
+				expect(numeric.compare(result.scalar, numeric.from(minimum))).toBe(0);
+				// Negative intervals must not become valid absolute readings through underflow.
+				expect(() => new Q('-' + input, 'mdegK').to(target)).toThrow('absolute zero');
+			}
+		});
+	}
+}
+
+it('keeps temperature-versus-interval comparison and conversion semantics', () => {
+	for (const numeric of [decimalAdapter, numberAdapter, floatAdapter])
+	{
+		const Q = createQuantityClass({ numeric, parser: c => new NearleyParser(c) });
+		expect(new Q('0 tempC').eq('273.15 degK')).toBe(true);
+		expect(new Q('0 tempC').gt('0 degC')).toBe(true);
+		expect(new Q('0 degC').lt('0 tempC')).toBe(true);
+		// Conversion to an interval uses the reading, without an absolute offset.
+		expect(numeric.toNumber(new Q('20 tempC').to('degC').scalar)).toBe(20);
+		expect(new Q('20 tempC').sub('10 tempC').units()).toBe('degC');
+	}
+});

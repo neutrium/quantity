@@ -3,7 +3,7 @@ import type { UnitStructure, UnitPower } from '../QuantityDefinition.js';
 import { normalizePowers } from '../operations/unit-powers.js';
 
 /** Internal immutable parse tree: products retain operands instead of copying their units. */
-export type UnitExpression = UnitStructure | {
+type UnitExpression = UnitStructure | {
 	readonly left: UnitExpression;
 	readonly right: UnitExpression;
 	readonly divide: boolean;
@@ -35,6 +35,7 @@ export function combineUnitExpressions(left: UnitExpression, right: UnitExpressi
 			};
 		}
 	}
+
 	return { left, right, divide };
 }
 

@@ -1,4 +1,7 @@
-import { cacheConfig, DEFAULT_CACHE_CONFIG, validateKeys, type CacheConfigInput, type CacheStats } from '../utils/CacheConfig.js';
+import { CacheScope } from '../utils/CacheScope.js';
+import { resolveQuantityCache } from '../QuantityConfig.js';
+import { assertKnownKeys } from '@neutrium/utilities/validation';
+import { WeakCacheRegistry, cacheConfig, DEFAULT_CACHE_CONFIG, type CacheConfigInput, type BudgetCacheStats } from '@neutrium/utilities/cache';
 
 /** Limits on retained parser plans; zero for either limit disables plan caching. */
 export interface ParserCacheConfigInput extends CacheConfigInput {}
@@ -18,7 +21,7 @@ export interface ParserConfig
 }
 
 /** A snapshot of a parser cache's retained plans and configured limits. */
-export interface ParserCacheStats extends CacheStats {}
+export interface ParserCacheStats extends BudgetCacheStats {}
 
 /** @internal Shared default scope for ordinary parser instances. */
 export const DEFAULT_PARSER_CONFIG: ParserConfig = Object.freeze({
@@ -39,9 +42,13 @@ export function parserConfig(input?: ParserConfigInput, parent: ParserConfig = D
 		return input as ParserConfig;
 	}
 
-	validateKeys(input, ['cache'], 'parser');
-	const result = Object.freeze({ cache: cacheConfig(input.cache, parent.cache, 'parser cache') });
+	assertKnownKeys(input as unknown, ['cache'], 'parser');
+	const result = Object.freeze({ cache: cacheConfig(input.cache, parent.cache, { name: 'parser cache', reuse: true }) });
 	resolved.add(result);
 
 	return result;
 }
+
+const scopes = new WeakCacheRegistry((config: ParserConfig) => new CacheScope(resolveQuantityCache({ parser: config.cache })));
+/** @internal Optional caches used during standalone parser evaluation. */
+export function parserScope(config: ParserConfig): CacheScope { return scopes.get(config); }

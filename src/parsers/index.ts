@@ -1,2 +1,3 @@
-export * from './NearleyQtyParser.js';
-export * from './RegexQtyParser.js';
+export * from './NearleyParser.js';
+export * from './RegexParser.js';
+export type { Parser } from './Parser.js';

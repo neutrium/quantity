@@ -1,10 +1,12 @@
+import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it } from 'vitest';
 import { parseExpression } from '../helpers/nearley.js';
-import { NearleyQtyParser } from '../../dist/parsers/NearleyQtyParser.js';
+import { NearleyParser } from '../../dist/parsers/NearleyParser.js';
 import { Quantity } from '../../dist/Quantity.js';
 import { MooQtyLexer } from '../../dist/parsers/MooQtyLexer.js';
 
-const parser = new NearleyQtyParser();
+const parser = new NearleyParser();
 
 describe('Nearley alternative power syntax', () => {
 	it.each([
@@ -13,14 +15,14 @@ describe('Nearley alternative power syntax', () => {
 		'2 (m/s)**2', '2 ((kg*m)**2/s)**-2',
 		'2**3 m', '2e1 ** 2e0 m',
 	])('parses %s identically to caret powers without ambiguity', input => {
-		const expected = parser.parse(input.replaceAll('**', '^'));
-		expect(parser.parse(input)).toEqual(expected);
+		const expected = parser.parse(input.replaceAll('**', '^'), testNumeric);
+		expect(parser.parse(input, testNumeric)).toEqual(expected);
 		parseExpression(input);
 	});
 
 	it.each(['m**', 'm***2', 'm * * 2', 'm**2.0', 'm**1e3', 'm**9007199254740992'])
 		('rejects invalid power %j', input => {
-			expect(() => parser.parse(input)).toThrow();
+			expect(() => parser.parse(input, testNumeric)).toThrow();
 		});
 });
 
@@ -32,7 +34,7 @@ describe('Nearley scientific notation', () => {
 		['+2', '2'], ['+1.25', '1.25'], ['.5', '0.5'],
 		['123456789012345678901e-3', '123456789012345678.901'],
 	])('parses %s without rounding through a JavaScript number', (input, scalar) => {
-		const definition = parser.parse(input);
+		const definition = parser.parse(input, testNumeric);
 		expect(definition.scalar.toString()).toBe(scalar);
 		expect(definition.numerator).toEqual([]);
 		for (const separator of ['', ' ', '\t']) {
@@ -79,8 +81,8 @@ describe('Nearley whitespace', () => {
 
 it.each(['1e', '1e+', '1E-', '1e2e3 m', 'm^1e3', 'm1e3', 'm^2.0', 'm^9007199254740992', '', ' \t\n ', 'm / ', 'm ^ '])
 	('rejects malformed or unsupported input %j and recovers on the next call', input => {
-		expect(() => parser.parse(input)).toThrow();
-		expect(parser.parse('1e3 m').scalar.toString()).toBe('1000');
+		expect(() => parser.parse(input, testNumeric)).toThrow();
+		expect(parser.parse('1e3 m', testNumeric).scalar.toString()).toBe('1000');
 	});
 
 it.each(['1e3 m', ' 2 ', ' m ', ' m  s ', '1 / m / s', '2 ^ 3 m', ' ( m / s ) ^ 2 ', 'kg', '2 kg * m / s ^ 2', 'kg/m.s', 'kg / m . s * ampere', 'kg/m s.ampere'])

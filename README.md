@@ -23,6 +23,24 @@ Perform a unit conversion:
 
 	const impQty = qty.to('ft');
 
+## Parser and Numeric Backends
+
+If desired @neutrium/quantity can be configured to use custom numerical backends and parsers so that you are able to balance the tradeoffs between package size, feature set,  performance and numerical precision.
+
+The default configuration is @neutrium/decimal for the numerical backend with a  Nearley parser.
+
+This package also ships with a standard Javascript numerical backend and a simplier Regex  based parser.
+
+To use the standard JavaScript numerical backend with the same parser and exclude Decimal from your runtime bundle:
+
+```ts
+import { Quantity } from '@neutrium/quantity/number';
+
+new Quantity('1 km').to('m').scalar; // 1000 (number)
+```
+
+See the [numeric backends guide](guides/numeric-backends.md) for configuration, custom adapters and tree shaking.
+
 ## Preview documentation locally
 
 ```sh
@@ -104,9 +122,21 @@ More examples can be found in the unit tests located in `spec/parsing`.
 
 ### Cloning
 
-You can create a copy of a quantity using the clone function:
+You can create a copy in the same backend and configuration using `clone()`:
 
 	qtyCopy = new Quantity('1m').clone();
+
+To change backends, pass the quantity to the destination constructor:
+
+```ts
+import { Quantity as DecimalQuantity } from '@neutrium/quantity';
+import { Quantity as NumberQuantity } from '@neutrium/quantity/number';
+
+const native = new NumberQuantity('1.25 m');
+const decimal = new DecimalQuantity(native);
+```
+
+The units are preserved. Arithmetic and comparisons require compatible backends; convert explicitly before combining incompatible quantities.
 
 ### Accessing the Scalar Value
 
@@ -115,7 +145,7 @@ You can access the scalar component of the quantity:
 	qty = new Quantity('10 m');
 	qty.scalar;								// Decimal(10)
 
-The scalar component is a [Decimal](https://github.com/neutrium/decimal) object that provides a range of operators. For more information, see the [@neutrium/decimal documentation](https://github.com/neutrium/decimal#readme).
+With the default preset, the scalar component is a [Decimal](https://github.com/neutrium/decimal) object that provides a range of operators. The number preset returns a JavaScript number, and a custom backend returns its own scalar type. For generic code, use `qty.numeric.toString(qty.scalar)` or `qty.numeric.toNumber(qty.scalar)`. The latter can lose precision.
 
 ### Displaying a quantity’s units
 
@@ -157,12 +187,9 @@ You can perform numerical and logical comparison using the following functions:
 | qty1.isTemperature()		| True if qty1 is an absolute temperature	e.g. new Quantity('1 tempC')					|
 | qty1.isDegrees() | True for standalone, unprefixed temperature degrees or absolute temperatures. Use `!qty1.isTemperature()` as well to identify intervals only. |
 
-Numeric comparison operands use the receiver's units: `new Quantity('100 cm').eq(100)`
-is true. String operands remain full expressions: `.eq('1 m')` is true, while
+Numeric comparison operands use the receiver's units: `new Quantity('100 cm').eq(100)` is true. String operands remain full expressions: `.eq('1 m')` is true, while
 `.eq('100')` throws for incompatible units. Numeric addition and subtraction instead
-use dimensionless operands: `new Quantity(2).add(3)` succeeds, but
-`new Quantity('2 m').add(3)` throws. Numeric objects are accepted for construction
-and arithmetic, but comparison thresholds must be numbers or Decimal instances.
+use dimensionless operands: `new Quantity(2).add(3)` succeeds, but `new Quantity('2 m').add(3)` throws. Numeric objects are accepted for construction and arithmetic, but comparison thresholds must be numbers or scalars recognized by the selected backend.
 
 ### Quantity Arithmetic
 
@@ -178,7 +205,7 @@ Available operators include:
 | qty.sub(other) | Subtract a compatible expression, definition, Quantity, or dimensionless scalar. |
 | qty.mul(other) | Multiply by an expression, definition, Quantity, number, Decimal, or numeric object. |
 | qty.div(other) | Divide by an expression, definition, Quantity, number, Decimal, or numeric object. |
-| qty.pow(y)		| Power - y must be an integer stored in a number, string or Decimal (fractional powers not supported) |
+| qty.pow(y)		| Power - y must be a safe integer stored in a number, string or backend scalar (fractional powers not supported) |
 | qty.inverse() | Take the reciprocal; rejects zero and absolute temperatures. |
 
 ### Temperatures
@@ -201,6 +228,8 @@ As you would expect, unit math on temperatures is limited:
 	new Quantity('100 unit/tempC')				// throws error
 	new Quantity('100 tempC').inverse()			// throws error
 
+
+Valid temperature underflow returns absolute zero when its reading is representable in the target scale. Below-zero inputs are rejected. A valid calculation whose negative reading or absolute-zero boundary is outside the backend range throws `RangeError`. See the [temperature guide](guides/temperatures.md#precision-and-absolute-zero).
 
 ### Errors
 
@@ -240,6 +269,7 @@ This package supports the unit categories listed below, with each category’s b
 | Power 					| kg.m^2/s^3 		|
 | Pressure 					| kg/m.s^2 			|
 | Radiation 				| m^2/s^2 			|
+| Radiation Exposure        | A.s/kg            |
 | Radioactivity 			| s^-1				|
 | Sound 					| bel 				|
 | Substance 				| mole 				|
@@ -249,7 +279,6 @@ This package supports the unit categories listed below, with each category’s b
 | Viscosity 				| kg/m.s 			|
 | Viscosity, Kinematic 		| m^2/s 			|
 | Volume 					| m^3 				|
-
 
 
 ### Unit Prefixes
@@ -315,8 +344,8 @@ The general conventions listed below are utilised to define unit names. These ca
 
 The @neutrium/quantity package ships with two unit parsers:
 
-- NearleyQtyParser (default) - A performant parser using a [moo.js](https://github.com/no-context/moo) lexer and [nearley.js](https://github.com/kach/nearley) parser
-- RegexQtyParser - A parser that uses regular expressions and is based on the original [JS-quantities](https://github.com/gentooboontoo/js-quantities) logic
+- NearleyParser (default) - A performant parser using a [moo.js](https://github.com/no-context/moo) lexer and [nearley.js](https://github.com/kach/nearley) parser
+- RegexParser - A parser that uses regular expressions and is based on the original [JS-quantities](https://github.com/gentooboontoo/js-quantities) logic
 
 Select the parser through the package entry point:
 
@@ -325,29 +354,28 @@ import { Quantity } from '@neutrium/quantity'; // Nearley (default)
 // Or: import { Quantity } from '@neutrium/quantity/regex';
 ```
 
-Select the default Nearly parser for full feature set and robust parsing. However if you prefer a smaller package and faster operation (at the cost of feature set) select the Regex parser which excludes the Nearley and Moo dependencies.
+Select the default Nearley parser for full feature set and robust parsing. For simpler expressions, the Regex preset can produce a smaller runtime bundle and is faster on the measured warmed parser workloads. It excludes Nearley and Moo from that bundle; npm still installs declared dependencies.
 
-For custom parsers, import `createQuantityClass` and the `Parser` and
-`QuantityDefinition` types from `@neutrium/quantity/core`. Derived quantities retain
-both their configured class and parser, including arithmetic, conversions, and clones.
+For custom parsers, import `createQuantityClass` and the `Parser` and `QuantityDefinition` types from `@neutrium/quantity/factory`. Derived quantities retain both their configured class and parser, including arithmetic, conversions, and clones.
 
 ```ts
-import { createQuantityClass } from '@neutrium/quantity/core';
-import { RegexQtyParser } from '@neutrium/quantity/parsers/regex';
+import { createQuantityClass } from '@neutrium/quantity/factory';
+import { RegexParser } from '@neutrium/quantity/parsers/regex';
+import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+const decimalAdapter = new DecimalScientificAdapter();
 
-const Quantity = createQuantityClass(config => new RegexQtyParser(config));
+const Quantity = createQuantityClass({ numeric: decimalAdapter, parser: config => new RegexParser(config) });
 const result = new Quantity('1e3 m').add('2 m');
 ```
 
-You can specify the parser to use or provide your own parser conforming to the `Parser` type exported by `@neutrium/quantity/core` by passing it as an optional third argument to the Quantity constructor:
+You can specify the parser to use or provide your own parser conforming to the `Parser` type exported by `@neutrium/quantity/factory` by passing it as an optional third argument to the Quantity constructor:
 
-	import { RegexQtyParser } from '@neutrium/quantity/parsers.js';
+	import { RegexParser } from '@neutrium/quantity/parsers.js';
 
-	const parser = new RegexQtyParser();
+	const parser = new RegexParser();
 	let qty = new Quantity(1, 'm', parser);
 
-Nearley remains the default and supports parenthesized expression groups, scalar
-products and division (`m/2`, `(2 m/s)**2`), and Unicode notation (`m²`, `kg·m/s²`).
+Nearley remains the default and supports parenthesized expression groups, scalar products and division (`m/2`, `(2 m/s)**2`), and Unicode notation (`m²`, `kg·m/s²`).
 Its `tryParse()` method returns structured errors with source locations. See the
 [parser guide](guides/parsers.md) for syntax, precedence, and caching details.
 Regex has a smaller dependency graph and is faster on the warmed simple-expression
@@ -356,6 +384,8 @@ supports your input syntax.
 
 ## Release Notes
 
+For changes to factory, parser and configuration APIs, see [Migrating to version 6](guides/migrating-v6.md).
+
 | Version | Notes |
 |:-------:|:------|
 | 1.0.0	  | Initial Release |
@@ -363,6 +393,7 @@ supports your input syntax.
 | 3.0.0   | Switch to using [Decimal.js](https://github.com/MikeMcl/decimal.js/) for the quantity scalar to improve the accuracy of mathematical operations and range of scalar representation |
 | 4.0.0	  | Major refactor, conversion to ESM and introduction of Nearley.js based default parser |
 | 5.0.0   | Counted unit API, bounded allocation for large powers, immutable unit records, and collision-free dimensional signatures |
+| 6.0.0   | Utilities numeric adapters, Decimal and native-number backends, renamed parser classes, and nested numeric/cache configuration with optional caching |
 
 ## License
 

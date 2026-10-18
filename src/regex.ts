@@ -1,43 +1,26 @@
-import { Quantity as QuantityCore } from './QuantityCore.js';
-import { RegexQtyParser } from './parsers/RegexQtyParser.js';
-import type { QuantityInitParam } from './guards.js';
-import type { QuantityDefinition } from './QuantityDefinition.js';
-import type { Parser } from './parsers/Parser.js';
+import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import type { Decimal } from '@neutrium/decimal';
+import { createQuantityClass } from './factory.js';
+import type { Quantity as GenericQuantity } from './QuantityCore.js';
+import { RegexParser } from './parsers/RegexParser.js';
 
 /**
- * Quantity configured with {@link RegexQtyParser}.
- * Import from `@neutrium/quantity/regex`. Values and counted units are read-only; arithmetic,
- * conversions, and clones retain the receiving class and parser.
- *
- * Use {@link withConfig} to isolate Decimal settings and configure cache budgets.
+ * Decimal scalars with Regex parsing, excluding Nearley and Moo from runtime bundles.
+ * Use `withConfig` for Quantity settings or `createQuantityClass` to select another backend/parser.
  * @example
  * ```ts
  * import { Quantity } from '@neutrium/quantity/regex';
- *
- * const PreciseQuantity = Quantity.withConfig({ precision: 30 });
- * new PreciseQuantity('2 m').to('cm').scalar.toString(); // "200"
+ * new Quantity('2 km/h').to('m/h').scalar.toString(); // "2000"
  * ```
  */
-export class Quantity extends QuantityCore
-{
-	/**
-	 * Construct a quantity from an expression, scalar, definition, or existing quantity.
-	 * @param input - Quantity expression, number, Decimal, numeric `toString()` object,
-	 * or definition containing a Decimal scalar and counted unit records.
-	 * @param units - Optional unit expression. Omitted or empty units make scalar
-	 * inputs dimensionless. A scalar in this expression is replaced by `input`.
-	 * Ignored for definitions and existing quantities.
-	 * @param parser - Per-instance override; otherwise uses this class's default
-	 * parser with its configured cache limits. Derived results retain the parser.
-	 * @throws If input is invalid, unit counts overflow, or temperature restrictions
-	 * are violated. External definition scalars must be Decimal instances.
-	 * @category Construction
-	 */
-	constructor(input: QuantityInitParam, units?: string, parser?: Parser<QuantityDefinition>)
-	{
-		super(input, units, parser === undefined ? new RegexQtyParser(new.target.parserConfig) : parser);
-	}
-}
-
-export type { QuantityConfigInput, CacheConfigInput, CacheConfig } from './QuantityConfig.js';
+export const Quantity = createQuantityClass({
+	numeric: Object.freeze(new DecimalScientificAdapter()),
+	parser: config => new RegexParser(config),
+});
+/** A quantity with the selected scalar representation. */
+export type Quantity<T = Decimal, Numeric extends object = T extends Decimal ? import('@neutrium/decimal').DecimalConfig : object> = GenericQuantity<T, Numeric>;
+/** Nested Decimal options and optional library cache policies. */
+export type QuantityConfigInput = import('./QuantityConfig.js').QuantityConfigInput<import('@neutrium/decimal').DecimalConfigInput>;
+export type { QuantityConfig, QuantityCacheInput, QuantityCacheConfig } from './QuantityConfig.js';
+export type { CacheConfigInput, CacheConfig } from '@neutrium/utilities/cache';
 export type { ParserConfigInput, ParserConfig, ParserCacheConfigInput, ParserCacheStats } from './parsers/ParserConfig.js';

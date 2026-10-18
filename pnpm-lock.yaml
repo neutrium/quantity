@@ -9,11 +9,11 @@ importers:
   .:
     dependencies:
       '@neutrium/decimal':
-        specifier: ^2.2.0
-        version: 2.2.0
+        specifier: ^2.3.0
+        version: 2.3.0
       '@neutrium/utilities':
-        specifier: ^2.0.0
-        version: 2.0.0
+        specifier: ^4.0.0
+        version: 4.0.0(@neutrium/decimal@2.3.0)
       moo:
         specifier: ^0.5.3
         version: 0.5.3
@@ -55,13 +55,18 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@neutrium/decimal@2.2.0':
-    resolution: {integrity: sha512-HXoDPKbYqe9XDfIN92/ZQnimD06MAO5sg/lcj9XGFf3+fxcoEJ4DkVkBgf3lYytsSR/BKve/PlrFKt3EQoKQwQ==}
+  '@neutrium/decimal@2.3.0':
+    resolution: {integrity: sha512-Mhp8m9dDA6xI50a41UEAp9552kYXKfYK8aQH8v5Q6MBBuPnyfv5tdOFQSfbSFtluOnEk0T+Z+DzdyynPbYFFRQ==}
     engines: {node: '>=20.19.0'}
 
-  '@neutrium/utilities@2.0.0':
-    resolution: {integrity: sha512-rAj7//8y3ldNdNEugzRvPuNl+A425Z/hLFgI5TUNTZPa+yDufzfGkHyuvaOeWkL7ydlwwtF+t0ndhC5hIEsQFA==}
-    engines: {node: '>=0.10.0'}
+  '@neutrium/utilities@4.0.0':
+    resolution: {integrity: sha512-NVVWBvk9YGrrh9ocMrAMU05KdDts5w/DtnjTUPaV8wHGzDTpZ8KYvwm3TBoIFEQRR+/eRsNs9J3wZU9CnJmBlg==}
+    engines: {node: '>=24.0.0'}
+    peerDependencies:
+      '@neutrium/decimal': ^2.3.0
+    peerDependenciesMeta:
+      '@neutrium/decimal':
+        optional: true
 
   '@oxc-project/types@0.151.0':
     resolution: {integrity: sha512-J1yXrIlNDZVzE3ada310xeAw7nH8yCAyLPuUIsjKatFPmfn5bS1oW+cM+QsGOtVWd5nhSpbwZWx/rue+r5Z+PA==}
@@ -560,9 +565,11 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
 
-  '@neutrium/decimal@2.2.0': {}
+  '@neutrium/decimal@2.3.0': {}
 
-  '@neutrium/utilities@2.0.0': {}
+  '@neutrium/utilities@4.0.0(@neutrium/decimal@2.3.0)':
+    optionalDependencies:
+      '@neutrium/decimal': 2.3.0
 
   '@oxc-project/types@0.151.0': {}
 

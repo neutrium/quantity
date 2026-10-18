@@ -1,10 +1,12 @@
+import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+const testNumeric = new DecimalScientificAdapter();
 // Run after npm run build; optional first argument overrides the default report path.
 import assert from 'node:assert/strict';
 import { measure, measurementDefaults } from '../benchmark/measure.js';
 import { writeResults } from '../benchmark/write-results.js';
 import { cpus } from 'node:os';
-import { NearleyQtyParser } from '../dist/parsers/NearleyQtyParser.js';
-import { RegexQtyParser } from '../dist/parsers/RegexQtyParser.js';
+import { NearleyParser } from '../dist/parsers/NearleyParser.js';
+import { RegexParser } from '../dist/parsers/RegexParser.js';
 import { UnitTokenManager } from '../dist/UnitTokenManager.js';
 
 const manager = UnitTokenManager.instance;
@@ -24,8 +26,8 @@ for (const prefix of new Set(Object.values(manager.getMap('prefix'))))
 	if (aliases.length === 400) break;
 }
 
-const parser = new NearleyQtyParser();
-const regex = new RegexQtyParser();
+const parser = new NearleyParser();
+const regex = new RegexParser();
 const cases = [
 	['simple unit', 'm'], ['compound units', '2 km/s'],
 	...[50, 100, 200, 400].map(count => [`${count} distinct terms`, aliases.slice(0, count).join('*')]),
@@ -34,7 +36,7 @@ const results = {};
 
 for (const [name, input] of cases)
 {
-	const expected = regex.parse(input);
+	const expected = regex.parse(input, testNumeric);
 	const validate = value => {
 		assert.equal(value.scalar.toString(), expected.scalar.toString());
 		assert.deepEqual(value.numerator, expected.numerator);
@@ -43,7 +45,7 @@ for (const [name, input] of cases)
 	results[name] = {
 		characters: input.length,
 		microsecondsPerOperation: measure({
-			run: () => parser.parse(input),
+			run: () => parser.parse(input, testNumeric),
 			beforeEach: () => parser.clearCache(),
 			validate,
 		}),

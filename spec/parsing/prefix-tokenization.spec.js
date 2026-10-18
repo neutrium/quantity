@@ -1,8 +1,10 @@
+import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+const testNumeric = new DecimalScientificAdapter();
 import assert from 'node:assert/strict';
 import { describe, expect, it } from 'vitest';
 import { parseExpression } from '../helpers/nearley.js';
-import { NearleyQtyParser } from '../../dist/parsers/NearleyQtyParser.js';
-import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
+import { NearleyParser } from '../../dist/parsers/NearleyParser.js';
+import { RegexParser } from '../../dist/parsers/RegexParser.js';
 import { Quantity } from '../../dist/Quantity.js';
 import { UnitTokenManager } from '../../dist/UnitTokenManager.js';
 
@@ -30,10 +32,10 @@ describe('complete unit tokenization', () => {
 	])('resolves %s without partial aliases or ambiguous parses', (input, unit, prefix) => {
 		parseExpression(input);
 		const term = { unit, ...(prefix ? { prefix } : {}), exponent: 1 };
-		for (const Parser of [NearleyQtyParser, RegexQtyParser]) {
+		for (const Parser of [NearleyParser, RegexParser]) {
 			const parser = new Parser();
 			for (let repeat = 0; repeat < 2; repeat++) {
-				const result = parser.parse(input);
+				const result = parser.parse(input, testNumeric);
 				expect(result.scalar.toString()).toBe('1');
 				expect(result.numerator).toEqual([term]);
 				expect(result.denominator).toEqual([]);
@@ -54,9 +56,9 @@ describe('complete unit tokenization', () => {
 	});
 
 	it('preserves every exact catalog alias', () => {
-		const parser = new NearleyQtyParser();
+		const parser = new NearleyParser();
 		for (const [alias, unit] of Object.entries(UnitTokenManager.instance.getMap('unit'))) {
-			const result = parser.parse(alias);
+			const result = parser.parse(alias, testNumeric);
 			expect(result.scalar.toString(), alias).toBe('1');
 			expect(result.numerator, alias).toEqual(unit === '<1>' ? [] : [{ unit, exponent: 1 }]);
 			expect(result.denominator, alias).toEqual([]);
@@ -64,13 +66,16 @@ describe('complete unit tokenization', () => {
 	});
 
 	it('agrees with Regex on all catalog prefix and unit spellings', () => {
-		const nearley = new NearleyQtyParser(), regex = new RegexQtyParser();
+		const nearley = new NearleyParser(), regex = new RegexParser();
 		const manager = UnitTokenManager.instance;
-		for (const prefix of Object.keys(manager.getMap('prefix'))) {
-			for (const [alias, unit] of Object.entries(manager.getMap('unit'))) {
+
+		for (const prefix of Object.keys(manager.getMap('prefix')))
+		{
+			for (const [alias, unit] of Object.entries(manager.getMap('unit')))
+			{
 				if (unit === '<1>') continue; // Scalar unity is not a physical unit alias.
 				const input = prefix + alias;
-				const actual = nearley.parse(input), expected = regex.parse(input);
+				const actual = nearley.parse(input, testNumeric), expected = regex.parse(input, testNumeric);
 				assert.deepEqual(actual.numerator, expected.numerator, input);
 				assert.deepEqual(actual.denominator, expected.denominator, input);
 				assert.equal(actual.scalar.toString(), expected.scalar.toString(), input);
@@ -80,8 +85,8 @@ describe('complete unit tokenization', () => {
 
 	it.each(['kkm', 'mminch', 'k m', 'minchunknown', 'minch2junk', 'minch-force', 'minch^', 'minch/'])
 		('rejects malformed spelling %s and recovers', input => {
-			const parser = new NearleyQtyParser();
-			expect(() => parser.parse(input)).toThrow();
-			expect(new Quantity(parser.parse('minch')).eq('0.001 inch')).toBe(true);
+			const parser = new NearleyParser();
+			expect(() => parser.parse(input, testNumeric)).toThrow();
+			expect(new Quantity(parser.parse('minch', testNumeric)).eq('0.001 inch')).toBe(true);
 		});
 });

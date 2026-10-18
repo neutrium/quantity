@@ -1,6 +1,10 @@
 # @neutrium/quantity
 
-Represent measured values with decimal scalars, convert units, and perform arithmetic while tracking dimensions. Requires Node.js 24 or newer; browser applications need an ESM-compatible bundler.
+Represent measured values with Decimal, JavaScript numbers or custom scalars, convert units, and perform arithmetic while tracking dimensions. Requires Node.js 24 or newer; browser applications need an ESM-compatible bundler.
+
+[Interactive demo](https://neutrium.github.io/quantity/demo/) · [API reference](https://neutrium.github.io/quantity/)
+
+## Getting Started
 
 ```sh
 npm install @neutrium/quantity
@@ -17,14 +21,15 @@ speed.scalar.toString(); // "75"
 speed.units(); // "km/h"
 ```
 
-Try the [interactive Quantity Lab](https://neutrium.github.io/quantity/demo/) to explore conversions, arithmetic, and temperatures in your browser.
 
-## Start here
+## Feature Guides
 
-- [Working with quantities](usage.md): inputs, decimal values, conversions, arithmetic, and comparisons.
+- [Working with quantities](usage.md): inputs, scalar values, conversions, arithmetic, and comparisons.
+- [Numeric backends](numeric-backends.md): Decimal, JavaScript doubles, custom adapters and tree shaking.
 - [Temperatures](temperatures.md): absolute temperatures, intervals, and permitted operations.
 - [Parsers and definitions](parsers.md): choosing a parser, adapting input, and checking results.
-- [Migrating to version 5](migrating-v5.md): counted definitions and changed runtime contracts.
+- [Migrating to version 6](migrating-v6.md): utilities adapters, parser interfaces and nested configuration.
+- [Migrating from version 4 to version 5](migrating-v5.md): counted definitions and changed runtime contracts.
 - [Benchmarks](benchmarks.md): workloads, measurements, and reproduction commands.
 
 ## API entry points
@@ -32,25 +37,26 @@ Try the [interactive Quantity Lab](https://neutrium.github.io/quantity/demo/) to
 | Import | Exports | Purpose |
 | --- | --- | --- |
 | `@neutrium/quantity` | {@link Quantity.Quantity | Quantity} | Construct, convert, and calculate quantities. |
+| `@neutrium/quantity/number` | {@link number.Quantity | Quantity} | JavaScript doubles with Nearley; excludes Decimal from runtime bundles. |
 | `@neutrium/quantity/regex` | {@link regex.Quantity | Quantity} | Construct quantities with Regex and exclude Nearley from bundles. |
-| `@neutrium/quantity/core` | {@link core.QuantityCore | QuantityCore}, {@link core.createQuantityClass | createQuantityClass}, supporting types | Configure a parser without importing a built-in parser. |
-| `@neutrium/quantity/parsers/nearley` | {@link parsers.NearleyQtyParser | NearleyQtyParser}, {@link parsers.QuantityParseError | QuantityParseError}, error/result and configuration types | Rich expressions and structured diagnostics. |
-| `@neutrium/quantity/parsers/regex` | {@link parsers.RegexQtyParser | RegexQtyParser}, configuration types | Direct Regex import without Nearley. |
-| `@neutrium/quantity/parsers.js` | {@link parsers.NearleyQtyParser | NearleyQtyParser}, {@link parsers.RegexQtyParser | RegexQtyParser} | Parse scalar and unit expressions. |
-| `@neutrium/quantity/guards.js` | {@link guards.isQuantity | isQuantity}, {@link guards.isQuantityDefinition | isQuantityDefinition}, {@link guards.QuantityInitParam | QuantityInitParam} | Inspect inputs and describe their TypeScript shape. |
+| `@neutrium/quantity/factory` | {@link factory.Quantity | Quantity}, {@link factory.createQuantityClass | createQuantityClass}, supporting types | Select a utilities numeric adapter and parser. |
+| `@neutrium/quantity/parsers/nearley` | {@link parsers.NearleyParser | NearleyParser}, {@link parsers.QuantityParseError | QuantityParseError}, error/result and configuration types | Rich expressions and structured diagnostics. |
+| `@neutrium/quantity/parsers/regex` | {@link parsers.RegexParser | RegexParser}, configuration types | Direct Regex import without Nearley. |
+| `@neutrium/quantity/parsers.js` | {@link parsers.NearleyParser | NearleyParser}, {@link parsers.RegexParser | RegexParser} | Parse scalar and unit expressions. |
+| `@neutrium/quantity/guards.js` | {@link guards.isQuantity | isQuantity}, {@link guards.isQuantityDefinition | isQuantityDefinition} | Inspect quantities and validate definitions. |
 
-{@link QuantityDefinition.QuantityDefinition | QuantityDefinition}, {@link QuantityDefinition.UnitPower | UnitPower}, and {@link "parsers/Parser".Parser | Parser} are exported as types from `@neutrium/quantity/core`. See [Migrating to version 5](./migrating-v5.md) for the counted definition format.
+{@link QuantityDefinition.QuantityDefinition | QuantityDefinition}, {@link QuantityDefinition.UnitPower | UnitPower}, {@link factory.QuantityInput | QuantityInput}, and {@link "parsers/Parser".Parser | Parser} are exported as types from `@neutrium/quantity/factory`. See [Migrating to version 5](./migrating-v5.md) for the counted definition format.
 
 ## Common tasks
 
 | Task | API |
 | --- | --- |
-| Read the numerical value or unit expression | {@link Quantity.Quantity.scalar | Quantity.scalar}, {@link Quantity.Quantity.units | Quantity.units} |
-| Convert to chosen units or base units | {@link Quantity.Quantity.to | Quantity.to}, {@link Quantity.Quantity.toBase | Quantity.toBase} |
-| Add, subtract, multiply, or divide | {@link Quantity.Quantity.add | Quantity.add}, {@link Quantity.Quantity.sub | Quantity.sub}, {@link Quantity.Quantity.mul | Quantity.mul}, {@link Quantity.Quantity.div | Quantity.div} |
-| Compare equivalent measurements | {@link Quantity.Quantity.eq | Quantity.eq}, {@link Quantity.Quantity.compareTo | Quantity.compareTo} |
-| Check dimensions before an operation | {@link Quantity.Quantity.isCompatible | Quantity.isCompatible} |
-| Distinguish temperature intervals from absolute temperatures | {@link Quantity.Quantity.isTemperature | Quantity.isTemperature}, {@link Quantity.Quantity.isDegrees | Quantity.isDegrees} |
+| Read the numerical value or unit expression | {@link factory.Quantity.scalar | Quantity.scalar}, {@link factory.Quantity.units | Quantity.units} |
+| Convert to chosen units or base units | {@link factory.Quantity.to | Quantity.to}, {@link factory.Quantity.toBase | Quantity.toBase} |
+| Add, subtract, multiply, or divide | {@link factory.Quantity.add | Quantity.add}, {@link factory.Quantity.sub | Quantity.sub}, {@link factory.Quantity.mul | Quantity.mul}, {@link factory.Quantity.div | Quantity.div} |
+| Compare equivalent measurements | {@link factory.Quantity.eq | Quantity.eq}, {@link factory.Quantity.compareTo | Quantity.compareTo} |
+| Check dimensions before an operation | {@link factory.Quantity.isCompatible | Quantity.isCompatible} |
+| Distinguish temperature intervals from absolute temperatures | {@link factory.Quantity.isTemperature | Quantity.isTemperature}, {@link factory.Quantity.isDegrees | Quantity.isDegrees} |
 
 Quantity values are getter-only and their counted unit records and arrays are frozen. Use arithmetic or construction to obtain new values. Configuration is also immutable; use `Quantity.withConfig()` for an isolated numerical context and cache budgets.
 

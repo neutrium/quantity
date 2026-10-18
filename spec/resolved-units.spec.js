@@ -1,10 +1,13 @@
+import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it } from 'vitest';
 import { Decimal } from '@neutrium/decimal';
-import { QuantityCore, createQuantityClass } from '@neutrium/quantity/core';
+import { createQuantityClass } from '@neutrium/quantity/factory';
 
 describe('operations on resolved units', () => {
 	it('never invokes the parser for existing operands, including temperature operations', () => {
 		const parser = { parse() { throw new Error('Unexpected parsing'); } };
+		const QuantityCore = createQuantityClass({ numeric: testNumeric, parser: () => parser });
 		const q = (scalar, numerator, denominator = []) => new QuantityCore({
 			scalar: new Decimal(scalar), numerator, denominator,
 		}, undefined, parser);
@@ -34,11 +37,11 @@ describe('operations on resolved units', () => {
 
 	it('passes only external strings to a JSON-only parser', () => {
 		const calls = [];
-		const Custom = createQuantityClass(() => ({ parse(text) {
+		const Custom = createQuantityClass({ numeric: testNumeric, parser: () => ({ parse(text) {
 			calls.push(text);
 			const value = JSON.parse(text);
 			return { scalar: new Decimal(value.scalar), numerator: value.numerator, denominator: [] };
-		} }));
+		} }) });
 		const input = scalar => JSON.stringify({ scalar, numerator: [{ unit: '<meter>', exponent: 1 }] });
 		const a = new Custom(input(2));
 		const b = new Custom(input(3));

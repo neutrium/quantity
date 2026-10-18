@@ -4,8 +4,7 @@ import type { PreparedExpression } from './PreparedExpression.js';
 import { ExpressionIssue, QuantityParseError } from './QuantityParseError.js';
 
 // Nearley 2 exposes its parse columns at runtime but omits them from its typings.
-// Keep that version-specific boundary here, with regression tests for EOF and
-// rejected tokens. Do not derive public diagnostics from English error messages.
+
 interface ParseColumn
 {
 	scannable: {
@@ -16,7 +15,7 @@ interface ParseColumn
 	}[];
 }
 
-export function expectedTokens(parser?: Nearley.Parser): string[]
+function expectedTokens(parser?: Nearley.Parser): string[]
 {
 	const state = parser as (Nearley.Parser & { table?: (ParseColumn | undefined)[] }) | undefined;
 	const column = state?.table?.[state.current];

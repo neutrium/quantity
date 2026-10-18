@@ -1,14 +1,16 @@
+import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+const testNumeric = new DecimalScientificAdapter();
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import { Quantity } from '../dist/Quantity.js';
 import { Quantity as RegexQuantity } from '../dist/regex.js';
-import { NearleyQtyParser, RegexQtyParser } from '../dist/parsers/index.js';
+import { NearleyParser, RegexParser } from '../dist/parsers/index.js';
 import { compare } from './helpers.js';
 
 test('quantity construction', async ({ bench }) => {
 	const expected = new Quantity('3.5 kg.m/s^2');
-	const definition = new NearleyQtyParser().parse('3.5 kg.m/s^2');
-	const regex = new RegexQtyParser();
+	const definition = new NearleyParser().parse('3.5 kg.m/s^2', testNumeric);
+	const regex = new RegexParser();
 	const validate = value => assert(value.same(expected));
 	await compare(bench, [
 		{ name: 'expression: default Nearley', run: () => new Quantity('3.5 kg.m/s^2'), validate },
@@ -62,7 +64,7 @@ test('arithmetic: reused operands', async ({ bench }) => {
 	const duration = new Quantity('2 s');
 	const cases = [
 		['add: same units', () => length.add(sameUnits), '12 m'],
-		['add: different units (warm conversion cache)', () => length.add(otherUnits), '12 m'],
+		['add: different units (warm unit-plan cache)', () => length.add(otherUnits), '12 m'],
 		['subtract', () => length.sub(sameUnits), '8 m'],
 		['multiply quantities', () => length.mul(sameUnits), '20 m^2'],
 		['divide quantities', () => length.div(duration), '5 m/s'],

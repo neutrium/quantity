@@ -1,17 +1,20 @@
+import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it } from 'vitest';
 import { Decimal } from '@neutrium/decimal';
 import { Quantity } from '@neutrium/quantity';
 import { Quantity as RegexQuantity } from '@neutrium/quantity/regex';
-import { NearleyQtyParser, RegexQtyParser } from '@neutrium/quantity/parsers.js';
+import { NearleyParser, RegexParser } from '@neutrium/quantity/parsers.js';
 
 const term = (unit, exponent, prefix) => ({ unit, ...(prefix ? { prefix } : {}), exponent });
 
-for (const [Constructor, Parser] of [[Quantity, NearleyQtyParser], [RegexQuantity, RegexQtyParser]]) {
+for (const [Constructor, Parser] of [[Quantity, NearleyParser], [RegexQuantity, RegexParser]])
+{
 	describe(`counted units with ${Parser.name}`, () => {
 		it('stores million-sized positive, negative and zero powers without expansion', () => {
 			const parser = new Parser();
-			expect(parser.parse('m1000000').numerator).toEqual([term('<meter>', 1000000)]);
-			expect(parser.parse('km^-1000000').denominator).toEqual([term('<meter>', 1000000, '<kilo>')]);
+			expect(parser.parse('m1000000', testNumeric).numerator).toEqual([term('<meter>', 1000000)]);
+			expect(parser.parse('km^-1000000', testNumeric).denominator).toEqual([term('<meter>', 1000000, '<kilo>')]);
 			const q = new Constructor('2 m/s').pow(1000000);
 			expect(q.numerator).toEqual([term('<meter>', 1000000)]);
 			expect(q.denominator).toEqual([term('<second>', 1000000)]);
@@ -46,6 +49,25 @@ for (const [Constructor, Parser] of [[Quantity, NearleyQtyParser], [RegexQuantit
 			expect(new Constructor('m1000/km1000').toBase().scalar.eq(new Decimal(1000).pow(-1000))).toBe(true);
 		});
 
+		it.each([true, false])('preserves base-unit cancellation order and frozen counts, cache=%s', cache => {
+			const Q = Constructor.withConfig({ cache });
+			const q = new Q('2 kN/kg2/s3'), base = q.toBase();
+			expect(base.numerator).toEqual([term('<meter>', 1)]);
+			// A denominator remainder of a numerator unit precedes denominator-only units.
+			expect(base.denominator).toEqual([term('<kilogram>', 1), term('<second>', 5)]);
+			expect(base.scalar.toString()).toBe('2000');
+			expect(base.signature).toBe(q.signature);
+
+			for (const side of [base.numerator, base.denominator])
+			{
+				expect(Object.isFrozen(side)).toBe(true);
+				side.forEach(record => expect(Object.isFrozen(record)).toBe(true));
+			}
+			// Each expanded side must remain safe even when its final counts cancel.
+			expect(() => new Q('N4503599627370496/s9007199254740991')).toThrow(/safe integer/);
+			expect(() => new Q('s9007199254740991/N4503599627370496')).toThrow(/safe integer/);
+		});
+
 		it('does not confuse high powers with a different physical dimension', () => {
 			expect(new Constructor('m20').isCompatible('s')).toBe(false);
 			expect(() => new Constructor('m20').add('s')).toThrow();
@@ -56,13 +78,17 @@ for (const [Constructor, Parser] of [[Quantity, NearleyQtyParser], [RegexQuantit
 		});
 
 		it('rejects unsafe exponents and intermediate count overflow', () => {
-			for (const exponent of ['9007199254740992', '-9007199254740992', '999999999999999999999999']) {
-				expect(() => new Parser().parse(`m^${exponent}`)).toThrow(/safe integer/);
+			for (const exponent of ['9007199254740992', '-9007199254740992', '999999999999999999999999'])
+			{
+				expect(() => new Parser().parse(`m^${exponent}`, testNumeric)).toThrow(/safe integer/);
 				expect(() => new Constructor('1 m').pow(exponent)).toThrow(/safe integer/);
 			}
-			for (const exponent of [NaN, Infinity, -Infinity, 0.5]) {
+
+			for (const exponent of [NaN, Infinity, -Infinity, 0.5])
+			{
 				expect(() => new Constructor('1 m').pow(exponent)).toThrow();
 			}
+
 			const max = new Constructor('m9007199254740991');
 			expect(max.numerator[0].exponent).toBe(Number.MAX_SAFE_INTEGER);
 			expect(() => max.pow(2)).toThrow(/safe integer/);
@@ -71,7 +97,8 @@ for (const [Constructor, Parser] of [[Quantity, NearleyQtyParser], [RegexQuantit
 		});
 
 		it('preserves absolute-temperature restrictions and interval powers', () => {
-			for (const input of ['tempC2', 'tempK1000000', 'tempF^-2', 'm/tempR2', 'ktempC']) {
+			for (const input of ['tempC2', 'tempK1000000', 'tempF^-2', 'm/tempR2', 'ktempC'])
+			{
 				expect(() => new Constructor(input)).toThrow();
 			}
 			expect(() => new Constructor('20 tempC').pow(2)).toThrow();
@@ -82,12 +109,12 @@ for (const [Constructor, Parser] of [[Quantity, NearleyQtyParser], [RegexQuantit
 
 		it('returns immutable arrays without leaking mutable parser cache state', () => {
 			const parser = new Parser();
-			const parsed = parser.parse('m2');
+			const parsed = parser.parse('m2', testNumeric);
 			expect(Object.isFrozen(parsed.numerator)).toBe(true);
 			expect(Object.isFrozen(parsed.numerator[0])).toBe(true);
 			expect(() => { parsed.numerator[0].exponent = 3; }).toThrow(TypeError);
 			parsed.numerator = [];
-			expect(parser.parse('m2').numerator).toEqual([term('<meter>', 2)]);
+			expect(parser.parse('m2', testNumeric).numerator).toEqual([term('<meter>', 2)]);
 		});
 	});
 }
@@ -123,10 +150,13 @@ it('owns, validates and coalesces external counted definitions without mutating 
 });
 
 it('rejects incomplete syntax and unknown units even when raised to zero', () => {
-	for (const Parser of [NearleyQtyParser, RegexQtyParser]) {
+	for (const Parser of [NearleyParser, RegexParser])
+	{
 		const parser = new Parser();
-		for (const input of ['m/', 'm^', 'm**', 'kk^0', 'unknown0', 'm*']) {
-			expect(() => parser.parse(input)).toThrow();
+
+		for (const input of ['m/', 'm^', 'm**', 'kk^0', 'unknown0', 'm*'])
+		{
+			expect(() => parser.parse(input, testNumeric)).toThrow();
 		}
 	}
 });

@@ -1,34 +1,37 @@
+import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it } from 'vitest';
 import { Decimal } from '@neutrium/decimal';
 import { Quantity } from '@neutrium/quantity';
 import { Quantity as RegexQuantity } from '@neutrium/quantity/regex';
-import { createQuantityClass } from '@neutrium/quantity/core';
-import { RegexQtyParser } from '@neutrium/quantity/parsers/regex';
+import { createQuantityClass } from '@neutrium/quantity/factory';
+import { RegexParser } from '@neutrium/quantity/parsers/regex';
 
 
-for (const Entry of [Quantity, RegexQuantity]) {
+for (const Entry of [Quantity, RegexQuantity])
+{
 	describe(`isolated config: ${Entry === Quantity ? 'Nearley' : 'Regex'}`, () => {
 		it('snapshots settings without mutating the shared Decimal or caller object', () => {
 			const options = { precision: 6, rounding: 'down' };
-			const Configured = Entry.withConfig(options);
+			const Configured = Entry.withConfig({ numeric: options });
 			const source = new Configured('1 degF');
 			const cached = source.to('degC');
 			options.precision = 2;
 			Decimal.config = { precision: 2, rounding: 'up', maxE: 2, minE: -2 };
-			expect(Configured.config.precision).toBe(6);
+			expect(Configured.config.numeric.precision).toBe(6);
 			expect(Object.isFrozen(Configured.config)).toBe(true);
 			expect(source.to('degC')).toBe(cached);
 			expect(cached.scalar.toString()).toBe('0.555555');
 			expect(new Configured('1e30 m').scalar.toString()).toBe('1e+30');
 			expect(new Configured('1e-30 m').scalar.toString()).toBe('1e-30');
 			expect(new Configured('1 tempF').to('tempC').scalar.toString()).toBe('-17.2222');
-			expect(() => { source.scalar.constructor.config = { precision: 3 }; }).toThrow('configuration is fixed');
+			expect(() => { source.scalar.constructor.config = { precision: 3 }; }).toThrow('configuration is immutable');
 			expect(Decimal.config.precision).toBe(2);
 		});
 
 		it('inherits the parser and configuration in copies, arithmetic, and chained classes', () => {
-			const Low = Entry.withConfig({ precision: 6 });
-			const High = Low.withConfig({ precision: 30 });
+			const Low = Entry.withConfig({ numeric: { precision: 6 } });
+			const High = Low.withConfig({ numeric: { precision: 30 } });
 			const q = new Low('1 m');
 			for (const result of [q.clone(), q.add('2 m'), q.sub('2 m'), q.mul(2), q.div(3), q.pow(2), q.inverse(), q.to('cm')]) {
 				expect(result).toBeInstanceOf(Low);
@@ -36,15 +39,15 @@ for (const Entry of [Quantity, RegexQuantity]) {
 			}
 			expect(new Low('1 m').div(3).scalar.toString()).toBe('0.333333');
 			expect(new High('1 m').div(3).scalar.toString()).toBe('0.' + '3'.repeat(30));
-			expect(High.config.precision).toBe(30);
-			expect(Low.config.precision).toBe(6);
+			expect(High.config.numeric.precision).toBe(30);
+			expect(Low.config.numeric.precision).toBe(6);
 			if (Entry === RegexQuantity) expect(() => new Low('(m)')).toThrow();
 			else expect(new Low('(m)').units()).toBe('m');
 		});
 
 		it('uses the receiver context across different classes and Decimal inputs', () => {
-			const Low = Entry.withConfig({ precision: 6, rounding: 'down' });
-			const High = Entry.withConfig({ precision: 30, rounding: 'up' });
+			const Low = Entry.withConfig({ numeric: { precision: 6, rounding: 'down' } });
+			const High = Entry.withConfig({ numeric: { precision: 30, rounding: 'up' } });
 			const value = new High('1.23456789 cm');
 			expect(new Low('1 m').add(value).scalar.toString()).toBe('1.01234');
 			expect(new Low('1 m').sub(value).scalar.toString()).toBe('0.987654');
@@ -59,8 +62,8 @@ for (const Entry of [Quantity, RegexQuantity]) {
 		});
 
 		it('keeps caches independent when low and high precision are interleaved', () => {
-			const Low = Entry.withConfig({ precision: 6, rounding: 'down' });
-			const High = Entry.withConfig({ precision: 30, rounding: 'up' });
+			const Low = Entry.withConfig({ numeric: { precision: 6, rounding: 'down' } });
+			const High = Entry.withConfig({ numeric: { precision: 30, rounding: 'up' } });
 			const low = new Low('1 m/h'), high = new High('1 m/h');
 			const a = low.to('ft/min'), b = high.to('ft/min');
 			for (let i = 0; i < 4; i++) {
@@ -73,9 +76,9 @@ for (const Entry of [Quantity, RegexQuantity]) {
 		});
 
 		it('validates settings and preserves nonfinite numeric comparison behaviour', () => {
-			expect(() => Entry.withConfig({ precision: 0 })).toThrow();
-			expect(() => Entry.withConfig({ rounding: 'unknown' })).toThrow();
-			const Configured = Entry.withConfig({ precision: 6 });
+			expect(() => Entry.withConfig({ numeric: { precision: 0 } })).toThrow();
+			expect(() => Entry.withConfig({ numeric: { rounding: 'unknown' } })).toThrow();
+			const Configured = Entry.withConfig({ numeric: { precision: 6 } });
 			const make = scalar => new Configured({ scalar: new Decimal(scalar), numerator: [{ unit: '<meter>', exponent: 1 }], denominator: [] });
 			expect(make(NaN).eq(make(NaN))).toBe(false);
 			expect(make(Infinity).compareTo(make(Infinity))).toBe(0);
@@ -87,11 +90,11 @@ for (const Entry of [Quantity, RegexQuantity]) {
 
 it('passes context to custom parsers and preserves their class', () => {
 	const seen = [];
-	const parser = new RegexQtyParser();
-	const Custom = createQuantityClass(() => ({ parse(text, Numeric) {
+	const parser = new RegexParser();
+	const Custom = createQuantityClass({ numeric: testNumeric, parser: () => ({ parse(text, Numeric) {
 		seen.push(Numeric.config.precision);
 		return parser.parse(text, Numeric);
-	} })).withConfig({ precision: 7 });
+	} }) }).withConfig({ numeric: { precision: 7 } });
 	const quantity = new Custom('1 m');
 	expect(quantity.to('cm')).toBeInstanceOf(Custom);
 	expect(seen).toEqual([7, 7]);
@@ -99,8 +102,8 @@ it('passes context to custom parsers and preserves their class', () => {
 });
 
 it('evaluates Nearley scalar expressions in the isolated context on cache misses and hits', () => {
-	const Low = Quantity.withConfig({ precision: 6, rounding: 'down' });
-	const High = Quantity.withConfig({ precision: 30, rounding: 'up' });
+	const Low = Quantity.withConfig({ numeric: { precision: 6, rounding: 'down' } });
+	const High = Quantity.withConfig({ numeric: { precision: 30, rounding: 'up' } });
 	Decimal.config = { precision: 2, maxE: 2, minE: -2 };
 	for (let i = 0; i < 2; i++) {
 		expect(new Low('(1/3) m').scalar.toString()).toBe('0.333333');

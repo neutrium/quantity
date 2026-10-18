@@ -1,16 +1,21 @@
+import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it } from 'vitest';
 import { Quantity } from '@neutrium/quantity';
 import { Quantity as RegexQuantity } from '@neutrium/quantity/regex';
-import { createQuantityClass } from '@neutrium/quantity/core';
-import { RegexQtyParser } from '@neutrium/quantity/parsers/regex';
+import { createQuantityClass } from '@neutrium/quantity/factory';
+import { RegexParser } from '@neutrium/quantity/parsers/regex';
 
-const CustomQuantity = createQuantityClass(config => new RegexQtyParser(config));
+const CustomQuantity = createQuantityClass({ numeric: testNumeric, parser: config => new RegexParser(config) });
 
-for (const [name, Entry] of [['Nearley', Quantity], ['Regex', RegexQuantity], ['custom factory', CustomQuantity]]) {
+for (const [name, Entry] of [['Nearley', Quantity], ['Regex', RegexQuantity], ['custom factory', CustomQuantity]])
+{
 	describe(`subclass construction: ${name}`, () => {
-		class Labelled extends Entry {
+		class Labelled extends Entry
+		{
 			#options;
-			constructor(input, options, units, parser) {
+			constructor(input, options, units, parser)
+			{
 				super(input, units, parser);
 				// Read a required argument: a declaration-only test would miss failures here.
 				this.label = options.label;
@@ -22,9 +27,8 @@ for (const [name, Entry] of [['Nearley', Quantity], ['Regex', RegexQuantity], ['
 		}
 
 		it('preserves required state and configured classes across operands and results', () => {
-			const Q = Labelled.withConfig({ precision: 6, rounding: 'down',
-				parser: { cache: { maxEntries: 7 } }, conversionCache: { maxEntries: 3 } })
-				.withConfig({ precision: 8 });
+			const Q = Labelled.withConfig({ numeric: { precision: 6, rounding: 'down' }, cache: { parser: { maxEntries: 7 }, conversionResults: { maxEntries: 3 } } })
+				.withConfig({ numeric: { precision: 8 } });
 			const q = new Q('2 m', { label: 'length' });
 			const cases = [
 				[q.clone(), '2', 'm'],
@@ -40,7 +44,8 @@ for (const [name, Entry] of [['Nearley', Quantity], ['Regex', RegexQuantity], ['
 				[q.inverse(), '0.5', '1/m'],
 				[new Q('200 cm', { label: 'length' }).toBase(), '2', 'm'],
 			];
-			for (const [result, scalar, units] of cases) {
+			for (const [result, scalar, units] of cases)
+			{
 				expect(result).toBeInstanceOf(Q);
 				expect(result.label).toBe('length');
 				expect(result.scalar.toString()).toBe(scalar);
@@ -58,7 +63,7 @@ for (const [name, Entry] of [['Nearley', Quantity], ['Regex', RegexQuantity], ['
 
 		it('forwards the original parser, including overrides, without reparsing definitions', () => {
 			let calls = 0;
-			const parser = new RegexQtyParser({ cache: { maxEntries: 1 } });
+			const parser = new RegexParser({ cache: { maxEntries: 1 } });
 			const override = { config: parser.config, parse(text, Numeric) {
 				calls++;
 				return parser.parse(text.replaceAll('length-unit', 'm'), Numeric);
@@ -76,7 +81,7 @@ for (const [name, Entry] of [['Nearley', Quantity], ['Regex', RegexQuantity], ['
 		});
 
 		it('retains state across temperature-specific result paths', () => {
-			const Q = Labelled.withConfig({ precision: 12 });
+			const Q = Labelled.withConfig({ numeric: { precision: 12 } });
 			const q = new Q('20 tempC', { label: 'temperature' });
 			const cases = [
 				[q.to('tempF'), '68'], [q.toBase(), '293.15'],
@@ -92,9 +97,11 @@ for (const [name, Entry] of [['Nearley', Quantity], ['Regex', RegexQuantity], ['
 
 		it('keeps the default hook working for constructor-compatible subclasses', () => {
 			class Compatible extends Entry { identify() { return 'compatible'; } }
-			const Q = Compatible.withConfig({ precision: 12 });
+			const Q = Compatible.withConfig({ numeric: { precision: 12 } });
 			const q = new Q('1 m');
-			for (const result of [q.clone(), q.to('cm'), q.add('1 m')]) {
+
+			for (const result of [q.clone(), q.to('cm'), q.add('1 m')])
+			{
 				expect(result).toBeInstanceOf(Q);
 				expect(result.identify()).toBe('compatible');
 			}
@@ -104,18 +111,22 @@ for (const [name, Entry] of [['Nearley', Quantity], ['Regex', RegexQuantity], ['
 
 it('does not call the custom parser factory again for subclass operands or results', () => {
 	let factories = 0;
-	const Base = createQuantityClass(config => { factories++; return new RegexQtyParser(config); });
-	class Labelled extends Base {
-		constructor(input, options, units, parser) {
+	const Base = createQuantityClass({ numeric: testNumeric, parser: config => { factories++; return new RegexParser(config); } });
+
+	class Labelled extends Base
+	{
+		constructor(input, options, units, parser)
+		{
 			super(input, units, parser);
 			this.options = options;
 			this.label = options.label;
 		}
-		constructQuantity(input, units, parser) {
+		constructQuantity(input, units, parser)
+		{
 			return new this.constructor(input, this.options, units, parser);
 		}
 	}
-	const Q = Labelled.withConfig({ precision: 8 });
+	const Q = Labelled.withConfig({ numeric: { precision: 8 } });
 	const q = new Q('1 m', { label: 'length' });
 	expect(q.clone().add('2 m').to('cm').label).toBe('length');
 	expect(factories).toBe(1);

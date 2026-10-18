@@ -1,10 +1,9 @@
-import type { DecimalConstructor } from '../operations/numeric-context.js';
-import { BudgetCache } from '../utils/BudgetCache.js';
-import { WeakCacheRegistry } from '../utils/WeakCacheRegistry.js';
-import { unitPlanBytes } from '../utils/cache-memory.js';
+import type { CacheScope } from '../utils/CacheScope.js';
+import type { ArithmeticAdapter } from '@neutrium/utilities/numeric/arithmetic';
+import { BudgetCache, WeakCacheRegistry } from '@neutrium/utilities/cache';
+import { unitPlanBytes, copyCacheText } from '../utils/cache-memory.js';
 import { parserConfig, type ParserConfigInput, type ParserConfig, type ParserCacheStats } from './ParserConfig.js';
-import { Decimal } from "@neutrium/decimal";
-import { Parser } from './Parser.js';
+
 
 import type { QuantityDefinition, UnitPower, UnitStructure } from "../QuantityDefinition.js";
 import { UnitTokenManager } from '../UnitTokenManager.js'
@@ -12,28 +11,15 @@ import { checkedExponent, normalizePowers } from '../operations/unit-powers.js';
 
 function createCache(config: ParserConfig): BudgetCache<UnitStructure>
 {
-	return new BudgetCache(config.cache, { measure: plan => unitPlanBytes(plan.numerator) + unitPlanBytes(plan.denominator) });
+	return new BudgetCache(config.cache, { detachKey: copyCacheText, measure: plan => unitPlanBytes(plan.numerator) + unitPlanBytes(plan.denominator) });
 }
 
 /**
- * Legacy parser for scalar and unit expressions without parenthesized grouping.
- * Powers bind first, then dot products; * / and whitespace evaluate from left to right.
- *
- * Import from `@neutrium/quantity/parsers.js`. Pass an instance as the third
- * argument to {@link Quantity.Quantity.constructor | Quantity constructor}, or call {@link parse} directly
- * when a parsed definition is needed.
- *
- * @example
- * ```ts
- * import { Quantity } from '@neutrium/quantity';
- * import { RegexQtyParser } from '@neutrium/quantity/parsers.js';
- *
- * const parser = new RegexQtyParser();
- * const force = new Quantity('2 kg*m/s^2', undefined, parser);
- * force.to('N').scalar.toString(); // "2"
- * ```
+ * Regex parser for scalar and unit expressions without parenthesized grouping.
+ * Receives the numeric adapter explicitly; importing this engine does not load Decimal.
+ * Powers bind first, then dot products; * / and whitespace evaluate left to right.
  */
-export class RegexQtyParser implements Parser<QuantityDefinition>
+export class RegexParser
 {
 	private static readonly caches = new WeakCacheRegistry(createCache);
 	private readonly options: ParserConfig;
@@ -45,63 +31,82 @@ export class RegexQtyParser implements Parser<QuantityDefinition>
 	/** Estimated retention for the cache shared by this configuration. */
 	get cacheStats(): ParserCacheStats
 	{
-		return this.cache.stats;
+		return this.cache?.stats ?? Object.freeze({ ...this.options.cache, entries: 0, estimatedBytes: 0 });
 	}
 	/** Release all plans shared by this parser configuration. */
 	clearCache(): void
 	{
-		this.cache.clear();
+		this.cache?.clear();
 	}
 
-	private get cache(): BudgetCache<UnitStructure>
+	private get cache(): BudgetCache<UnitStructure> | undefined
 	{
-		return RegexQtyParser.caches.get(this.options);
+		return this.options.cache.maxEntries && this.options.cache.maxBytes ? RegexParser.caches.get(this.options) : undefined;
 	}
 	private static UNIT_MATCH_REGEX: RegExp;
 	private static readonly UNIT_SEPARATOR_REGEX = /(?:\s*([.*/])\s*|\s+)/y;
-	private tokenMapper = UnitTokenManager.instance;
 
 	// Capture sign, unsigned scalar, and units separately. Whitespace after a
 	// sign remains accepted without stripping whitespace or '+' from each scalar.
 	private static readonly QTY_STRING_REGEX = /^(?:([+-]?)\s*((?:\d+(?:\.\d+)?|\.\d+)(?:[Ee][+-]?\d+)?))?\s*([\s\S]*)$/;
 
-	/** Create a parser; supplied options isolate its cache from the default scope. */
+	/**
+	 * Create a parser with optional cache limits.
+	 * Omitted options share the default configuration. Separately supplied option
+	 * objects isolate retention; passing an already resolved configuration reuses it.
+	 * @example
+	 * ```ts
+	 * const parser = new RegexParser({ cache: { maxEntries: 128 } });
+	 * parser.config.cache.maxEntries; // 128
+	 * ```
+	 */
 	constructor(config?: ParserConfigInput)
 	{
 		this.options = parserConfig(config);
 
-		if (!RegexQtyParser.UNIT_MATCH_REGEX)
+		if (!RegexParser.UNIT_MATCH_REGEX)
 		{
 			this.initialize();
 		}
 	}
 
-	/** Rebuild shared patterns and clear cached definitions after changing unit aliases. */
+	/** Rebuild shared unit patterns and clear unit caches across all Regex parser configurations. Called automatically on first construction; ordinary parsing does not require this method. */
 	initialize(): void
 	{
+		const tokenMapper = UnitTokenManager.instance;
 		const alternatives = (map: Record<string, string>) => Object.keys(map)
 			.sort((a, b) => b.length - a.length)
 			.map(value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-		const prefixes = alternatives(this.tokenMapper.getMap('prefix'));
-		const units = alternatives(this.tokenMapper.getMap('unit'));
+		const prefixes = alternatives(tokenMapper.getMap('prefix'));
+		const units = alternatives(tokenMapper.getMap('unit'));
 		// Sticky matching consumes one unit and its exponent, never repeated copies.
-		RegexQtyParser.UNIT_MATCH_REGEX = new RegExp(
+		RegexParser.UNIT_MATCH_REGEX = new RegExp(
 			`(${prefixes})??(${units})(?:(?:\\^|\\*\\*)([+-]?\\d+)|([+-]?\\d+))?(?=\\s|[*.\/]|$)`, 'y');
 		// Drop every configured scope without retaining an iterable registry of parsers.
-		RegexQtyParser.caches.clear();
+		RegexParser.caches.clear();
 	}
 
 	/**
 	 * Parse a scalar and counted units without expanding powers.
 	 * @param val - Expression such as `"2 kg*m/s^2"`, `"m"`, or `"2"`.
-	 * @param Numeric - Decimal constructor used to evaluate the scalar; defaults to shared Decimal.
+	 * @param Numeric - Adapter used to evaluate the scalar.
+	 * @param scope - Optional Quantity cache scope; wrappers should forward it unchanged.
 	 * @returns A definition accepted by Quantity. Empty sides represent unity.
 	 * @throws If syntax, unit tokens, or integer exponents are invalid.
+	 * @remarks Grouped expressions and scalar arithmetic require Nearley.
+	 * Absolute-zero validation occurs when a Quantity is constructed from the definition.
+	 * @example
+	 * ```ts
+	 * import { Quantity } from '@neutrium/quantity/number';
+	 * const parsed = new RegexParser().parse('2 m/s', new Quantity(1).numeric);
+	 * parsed.scalar; // 2
+	 * new Quantity(parsed).units(); // "m/s"
+	 * ```
 	 */
-	parse(val: string, Numeric: DecimalConstructor = Decimal): QuantityDefinition
+	parse<T>(val: string, Numeric: ArithmeticAdapter<T>, scope?: CacheScope): QuantityDefinition<T>
 	{
 		val = String(val).trim();
-		const result = val && RegexQtyParser.QTY_STRING_REGEX.exec(val);
+		const result = val && RegexParser.QTY_STRING_REGEX.exec(val);
 
 		if (!result)
 		{
@@ -109,8 +114,8 @@ export class RegexQtyParser implements Parser<QuantityDefinition>
 		}
 
 		const scalarText = result[1] === '-' ? '-' + result[2] : result[2] ?? '1';
-		const scalar = new Numeric(scalarText);
-		const units = this.parseUnits(result[3].trim());
+		const scalar = Numeric.from(scalarText);
+		const units = this.parseUnits(result[3].trim(), scope?.enabled('parser') !== false);
 
 		return {
 			scalar,
@@ -119,15 +124,17 @@ export class RegexQtyParser implements Parser<QuantityDefinition>
 		};
 	}
 
-	private parseUnits(units: string): UnitStructure
+	private parseUnits(units: string, enabled: boolean): UnitStructure
 	{
-		const cached = this.cache.get(units);
+		const cache = enabled ? this.cache : undefined;
+		const cached = cache?.get(units);
 
 		if (cached)
 		{
 			return cached;
 		}
 
+		const tokenMapper = UnitTokenManager.instance;
 		const num: UnitPower[] = [], den: UnitPower[] = [];
 		let cursor = 0;
 		let divide = false;
@@ -146,8 +153,8 @@ export class RegexQtyParser implements Parser<QuantityDefinition>
 
 		while (cursor < units.length)
 		{
-			RegexQtyParser.UNIT_MATCH_REGEX.lastIndex = cursor;
-			const match = RegexQtyParser.UNIT_MATCH_REGEX.exec(units);
+			RegexParser.UNIT_MATCH_REGEX.lastIndex = cursor;
+			const match = RegexParser.UNIT_MATCH_REGEX.exec(units);
 
 			if (!match)
 			{
@@ -162,8 +169,8 @@ export class RegexQtyParser implements Parser<QuantityDefinition>
 				throw new Error('Unit exponent must use safe integer syntax');
 			}
 
-			const unit = this.tokenMapper.getUnitToken(match[2]);
-			const prefix = match[1] ? this.tokenMapper.getPrefixToken(match[1]) : undefined;
+			const unit = tokenMapper.getUnitToken(match[2]);
+			const prefix = match[1] ? tokenMapper.getPrefixToken(match[1]) : undefined;
 
 			if (!unit || prefix === null)
 			{
@@ -184,8 +191,8 @@ export class RegexQtyParser implements Parser<QuantityDefinition>
 
 			if (cursor < units.length)
 			{
-				RegexQtyParser.UNIT_SEPARATOR_REGEX.lastIndex = cursor;
-				const separator = RegexQtyParser.UNIT_SEPARATOR_REGEX.exec(units);
+				RegexParser.UNIT_SEPARATOR_REGEX.lastIndex = cursor;
+				const separator = RegexParser.UNIT_SEPARATOR_REGEX.exec(units);
 
 				if (!separator)
 				{
@@ -209,7 +216,7 @@ export class RegexQtyParser implements Parser<QuantityDefinition>
 
 		const result = { numerator: normalizePowers(num), denominator: normalizePowers(den) };
 		// Bound retention when applications parse many distinct large powers.
-		this.cache.set(units, result);
+		cache?.set(units, result);
 
 		return result;
 	}

@@ -1,16 +1,18 @@
 # Migrating to version 5
 
+This guide covers the counted-unit changes introduced in version 5. Examples use the current API. For the factory, parser and configuration changes from version 5 to version 6, see [Migrating to version 6](migrating-v6.md).
+
 ## Counted definitions
 
 `QuantityDefinition.numerator` and `.denominator`, the corresponding Quantity
 fields, and parser results now contain `UnitPower`
 records instead of repeated strings. Import both types from
-`@neutrium/quantity/core`.
+`@neutrium/quantity/factory`.
 
 ```ts
 import { Decimal } from '@neutrium/decimal';
 import { Quantity } from '@neutrium/quantity';
-import type { QuantityDefinition, UnitPower } from '@neutrium/quantity/core';
+import type { QuantityDefinition, UnitPower } from '@neutrium/quantity/factory';
 
 const areaUnit: UnitPower = {
     unit: '<meter>',
@@ -39,18 +41,13 @@ A prefix belongs to its unit record and is included in the power. For negative p
 
 Construction coalesces repeated records on each side, copies external records, and freezes the resulting records and arrays. It never mutates a parser's result. Copies and arithmetic results can safely share these immutable arrays. Use new definitions to change values or units. `scalar`, `signature`, `baseScalar`, `numerator`, `denominator`, and `initValue` are now getter-only in TypeScript and JavaScript; assignments throw in strict mode. The public `baseScalar` setter has been removed. These getters are not enumerable own properties; when exporting a definition, explicitly select `{ scalar: qty.scalar, numerator: qty.numerator, denominator: qty.denominator }` instead of spreading the instance.
 
-Numerical base values are calculated on first access rather than during construction. Unit validation, dimensional overflow checks, and absolute-zero validation still happen immediately. Subsequent reads reuse the cached value until the shared Decimal configuration changes.
+Numerical base values are calculated on first access rather than during construction. Unit validation, dimensional overflow checks, and absolute-zero validation still happen immediately. Subsequent reads reuse the cached value when metadata caching is enabled.
 
-For Quantity and definition inputs, `initValue` now holds a normalized snapshot of `scalar`, `numerator`, and `denominator`, rather than retaining the input object. This snapshot is frozen. This prevents repeated copies from retaining earlier quantities and their caches. Extra properties on input definitions are not copied. String, number, and Decimal inputs retain their original `initValue`; numeric `toString()` objects instead retain their parsed Decimal snapshot. Clones preserve their configured parser.
+For Quantity and definition inputs, `initValue` now holds a normalized snapshot of `scalar`, `numerator`, and `denominator`, rather than retaining the input object. This snapshot is frozen. This prevents repeated copies from retaining earlier quantities and their caches. Extra properties on input definitions are not copied. String, number, and Decimal inputs retain their original `initValue`; non-native numeric `toString()` objects instead retain their parsed backend scalar snapshot. Clones preserve their configured parser.
 
 Parsing preserves numerator and denominator separately: `m/m` retains both sides. Multiplication, division, and powers cancel matching unit/prefix pairs. Distinct prefixes remain distinct until converted; `km/m` has a conversion factor of 1000. Resolving scaled or derived units with `toBase()` also cancels matching base terms. Quantities already in base units still return themselves.
 
-Extreme scale factors are combined before applying Decimal's exponent limits when direct evaluation overflows or underflows. For example, `km9007199254740991/km9007199254740991` has a base scalar of `1`, and reducing the denominator power by one gives `1000`. The stored unit records remain unchanged. Results whose final scale exceeds Decimal's range still overflow or underflow, and unsafe dimensional counts still throw.
-
-Range handling also includes the quantity's scalar and relative target factors. Zero quantities remain zero even when their unit factor overflows, and comparisons do not treat distinct finite quantities as equal just because both base values overflow or underflow.
-
-Binary prefixes now retain exact integer values rather than passing through JavaScript number formatting. The `kph`, `knot`, and `oz` factors use exact ratios; small numerical differences from their former rounded literals are intentional. Temperature ratios are evaluated at calculation time instead of import time. Numeric caches are invalidated when the shared `Decimal.config` changes, including
-cached base values on existing quantities and their subsequent conversions. This does not change already stored scalar values or restore previously lost digits.
+With the default Decimal backend, unit conversions and cross-unit arithmetic cancel catalog factors before evaluation and apply output precision and range limits only to the final result of each operation. Converted operands are not rounded separately. Cross-unit comparisons use unrounded values. Same-unit and scalar arithmetic use the selected utilities adapter directly. Integer powers use the selected backend; both Decimal tiers apply final-only rounding and range limits. The default is an isolated scientific Decimal adapter; global `Decimal.config` changes no longer affect existing Quantity classes. See [numeric backends](numeric-backends.md) for factory selection and breaking API changes.
 
 Conversion caches, unchanged-unit checks, and `same()` compare unit tokens, prefixes, exponents, and numerator/denominator placement, preserving term order. They do not use display aliases as identity: the historical `min`/`milliinch` formatting collision cannot make time and length compatible. Use `eq()` to compare equivalent physical values expressed with different unit records.
 
@@ -60,7 +57,7 @@ Conversion caches, unchanged-unit checks, and `same()` compare unit tokens, pref
 
 `compareTo()` now declares its existing unordered result: `-1 | 0 | 1 | undefined`. Handle `undefined` when NaN is possible; boolean comparisons return false for unordered values.
 
-`isQuantityDefinition()` now validates Decimal scalars, counted arrays, registered tokens, and safe counts. It returns false for nullish or malformed inputs rather than throwing or accepting incomplete objects. It does not mutate the input, and physical temperature restrictions remain constructor checks. Definition and parser scalars must be Decimal instances; construction reports an explicit error for numeric or string scalars in those objects.
+`isQuantityDefinition(value, numeric)` now validates backend scalars, counted arrays, registered tokens, and safe counts. It returns false for nullish or malformed inputs rather than throwing or accepting incomplete objects. It does not mutate the input, and physical temperature restrictions remain constructor checks. Definition and parser scalars must satisfy the selected adapter’s `isValue` check.
 
 ## Removed `toBaseUnits()` helper
 
@@ -83,7 +80,7 @@ Use your configured Quantity class when numerical settings must be preserved. Fo
 `.to()` now ignores the target scalar for both strings and Quantity arguments. Previously, a scalar in a string could divide the result for changed units, while unchanged units and temperature conversions ignored it. For example, `new Quantity('1000 cm').to('2 m')` now returns `10 m`, consistently with
 `new Quantity('10 m').to('2 m')`. A target of `0 cm` or `-2 cm` behaves like `cm`. Target syntax and unit compatibility are still validated.
 
-Equivalent unit targets share cached results, independent of their ignored scalar or alias spelling. Per-source result and string-lookup caches each default to 1,024 entries and a 4 MiB estimated-byte budget; override these with `conversionCache`. Shared parser, base-unit, and alias caches evict the least recently used entry instead of periodically clearing all entries. Object identity of a conversion result is not guaranteed across eviction or Decimal configuration changes.
+Equivalent unit targets share cached results, independent of their ignored scalar or alias spelling. Per-source result and string-lookup caches each default to 1,024 entries and a 4 MiB estimated-byte budget; in version 6, override these with `cache: { conversionResults: { maxEntries, maxBytes } }`. The former `conversionCache` option is rejected. Shared parser, base-unit, and alias caches evict the least recently used entry instead of periodically clearing all entries. Object identity of a conversion result is not guaranteed across eviction.
 
 If you used scaled targets to calculate a ratio, replace `.to('2 m')` with `.div('2 m')`; `new Quantity('10 m').div('2 m')` returns the unitless quantity `5`.
 
@@ -106,7 +103,7 @@ Unitless quantities still return an empty string from `units()`; use `"1"` when 
 
 ## Large powers and limits
 
-Unit storage and dimensional operations scale with the number of distinct unit/prefix pairs, rather than the magnitude of each power. `m1000000` uses one record. Nested powers multiply counters; base conversion multiplies the catalog's base-unit counts and raises conversion factors using Decimal arithmetic. The unit catalog's small fixed arrays are not expanded by user exponents.
+Unit storage and dimensional operations scale with the number of distinct unit/prefix pairs, rather than the magnitude of each power. `m1000000` uses one record. Nested powers multiply counters; base conversion multiplies the catalog's base-unit counts and evaluates the corresponding conversion factors with the selected backend. The unit catalog's small fixed arrays are not expanded by user exponents.
 
 Every exponent, combined count, and dimension count must be a safe integer (no larger in magnitude than `Number.MAX_SAFE_INTEGER`). Overflow throws `RangeError` before rounded counts can silently corrupt dimensions. This also applies to intermediate counts and base expansion: a very large power of `N`
 can overflow its doubled seconds exponent even when the input exponent fits. `Quantity.pow()` accepts integer Decimal, string, or number arguments within the same range. Zero produces a dimensionless identity.
@@ -115,17 +112,13 @@ Scalar arithmetic still follows Decimal's precision and numeric range; counted u
 
 ## Other observable changes
 
-- Absolute-temperature conversions to prefixed or compound intervals now use the   same offset-free source reading as standalone degree conversions. For example, `20 tempC` converts to `20000 mdegC`, matching conversion through `degC`; previously the direct prefixed conversion incorrectly used absolute kelvin and returned `293150`. Absolute-temperature conversions retain their offsets.
+- Absolute-temperature conversions to prefixed or compound intervals now use the same offset-free source reading as standalone degree conversions. For example, `20 tempC` converts to `20000 mdegC`, matching conversion through `degC`; previously the direct prefixed conversion incorrectly used absolute kelvin and returned `293150`. Absolute-temperature conversions retain their offsets.
 - `isInverse()` now compares dimensions directly, ignoring scalar values. Zero quantities no longer cause this predicate to throw. Absolute temperatures can have reciprocal dimensions, but actual inversion and reciprocal conversion still reject them. Invalid string operands still throw parsing errors.
 - Farads use the catalog's derived SI dimensions, `A2*s4/kg/m2`, for both prefixed and unprefixed units. `new Quantity('farad').isBase()` now returns false, and `toBase()` expands those dimensions. Farads, millifarads, and coulombs per volt are compatible for conversion and arithmetic.
 - `signature` is now an opaque string containing the full dimensional vector, rather than a number. Use `isCompatible()` to compare dimensions. The previous radix-20 encoding could incorrectly equate `m20` with `s`.
 - Nearley now throws for incomplete expressions such as `m/` instead of returning `undefined` despite its declared return type. Handle parser errors with `try`/`catch`.
 - Regex reads powers directly, including `**` notation and signed powers in the denominator. Unknown units and incomplete powers are rejected even for zero exponents. It continues to support literal unit names such as `ton(l)` without supporting parenthesized expression groups.
 
-## Isolated Decimal settings and consistent comparisons
+## Continuing to version 6
 
-`Quantity.withConfig({ precision, rounding, ... })` creates a class with fixed Decimal settings and the same parser. The default classes continue to follow shared `Decimal.config`; configured classes are unaffected by later global changes. Conversions, clones, and arithmetic retain the receiver's class. Mixed-context arithmetic uses the receiver's settings. Custom parsers can accept the optional Decimal constructor argument to evaluate scalars within that context.
-
-Cross-unit comparisons now preserve input digits rather than comparing rounded base scalars. Values that previously compared equal only because of rounding can compare unequal. A rounded conversion can also differ from its original exact physical value. Conversion and arithmetic range checks occur after factors combine, so intermediate overflow/underflow no longer destroys representable results.
-
-Absolute-temperature conversion rounds after the entire offset/scale transform. US liquid pint and quart aliases now share exact definitions, together with the US gallon and fluid ounce. These replace inconsistent truncated factors using [NIST Handbook 133, Appendix E](https://nvlpubs.nist.gov/nistpubs/hb/2023/NIST.HB.133-2023.pdf).
+Version 6 introduces utilities numeric adapters, renamed parser classes, the `/factory` entry point, and nested numeric/cache configuration. Follow [Migrating to version 6](migrating-v6.md) after updating counted definitions.

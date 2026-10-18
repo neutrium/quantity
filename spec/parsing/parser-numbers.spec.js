@@ -1,16 +1,18 @@
+import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it } from 'vitest';
-import { NearleyQtyParser } from '../../dist/parsers/NearleyQtyParser.js'
-import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
+import { NearleyParser } from '../../dist/parsers/NearleyParser.js'
+import { RegexParser } from '../../dist/parsers/RegexParser.js';
 
 //
-//	RegexQtyParser cannot do:
+//	RegexParser cannot do:
 //	- numbers to the power i.e. must be a straight up number
 //	- parentises
 
 
 [
-	["NearleyQtyParser Unit Tests", new NearleyQtyParser()],
-	["RegexQtyParser Unit Tests", new RegexQtyParser()]
+	["NearleyParser Unit Tests", new NearleyParser()],
+	["RegexParser Unit Tests", new RegexParser()]
 ]
 .forEach(([description, parser]) => {
 	describe("Neutrium Quantity - "  + description, function() {
@@ -27,7 +29,7 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 			])('parses a leading positive sign in %s with and without units', (input, expected) => {
 				for (const suffix of ['', ' m']) {
 					for (let repeat = 0; repeat < 2; repeat++) {
-						const result = parser.parse(input + suffix);
+						const result = parser.parse(input + suffix, testNumeric);
 						expect(result.scalar.toString()).toBe(expected);
 						expect(result.numerator).toEqual(suffix ? [{ unit: '<meter>', exponent: 1 }] : []);
 						expect(result.denominator).toEqual([]);
@@ -36,14 +38,14 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 			});
 
 			it('keeps negative signs and rejects malformed sign sequences', () => {
-				expect(parser.parse('-0 m').scalar.isNeg()).toBe(true);
+				expect(parser.parse('-0 m', testNumeric).scalar.isNeg()).toBe(true);
 				for (const input of ['++1 m', '+-1 m', '-+1 m', '+m', '+', '+1e+ m']) {
-					expect(() => parser.parse(input), input).toThrow();
+					expect(() => parser.parse(input, testNumeric), input).toThrow();
 				}
 			});
 
 			it("correctly parses an integer", function() {
-				let result = parser.parse("1");
+				let result = parser.parse("1", testNumeric);
 
 				expect(result.scalar.eq(1)).toBe(true);
 				expect(result.numerator).toEqual([]);
@@ -51,7 +53,7 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 			});
 
 			it("correctly parses a float", function() {
-				let result = parser.parse("1.2");
+				let result = parser.parse("1.2", testNumeric);
 
 				expect(result.scalar.eq(1.2)).toBe(true);
 				expect(result.numerator).toEqual([]);
@@ -59,19 +61,19 @@ import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
 			});
 
 			it("correctly parses a signed float", function() {
-				let result = parser.parse("-1.2");
+				let result = parser.parse("-1.2", testNumeric);
 
 				expect(result.scalar.eq(-1.2)).toBe(true);
 			});
 
 			it("correctly parses a signed float with an integer exponent", function() {
-				let result = parser.parse("-1.2e2");
+				let result = parser.parse("-1.2e2", testNumeric);
 
 				expect(result.scalar.eq(-1.2e2)).toBe(true);
 			});
 
 			it("correctly parses a signed float with an negative integer exponent", function() {
-				let result = parser.parse("-1.2e-2");
+				let result = parser.parse("-1.2e-2", testNumeric);
 
 				expect(result.scalar.eq(-1.2e-2)).toBe(true);
 			});

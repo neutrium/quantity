@@ -1,13 +1,17 @@
+import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it } from 'vitest';
-import { NearleyQtyParser } from '../../dist/parsers/NearleyQtyParser.js';
-import { RegexQtyParser } from '../../dist/parsers/RegexQtyParser.js';
+import { NearleyParser } from '../../dist/parsers/NearleyParser.js';
+import { RegexParser } from '../../dist/parsers/RegexParser.js';
 import { UnitTokenManager } from '../../dist/UnitTokenManager.js';
 
 function distinctTerms(count) {
 	const manager = UnitTokenManager.instance;
 	const result = [];
-	for (const prefix of new Set(Object.values(manager.getMap('prefix')))) {
-		for (const [unit, definition] of Object.entries(manager.values)) {
+	for (const prefix of new Set(Object.values(manager.getMap('prefix'))))
+	{
+		for (const [unit, definition] of Object.entries(manager.values))
+		{
 			if (definition.category === 'prefix' || unit === '<1>' || unit.startsWith('<temp-')) continue;
 			result.push({ alias: manager.getUnitOutput(unit, prefix), term: { unit, prefix, exponent: 1 } });
 			if (result.length === count) return result;
@@ -20,22 +24,22 @@ describe('Nearley long unit expressions', () => {
 	it('returns ordered frozen counters for thousands of distinct terms and safely caches them', () => {
 		const terms = distinctTerms(2000);
 		const input = terms.map(({ alias }) => alias).join('*');
-		const parser = new NearleyQtyParser();
-		const first = parser.parse('2 ' + input);
+		const parser = new NearleyParser();
+		const first = parser.parse('2 ' + input, testNumeric);
 		expect(first.numerator).toEqual(terms.map(({ term }) => term));
 		expect(first.denominator).toEqual([]);
 		expect(Object.isFrozen(first.numerator)).toBe(true);
 		expect(() => { first.numerator[0].exponent = 2; }).toThrow(TypeError);
-		const cached = parser.parse('3 ' + input);
+		const cached = parser.parse('3 ' + input, testNumeric);
 		expect(cached.numerator).toBe(first.numerator);
 		expect(cached.scalar.toString()).toBe('3');
 		first.numerator = [];
-		expect(parser.parse('4 ' + input).numerator).toBe(cached.numerator);
+		expect(parser.parse('4 ' + input, testNumeric).numerator).toBe(cached.numerator);
 	});
 
 	it('handles a deep left-associated product without recursive traversal', () => {
-		const parser = new NearleyQtyParser();
-		const result = parser.parse(Array(10000).fill('m').join('*'));
+		const parser = new NearleyParser();
+		const result = parser.parse(Array(10000).fill('m').join('*'), testNumeric);
 		expect(result.numerator).toEqual([{ unit: '<meter>', exponent: 10000 }]);
 		expect(result.denominator).toEqual([]);
 	});
@@ -46,18 +50,18 @@ describe('Nearley long unit expressions', () => {
 		const powers = [0, -2, 3, 1];
 		const input = terms.map(({ alias }, index) =>
 			(index ? separators[index % separators.length] : '') + alias + '^' + powers[index % powers.length]).join('');
-		expect(new NearleyQtyParser().parse(input)).toEqual(new RegexQtyParser().parse(input));
+		expect(new NearleyParser().parse(input, testNumeric)).toEqual(new RegexParser().parse(input, testNumeric));
 	});
 
 	it('preserves side order through nested division and negative group powers', () => {
-		const parser = new NearleyQtyParser();
-		expect(parser.parse('kg/(m/(s*ampere).mol)')).toEqual(parser.parse('kg*s*ampere*mol/m'));
-		expect(parser.parse('kg/(m/(s*ampere)*mol)')).toEqual(parser.parse('kg*s*ampere/m/mol'));
-		expect(parser.parse('(kg/(m/s)*ampere)^-2')).toEqual(parser.parse('m2/kg2/s2/ampere2'));
-		expect(parser.parse('(m*m/s)^2')).toEqual(parser.parse('m4/s2'));
+		const parser = new NearleyParser();
+		expect(parser.parse('kg/(m/(s*ampere).mol)', testNumeric)).toEqual(parser.parse('kg*s*ampere*mol/m', testNumeric));
+		expect(parser.parse('kg/(m/(s*ampere)*mol)', testNumeric)).toEqual(parser.parse('kg*s*ampere/m/mol', testNumeric));
+		expect(parser.parse('(kg/(m/s)*ampere)^-2', testNumeric)).toEqual(parser.parse('m2/kg2/s2/ampere2', testNumeric));
+		expect(parser.parse('(m*m/s)^2', testNumeric)).toEqual(parser.parse('m4/s2', testNumeric));
 		const max = '9007199254740991';
-		expect(parser.parse(`m${max}/m${max}`).numerator[0].exponent).toBe(Number.MAX_SAFE_INTEGER);
-		expect(parser.parse(`(m${max}/m${max})^0`).numerator).toEqual([]);
+		expect(parser.parse(`m${max}/m${max}`, testNumeric).numerator[0].exponent).toBe(Number.MAX_SAFE_INTEGER);
+		expect(parser.parse(`(m${max}/m${max})^0`, testNumeric).numerator).toEqual([]);
 	});
 
 	it.each([
@@ -68,8 +72,8 @@ describe('Nearley long unit expressions', () => {
 		'((m9007199254740991)^2)^0',
 		'1/(m9007199254740991*m)^0',
 	])('rejects intermediate count overflow in %s, including before zero powers', input => {
-		const parser = new NearleyQtyParser();
-		for (let repeat = 0; repeat < 2; repeat++) expect(() => parser.parse(input)).toThrow(/safe integer/);
-		expect(parser.parse('m2').numerator).toEqual([{ unit: '<meter>', exponent: 2 }]);
+		const parser = new NearleyParser();
+		for (let repeat = 0; repeat < 2; repeat++) expect(() => parser.parse(input, testNumeric)).toThrow(/safe integer/);
+		expect(parser.parse('m2', testNumeric).numerator).toEqual([{ unit: '<meter>', exponent: 2 }]);
 	});
 });

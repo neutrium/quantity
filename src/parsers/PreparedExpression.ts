@@ -1,3 +1,4 @@
+import { CacheScope, defaultCacheScope } from '../utils/CacheScope.js';
 import type Nearley from 'nearley';
 import type { Token } from 'moo';
 import type { CloneableLexer } from './MooQtyLexer.js';
@@ -14,8 +15,11 @@ export class PreparedExpression implements Nearley.Lexer
 	openGroups = 0;
 	private initial?: Token;
 
-	constructor(private readonly lexer: CloneableLexer, input: string)
-	{
+	constructor(
+		private readonly lexer: CloneableLexer,
+		input: string,
+		private readonly scope: CacheScope = defaultCacheScope
+	){
 		lexer.reset(input);
 		let first = lexer.next();
 
@@ -28,7 +32,7 @@ export class PreparedExpression implements Nearley.Lexer
 		this.scalar = parameter ? first!.value : '1';
 		this.scalarOffset = first?.offset ?? 0;
 		this.baseOffset = parameter ? first!.offset + first!.text.length : first?.offset ?? 0;
-		this.key = (parameter ? 'scalar:' : 'bare:') + input.slice(this.baseOffset).trimEnd();
+		this.key = scope.enabled('parser') ? (parameter ? 'scalar:' : 'bare:') + input.slice(this.baseOffset).trimEnd() : '';
 
 		// Moo creates fresh tokens for this call; adjust them in place instead of
 		// allocating a second object for every token in long expressions.
@@ -94,6 +98,7 @@ export class PreparedExpression implements Nearley.Lexer
 
 		if (token)
 		{
+			if (token.type === 'unit') (token as Token & { cacheScope: CacheScope }).cacheScope = this.scope;
 			if (token.type === 'lParen')
 			{
 				this.openGroups++;

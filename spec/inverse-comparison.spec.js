@@ -1,10 +1,13 @@
+import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it, vi } from 'vitest';
 import { Quantity } from '../dist/Quantity.js';
 import { Quantity as RegexQuantity } from '../dist/regex.js';
-import { createQuantityClass } from '../dist/core.js';
-import { RegexQtyParser } from '../dist/parsers/RegexQtyParser.js';
+import { createQuantityClass } from '../dist/factory.js';
+import { RegexParser } from '../dist/parsers/RegexParser.js';
 
-for (const Constructor of [Quantity, RegexQuantity]) {
+for (const Constructor of [Quantity, RegexQuantity])
+{
 	describe(`inverse dimensions with ${Constructor === Quantity ? 'Nearley' : 'Regex'}`, () => {
 		it('ignores scalars, including zero and non-finite values', () => {
 			const inverse = new Quantity('0 m^-1');
@@ -66,15 +69,15 @@ for (const Constructor of [Quantity, RegexQuantity]) {
 }
 
 it('parses string operands once using the configured parser', () => {
-	const regex = new RegexQtyParser();
-	const parse = vi.fn(text => regex.parse(text.replaceAll('metres', 'm')));
-	const Custom = createQuantityClass(() => ({ parse }));
+	const regex = new RegexParser();
+	const parse = vi.fn(text => regex.parse(text.replaceAll('metres', 'm'), testNumeric));
+	const Custom = createQuantityClass({ numeric: testNumeric, parser: () => ({ parse }) });
 	const source = new Custom('0 metres');
 	const target = new RegexQuantity('1/m');
 	parse.mockClear();
 	expect(source.isInverse(target)).toBe(true);
 	expect(parse).not.toHaveBeenCalled();
 	expect(source.isInverse('metres^-1')).toBe(true);
-	expect(parse).toHaveBeenCalledExactlyOnceWith('metres^-1', source.decimal);
+	expect(parse).toHaveBeenCalledExactlyOnceWith('metres^-1', source.numeric, source.cacheScope);
 	expect(() => source.isInverse('not_a_unit')).toThrow();
 });

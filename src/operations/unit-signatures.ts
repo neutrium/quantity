@@ -5,6 +5,7 @@ import { checkedExponent } from './unit-powers.js';
 // Derived units, including farads, use the base dimensions in the unit catalog.
 const DIMENSIONS = ['length', 'time', 'temperature', 'mass', 'current', 'substance', 'luminosity', 'currency', 'data', 'angle'];
 const INDEX = new Map(DIMENSIONS.map((dimension, index) => [dimension, index]));
+const UNITLESS_SIGNATURE = DIMENSIONS.map(() => 0).join(',');
 export const TEMPERATURE_SIGNATURE = DIMENSIONS.map(dimension => dimension === 'temperature' ? 1 : 0).join(',');
 
 /** Compare dimensional exponents without constructing or numerically inverting a quantity. */
@@ -17,6 +18,11 @@ export function areInverseSignatures(a: string, b: string): boolean
 // Input must already use base units. Keep the full dimensional vector: radix-20 encoding collides for large powers.
 export function unitSignature(a: UnitStructure): string
 {
+	if (!a.numerator.length && !a.denominator.length)
+	{
+		return UNITLESS_SIGNATURE;
+	}
+
 	const tm = UnitTokenManager.instance;
 	const vector = new Array(DIMENSIONS.length).fill(0);
 

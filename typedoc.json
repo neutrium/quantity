@@ -6,8 +6,9 @@
 		"./src/guards.ts",
 		"./src/QuantityDefinition.ts",
 		"./src/parsers/Parser.ts",
-		"./src/core.ts",
-		"./src/regex.ts"
+		"./src/regex.ts",
+		"./src/factory.ts",
+		"./src/number.ts"
 	],
 	"tsconfig": "./tsconfig.json",
 	"out": "./docs",
@@ -20,7 +21,9 @@
 		"./guides/temperatures.md",
 		"./guides/parsers.md",
 		"./guides/migrating-v5.md",
-		"./guides/benchmarks.md"
+		"./guides/migrating-v6.md",
+		"./guides/benchmarks.md",
+		"./guides/numeric-backends.md"
 	],
 	"categorizeByGroup": false,
 	"categoryOrder": [
@@ -46,5 +49,8 @@
 		"invalidLink": true
 	},
 	"treatWarningsAsErrors": true,
-	"cleanOutputDir": true
+	"cleanOutputDir": true,
+	"intentionallyNotExported": [
+		"CacheScope"
+	]
 }

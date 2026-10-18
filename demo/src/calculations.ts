@@ -118,8 +118,13 @@ export function calculate({ value, operation, operand, precision = 20, rounding 
 	{
 		throw new CalculationError('Choose 1 to 100 significant digits for this demo.', 'precision');
 	}
-	if (!roundingModes.includes(rounding)) throw new CalculationError('Choose a supported rounding mode.', 'rounding');
-	const ConfiguredQuantity = Quantity.withConfig({ precision, rounding });
+
+	if (!roundingModes.includes(rounding))
+	{
+		throw new CalculationError('Choose a supported rounding mode.', 'rounding');
+	}
+
+	const ConfiguredQuantity = Quantity.withConfig({ numeric: { precision, rounding } });
 	const input = parseQuantity(value, 'value', ConfiguredQuantity);
 	const unary = operation === 'toBase' || operation === 'inverse';
 	const argument = operand;
@@ -127,9 +132,17 @@ export function calculate({ value, operation, operand, precision = 20, rounding 
 
 	if (operation === 'pow')
 	{
-		if (!operand.trim()) throw new CalculationError('Enter a safe integer power.', 'operand');
-		try { result = input.pow(operand); }
-		catch (cause) {
+		if (!operand.trim())
+		{
+			throw new CalculationError('Enter a safe integer power.', 'operand');
+		}
+
+		try
+		{
+			result = input.pow(operand);
+		}
+		catch (cause)
+		{
 			throw new CalculationError(cause instanceof RangeError
 				? 'The power or resulting dimensions exceed the safe integer range.'
 				: errorMessage(cause), 'operand', cause);
@@ -141,9 +154,19 @@ export function calculate({ value, operation, operand, precision = 20, rounding 
 	}
 	else if (operation === 'to')
 	{
-		if (!operand.trim()) throw new CalculationError('Enter target units, such as ft.', 'operand');
-		try { result = input.to(operand); }
-		catch (cause) { throw inputError(cause, 'operand', true); }
+		if (!operand.trim())
+		{
+			throw new CalculationError('Enter target units, such as ft.', 'operand');
+		}
+
+		try
+		{
+			result = input.to(operand);
+		}
+		catch (cause)
+		{
+			throw inputError(cause, 'operand', true);
+		}
 	}
 	else
 	{
@@ -156,7 +179,7 @@ export function calculate({ value, operation, operand, precision = 20, rounding 
 	const code = [
 		"import { Quantity } from '@neutrium/quantity';",
 		'',
-		`const ConfiguredQuantity = Quantity.withConfig({ precision: ${precision}, rounding: ${JSON.stringify(rounding)} });`,
+		`const ConfiguredQuantity = Quantity.withConfig({ numeric: { precision: ${precision}, rounding: ${JSON.stringify(rounding)} } });`,
 		`const quantity = new ConfiguredQuantity(${JSON.stringify(value)});`,
 		`const result = quantity.${operation}(${unary ? '' : JSON.stringify(argument)});`,
 		'',

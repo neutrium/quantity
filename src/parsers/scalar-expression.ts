@@ -1,11 +1,11 @@
-import type { DecimalConstructor } from '../operations/numeric-context.js';
-import { Decimal } from '@neutrium/decimal';
+import { power } from '../numeric/support.js';
+import type { ArithmeticAdapter } from '@neutrium/utilities/numeric/arithmetic';
 import type { Token } from 'moo';
 import { ExpressionIssue } from './QuantityParseError.js';
 
 // This value is injected only after lexing a leading number; it cannot be lexed from input.
 export const INPUT_SCALAR = '\u0000input';
-export type ScalarOperator = 'multiply' | 'divide';
+type ScalarOperator = 'multiply' | 'divide';
 export type ScalarExpression = { kind: 'literal'; text: string; offset: number }
 	| { kind: 'input' }
 	| { kind: 'negate'; base: ScalarExpression; offset: number }
@@ -88,11 +88,11 @@ export function compileScalar(expression: ScalarExpression): ScalarProgram
 	return result;
 }
 
-function decimal(text: string, offset: number, Numeric: DecimalConstructor): Decimal
+function decimal<T>(text: string, offset: number, Numeric: ArithmeticAdapter<T>): T
 {
 	try
 	{
-		return new Numeric(text.startsWith('+') ? text.slice(1) : text);
+		return Numeric.from(text.startsWith('+') ? text.slice(1) : text);
 	}
 	catch (error)
 	{
@@ -101,7 +101,7 @@ function decimal(text: string, offset: number, Numeric: DecimalConstructor): Dec
 }
 
 /** The same evaluator serves grammar results, cache misses, and cache hits. */
-export function evaluateScalar(program: ScalarProgram, input = '1', Numeric: DecimalConstructor = Decimal): Decimal
+export function evaluateScalar<T>(program: ScalarProgram, input: string, Numeric: ArithmeticAdapter<T>): T
 {
 	const first = program[0];
 
@@ -118,7 +118,7 @@ export function evaluateScalar(program: ScalarProgram, input = '1', Numeric: Dec
 		}
 	}
 
-	const stack: Decimal[] = [];
+	const stack: T[] = [];
 
 	for (const instruction of program)
 	{
@@ -132,14 +132,14 @@ export function evaluateScalar(program: ScalarProgram, input = '1', Numeric: Dec
 		}
 		else if (instruction.kind === 'negate')
 		{
-			stack.push(stack.pop()!.neg());
+			stack.push(Numeric.neg(stack.pop()!));
 		}
 		else if (instruction.kind === 'power')
 		{
 			const base = stack.pop()!;
 			try
 			{
-				stack.push(base.pow(instruction.text));
+				stack.push(power(Numeric, base, instruction.text));
 			}
 			catch (error)
 			{
@@ -150,23 +150,23 @@ export function evaluateScalar(program: ScalarProgram, input = '1', Numeric: Dec
 		{
 			const right = stack.pop()!, left = stack.pop()!;
 
-			if (instruction.kind === 'divide' && right.isZero())
+			if (instruction.kind === 'divide' && Numeric.compare(right, Numeric.from(0)) === 0)
 			{
 				throw new ExpressionIssue('DIVISION_BY_ZERO', instruction.offset, 'Cannot divide by zero');
 			}
 
 			try
 			{
-				if (right.eq(1))
+				if (Numeric.compare(right, Numeric.from(1)) === 0)
 				{
 					stack.push(left); continue;
 				}
 
-				if (instruction.kind === 'multiply' && left.eq(1))
+				if (instruction.kind === 'multiply' && Numeric.compare(left, Numeric.from(1)) === 0)
 				{
 					stack.push(right); continue;
 				}
-				stack.push(instruction.kind === 'multiply' ? left.mul(right) : left.div(right));
+				stack.push(instruction.kind === 'multiply' ? Numeric.mul(left, right) : Numeric.div(left, right));
 			}
 			catch (error)
 			{

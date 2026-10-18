@@ -2,7 +2,7 @@
 
 ## Construct and read a quantity
 
-Use `new Quantity(...)`, then read its {@link Quantity.Quantity.scalar | scalar} and {@link Quantity.Quantity.units | units}.
+Use `new Quantity(...)`, then read its {@link factory.Quantity.scalar | scalar} and {@link factory.Quantity.units | units}.
 
 ```ts
 import { Quantity } from '@neutrium/quantity';
@@ -13,7 +13,7 @@ new Quantity('m').scalar.toString(); // "1"
 new Quantity('2').units(); // ""
 ```
 
-The scalar is an `@neutrium/decimal` Decimal. Supply decimal strings when every input digit matters: a JavaScript number may already have been rounded before it reaches the constructor. `scalar.toNumber()` converts back to a JavaScript number and may lose precision.
+The default preset stores a Decimal scalar. Use `quantity.numeric.toString(quantity.scalar)` or `quantity.numeric.toNumber(quantity.scalar)` when writing code that supports any backend. Conversion to a number may lose precision. With the Decimal preset, supply strings when every input digit matters: a JavaScript number may already have been rounded before construction.
 
 | Input                           | Example                  | Behavior                               |
 | ------------------------------- | ------------------------ | -------------------------------------- |
@@ -22,9 +22,21 @@ The scalar is an `@neutrium/decimal` Decimal. Supply decimal strings when every 
 | Unit expression only            | `new Quantity('m/s')`    | Defaults to a scalar of 1.             |
 | Scalar only                     | `new Quantity(2.5)`      | Creates a dimensionless quantity.     |
 | Numeric string or object        | `new Quantity({ toString: () => '2.5' })` | Creates a dimensionless quantity. |
-| Existing quantity or definition | `new Quantity(length)`   | Normalizes the value; copies external records and may share frozen arrays.     |
+| Existing quantity | `new Quantity(length)` | Converts the scalar to the destination backend and preserves the units. |
+| Definition | `new Quantity({ scalar: length.scalar, numerator: length.numerator, denominator: length.denominator })` | Requires a destination-native scalar; normalizes and freezes the unit records. |
 
-Numbers, numeric strings, Decimal instances, and objects whose `toString()` returns a numeric literal create dimensionless quantities when units are omitted or empty. For example, `new Quantity(2)`, `new Quantity('2')`, and `new Quantity(new Decimal(2), '')` all represent the same value. Numeric objects are read once and saved as a Decimal snapshot; their text must be a scalar, not a unit expression. Decimal configuration applies to the resulting scalar.
+Numbers, numeric strings, Decimal instances, and objects whose `toString()` returns a numeric literal create dimensionless quantities when units are omitted or empty. For example, `new Quantity(2)`, `new Quantity('2')`, and `new Quantity(new Decimal(2), '')` all represent the same value. Non-native numeric objects are read once and saved as a backend scalar; their text must be a scalar, not a unit expression. Native backend scalars are accepted directly. The destination's numeric configuration applies during construction.
+
+```ts
+import { Quantity as NumberQuantity } from '@neutrium/quantity/number';
+
+const native = new NumberQuantity('1.25 km/h');
+const decimal = new Quantity(native);
+decimal.units(); // "km/h"
+decimal.scalar.toString(); // "1.25"
+```
+
+Use explicit construction to switch backends. Arithmetic and comparisons reject incompatible backend quantities; copying cannot recover precision already lost in the source.
 
 Quantity methods are shared on the prototype and require their instance as `this`. Arithmetic, comparison, and temperature methods are no longer automatically bound. When passing a method as a callback, wrap it or explicitly bind it:
 
@@ -44,7 +56,7 @@ The default parser accepts multiplication (`*`, `.`, or spaces), division (`/`),
 new Quantity('2 (kg*m/s^2)').to('N').scalar.toString(); // "2"
 new Quantity('3 m^2').units(); // "m2"
 new Quantity('2/s').scalar.toString(); // "2"
-new Quantity('2/(m*s)').units(); // "1/m/s"
+new Quantity('2/(m*s)').units(); // "1/m.s"
 ```
 
 Scalars may precede division directly, including scientific notation such as `1e3/s`.
@@ -55,7 +67,7 @@ The normalized output is not a copy of the input spelling. It selects unambiguou
 
 ## Convert units
 
-{@link Quantity.Quantity.to | Quantity.to} accepts a target unit string or another Quantity. Only the target's units are used; any target scalar is ignored, including zero or negative values. Prefer a units-only string to make your intent clear.
+{@link factory.Quantity.to | Quantity.to} accepts a target unit string or another Quantity. Only the target's units are used; any target scalar is ignored, including zero or negative values. Prefer a units-only string to make your intent clear.
 
 ```ts
 const length = new Quantity('2 m');
@@ -75,101 +87,123 @@ The default derived-quantity factory calls `new this.constructor(input, units, p
 
 ```ts
 import { Quantity } from '@neutrium/quantity';
-import type { QuantityInitParam, QuantityDefinition, Parser } from '@neutrium/quantity/core';
+import type { QuantityInput, Parser } from '@neutrium/quantity/factory';
+import type { Decimal } from '@neutrium/decimal';
 
-class LabelledQuantity extends Quantity {
+class LabelledQuantity extends Quantity
+{
     constructor(
-        input: QuantityInitParam,
+        input: QuantityInput<Decimal>,
         readonly label: string,
         units?: string,
-        parser?: Parser<QuantityDefinition>,
+        parser?: Parser<Decimal>,
     ) {
         super(input, units, parser);
     }
 
     protected override constructQuantity(
-        input: QuantityInitParam,
+        input: QuantityInput<Decimal>,
         units: string | undefined,
-        parser: Parser<QuantityDefinition>,
-    ): LabelledQuantity {
+        parser: Parser<Decimal>,
+    ): LabelledQuantity
+	{
         const Constructor = this.constructor as typeof LabelledQuantity;
         return new Constructor(input, this.label, units, parser);
     }
 }
 
-const EngineeringQuantity = LabelledQuantity.withConfig({ precision: 30 });
+const EngineeringQuantity = LabelledQuantity.withConfig({ numeric: { precision: 30 } });
 const length = new EngineeringQuantity('2 m', 'length');
 const result = length.add('1 m').to('cm');
 result.scalar.toString(); // "300"
 result instanceof EngineeringQuantity; // true
-if (result instanceof LabelledQuantity) result.label; // "length"
+
+if (result instanceof LabelledQuantity)
+{
+	result.label; // "length"
+}
 ```
 
-Use `this.constructor` inside the hook so results retain the current configured class; hard-coding `LabelledQuantity` would lose settings from `withConfig()`. Forward the supplied parser, including per-instance overrides, and preserve the input and units arguments. The hook constructs temporary operands and conversion targets as well as final results, so its input must support all `QuantityInitParam` forms. Subclass code decides how to copy or share its own state.
+Use `this.constructor` inside the hook so results retain the current configured class; hard-coding `LabelledQuantity` would lose settings from `withConfig()`. Forward the supplied parser, including per-instance overrides, and preserve the input and units arguments. The hook constructs temporary operands and conversion targets as well as final results, so its input must support all `QuantityInput<Decimal>` forms. Subclass code decides how to copy or share its own state.
 
 This contract applies to the default, Regex and `createQuantityClass()` entry points. `withConfig()` preserves your constructor's TypeScript signature but does not infer additional arguments. Inherited arithmetic and conversion methods continue to declare `Quantity` results; use a type guard to access subclass members.
 
 ## Configuration
 
-Use `Quantity.withConfig()` when calculations need specific handling:
+Use `Quantity.withConfig()` with nested numeric settings and cache policies:
 
 ```ts
 import { Quantity } from '@neutrium/quantity';
 
 const EngineeringQuantity = Quantity.withConfig({
-    precision: 30,
-    rounding: 'half-up',
+    numeric: { precision: 30, rounding: 'half-even' },
+    cache: {
+        parser: { maxEntries: 1024, maxBytes: 1024 * 1024 },
+        conversionResults: { maxEntries: 256, maxBytes: 256 * 1024 },
+        scalarTerms: false,
+    },
 });
 
-const length = new EngineeringQuantity('1 ft');
-length.to('m').scalar.toString(); // "0.3048"
-EngineeringQuantity.config.precision; // 30
+const speed = new EngineeringQuantity('36 km/h');
+EngineeringQuantity.config.numeric.precision; // 30
+EngineeringQuantity.config.cache.parser.maxBytes; // 1048576
+speed.config === EngineeringQuantity.config; // true
 ```
-All settings supported by `[@neutrium/decimal](https://github.com/neutrium/decimal)` are supported in quantity for number handling.
 
-The new class snapshots its parent's effective settings and applies the supplied overrides. Its settings
-are fixed; call `withConfig()` again to create another class. Both the class and its instances expose a frozen `config` snapshot
+Numeric values supplied as Decimal instances are adopted into the receiving context without rounding their significant digits; input exponent limits still apply. Operations between compatible backend contexts use the receiver’s settings. A Quantity passed to `to()` supplies units only and does not select the result backend.
 
-Copies, conversions, and arithmetic results retain the receiving class and configuration. When operands have different configurations, arithmetic uses the receiver's settings; conversion targets supply units only. Scalar values supplied as Decimal instances are adopted into an isolated class's context without rounding their significant digits, although its input exponent limits still apply.
+`config` is the complete immutable snapshot on the class and its instances. Derived quantities retain the receiver's class and settings. Numeric options are checked against the adapter's configuration interface; fixed-precision adapters do not accept numeric overrides. Unknown top-level options and cache-family names are rejected.
 
-Parser options use the same `withConfig()` call:
+All input settings are optional. Nested overrides merge with the parent class; omission preserves inherited settings. `cache: false` disables every optional library cache, and `cache: true` restores all default cache settings. A family-level `false` disables that family, and `true` restores its defaults. An object overrides inherited limits, so use `true` to re-enable a family whose inherited limits are zero.
 
 ```ts
-const BoundedQuantity = Quantity.withConfig({
-    precision: 30,
-    rounding: 'half-even',
-    parser: { cache: { maxEntries: 512, maxBytes: 1024 * 1024 } },
-    conversionCache: { maxEntries: 128, maxBytes: 256 * 1024 },
-});
-const speed = new BoundedQuantity('12 m/s');
-BoundedQuantity.config.precision; // 30
-BoundedQuantity.parserConfig.cache.maxBytes; // 1048576
-BoundedQuantity.conversionCacheConfig.maxBytes; // 262144
-speed.parserConfig === BoundedQuantity.parserConfig; // true
+const Uncached = EngineeringQuantity.withConfig({ cache: false });
+const ParsingOnly = Uncached.withConfig({ cache: { parser: true } });
+const Defaults = Uncached.withConfig({ cache: true });
 ```
 
-Both bundled parsers default to 1,024 retained plans and a **4 MiB estimated-byte budget**. Either limit can evict the least recently used plans. Plans larger than the byte budget are parsed normally without being cached; setting either limit to zero disables plan caching. Limits must be nonnegative safe integers.
+| Cache family | Input | Default |
+| --- | --- | --- |
+| `parser` | Boolean or `{ maxEntries?, maxBytes? }` | 1,024 entries, 4 MiB per parser plan/token cache |
+| `conversionResults` | Boolean or limits | 1,024 entries, 4 MiB per instance result/expression cache |
+| `unitFactors` | Boolean or limits | 1,024 entries, 1 MiB |
+| `conversionPlans` | Boolean or limits | 1,024 entries, 1 MiB |
+| `scalarTerms` | Boolean | Enabled; used for object scalars on the exact calculation path |
+| `temperatureConstants` | Boolean | Enabled; up to four scales per adapter |
+| `metadata` | Boolean | Enabled; unit identity, base metadata, formatting, lazy instance values |
 
-Parser options are frozen snapshots. Supplying `parser` options creates a separate cache scope shared by instances of that configured class, including derived quantities. Chaining `withConfig()` merges partial cache settings; changing only numerical settings keeps the parent's parser scope. Plain parser instances share the default scope. The byte budget estimates retained keys, unit records and scalar instructions, not total JavaScript heap usage or peak parsing memory. It excludes fixed grammar/catalog data and Quantity's conversion and structural caches.
+Resolved entry/byte settings always contain both limits; a disabled family has zero limits. Setting either limit to zero also disables that family. Byte budgets estimate retained cache data, not total heap usage or peak calculation memory. Each listed cache uses its own budget; `maxBytes` is not a global memory cap.
 
-`conversionCache` independently controls each Quantity's expression-to-unit-key cache and converted-result cache. Each defaults to **1,024 entries and 4 MiB of estimated payload**. The limit applies separately to the two caches, per instance; it is not a process-wide heap limit. Result accounting includes the unit records, keys and scalar digits, but not caches subsequently populated on returned results or shared catalog/structural caches. String and Quantity targets use the same bounded result cache. Oversized entries bypass retention without evicting hot entries, and either limit set to zero disables conversion caching.
+A cache-policy override creates an independent internal cache scope. Numeric-only configuration inherits the parent's scope, with numeric data still separated by adapter instance. Cache-only configuration preserves the numeric adapter. Standalone parser instances retain their `{ cache: { ... } }` constructor API; the Quantity factory maps `cache.parser` to that parser configuration. An explicitly supplied parser can use its own limits, but disabling the class's parser cache also disables bundled-parser retention. Custom parsers and backends remain responsible for honoring settings inside their own implementations.
 
-Successful same-unit string conversions retain only a marker in the expression cache. While retained, subsequent calls return the original quantity without parsing or constructing a target. These markers share the expression entry and byte limits and are invalidated when the quantity's Decimal configuration changes.
+Disabled caches are bypassed for reads and writes. Static unit definitions, compiled grammar and immutable-state validation markers remain available. Calculations and errors are identical with caching disabled, but repeated conversions can return distinct objects and lazy values are recalculated. An unchanged-unit conversion can still return the original quantity.
 
-An explicitly supplied parser controls its own settings; it is retained by derived quantities. Custom parser factories receive `ParserConfig` and should forward it to their parser or implement the limits themselves; zero-argument factories remain supported. See [parser configuration](parsers.md) for direct parser usage.
+The factory accepts the same configuration shape:
 
-The original entry points continue using the shared `Decimal.config` from `@neutrium/decimal`. Changing that configuration invalidates their numeric caches: subsequent conversions and `baseScalar` reads use the new settings. Base values are calculated on first access and cached; construction still validates units, dimensional counts, and absolute zero immediately. Unit metadata is shared independently of numeric configuration. Isolated classes and their cached results are unaffected. Stored scalars and already returned results are never retroactively recalculated; increasing precision cannot recover digits lost in an input or earlier operation.
+```ts
+import { createQuantityClass } from '@neutrium/quantity/factory';
+import { NumberAdapter } from '@neutrium/utilities/number';
+const numberAdapter = new NumberAdapter();
+import { NearleyParser } from '@neutrium/quantity/parsers/nearley';
 
-Arithmetic uses stored operands without clamping them to newly narrowed exponent limits first. For example, quantities created as `1e30 m` can still divide to `1` after setting `maxE: 20`. Current precision, rounding, and range limits apply to the result. Constructing a quantity from a new scalar or expression still follows the current input limits.
+const NativeQuantity = createQuantityClass({
+    numeric: numberAdapter,
+    parser: config => new NearleyParser(config),
+    config: { cache: false },
+});
+```
 
-Unit conversions and cross-unit sums combine exact values before rounding the result. Absolute-temperature conversions and differences, including reciprocal conversion targets, cancel offsets before final rounding, retaining tiny differences without expanding gaps between decimal exponents. Exact absolute zero is preserved in every scale. If rounding a valid conversion or arithmetic result would put it below absolute zero, the result uses the exact boundary (`-273.15 tempC` or `-459.67 tempF`); this boundary value can require more digits than the configured precision. Sources below absolute zero are rejected before rounding. This also applies when adding/subtracting intervals or scaling an absolute-temperature reading: an invalid physical result cannot be rounded back into the valid range. The configured exponent limits still apply to the final scalar. Multiplication, division, and reciprocal conversion combine scalar and unit factors before enforcing the result's exponent limits. Large counted
-factors use progressively refined bounds; a result is returned only when both bounds agree after final rounding and boundary validation. If Decimal's maximum precision is insufficient to establish the result, the operation throws a `RangeError` instead of returning an unverified approximation. Parsing a Nearley scalar expression still evaluates its written operations in order, each using the selected context; it does not reassociate a user's expression.
+All presets use isolated utilities adapters. Changing global `Decimal.config` does not change an existing Quantity class or its cached values. Configure an adapter before passing it to the factory, or use `withConfig()` for adapters that support it.
 
-Exponents are independent of the quantity's Decimal range limits. `pow()` validates the original exponent as a safe integer, so a tiny fractional exponent cannot underflow into zero. Nearley likewise preserves exponent literals while evaluating powers; result scalars still use the configured precision, rounding, and range.
+Scalar arithmetic follows the selected adapter's precision, rounding and range semantics. The default Decimal backend retains rational intermediates for conversions, cross-unit arithmetic and temperature calculations, and applies output rounding only to the final result of each operation. Decimal cross-unit comparisons evaluate unrounded values. Float, double and custom backends use their adapters throughout instead: scalars stay in their native representation, and intermediate rounding and range limits apply. Shared dimensional and temperature checks remain in place. See [numeric backends](numeric-backends.md) for the calculation guarantees and custom adapter contract.
 
-Physical comparisons do not round operands to either caller's precision. Exact factor cancellation and bounded-precision refinement preserve equality and ordering across unit spellings and configurations. A rounded conversion is a new value: a repeating conversion such as `1 degF` to `degC` need not compare exactly equal to the original quantity after rounding. Compare rounded values in the same units when that is the intended application policy.
+For example, at precision 6, `new Q('1 m').sub('100.0001 cm')` retains `-0.000001 m`. With `maxE: 20`, `new Q('1e20 m').div('1e20 km')` returns `0.001` instead of losing the divisor to intermediate overflow. Each method call still returns a scalar rounded to the receiver's settings; subsequent calls operate on that returned value.
 
-Relative conversions and comparisons can handle units whose separate base factors overflow or underflow. For example, `2 km4000000000000000` compares greater than `1 km4000000000000000`, and converting to `km4000000000000000*s/s` preserves the scalar `2`. Scale factors and scalar values are combined before final range limits are applied. An actual final result outside Decimal's range still becomes Infinity or zero; unsafe dimensional exponents still throw.
+Exponents are independent of the quantity's Decimal range limits. `pow()` validates the original exponent as a safe integer, so a tiny fractional exponent cannot underflow into zero. Nearley likewise preserves exponent literals while evaluating powers; result scalars still use the configured precision, rounding, and range. Both supported Decimal tiers apply output rounding and range limits to the final integer-power result.
+
+Decimal cross-unit comparisons evaluate unrounded physical values; native and custom comparisons use backend-rounded values. A rounded conversion is a new value and may not compare exactly equal to its source. Compare values in the same units or apply an application-specific tolerance when rounding matters.
+
+Relative conversions and comparisons can handle units whose separate base factors overflow or underflow. For example, `2 km4000000000000000` compares greater than `1 km4000000000000000`, and converting to `km4000000000000000*s/s` preserves the scalar `2`. Matching factors cancel before evaluation; remaining operations use the adapter’s range limits. Final scalar overflow and underflow follow the selected backend, subject to Quantity's [absolute-temperature restrictions](temperatures.md#precision-and-absolute-zero). Unsafe dimensional exponents still throw.
 
 ## Calculate and compare
 
@@ -186,7 +220,7 @@ length.div('25 cm').isUnitless(); // true
 length.scalar.toString(); // "1" — operations leave the operand unchanged
 ```
 
-{@link Quantity.Quantity.eq | Quantity.eq} compares physical values without rounding them to the receiver’s precision. {@link Quantity.Quantity.same | Quantity.same} requires identical scalar values and normalized units. Ordering methods throw for incompatible dimensions; {@link Quantity.Quantity.isCompatible | Quantity.isCompatible} checks dimensions without comparing values.
+{@link factory.Quantity.eq | Quantity.eq} compares values using the receiver’s numeric adapter. {@link factory.Quantity.same | Quantity.same} requires identical scalar values and normalized units. Ordering methods throw for incompatible dimensions; {@link factory.Quantity.isCompatible | Quantity.isCompatible} checks dimensions without comparing values.
 
 ```ts
 const length = new Quantity('1 m');
@@ -199,7 +233,7 @@ length.isCompatible('s'); // false
 Unitless addition also accepts numbers and Decimal values: `new Quantity(2).add(3)`
 and `new Quantity('2').add('3')` both produce `5`.
 
-`eq`, `lt`, `lte`, `gt`, `gte`, and `compareTo` accept numbers and Decimal values as
+`eq`, `lt`, `lte`, `gt`, `gte`, and `compareTo` accept numbers and native backend scalars as
 thresholds in the receiving quantity's current units. These operands compare
 directly with its scalar, without parsing or constructing another Quantity:
 
@@ -238,8 +272,8 @@ function convert(input: string, targetUnits: string): string
 }
 ```
 
-- {@link Quantity.Quantity.inverse | Quantity.inverse} rejects zero explicitly.
-- {@link Quantity.Quantity.div | Quantity.div} delegates scalar division to Decimal; check zero divisors if your application must reject them.
-- {@link Quantity.Quantity.pow | Quantity.pow} supports integer exponents. Exponent zero returns   the dimensionless identity (`1` with no units).
-- {@link Quantity.Quantity.clone | Quantity.clone} creates a new instance but shares scalar and unit arrays; it preserves the configured parser and does not retain the source quantity. For Quantity or definition inputs, `initValue` is a normalized snapshot containing only `scalar`, `numerator`, and `denominator`. String, number, and Decimal inputs remain unchanged; numeric objects are saved   as parsed Decimal snapshots.
-- Quantities expose read-only values. Assigning to `scalar`, `signature`, `baseScalar`,   `numerator`, `denominator`, or `initValue` is unsupported in TypeScript and rejected   in strict-mode JavaScript. Create a new quantity to change its value or units.
+- {@link factory.Quantity.inverse | Quantity.inverse} rejects zero explicitly.
+- {@link factory.Quantity.div | Quantity.div} delegates scalar division to the selected adapter; check zero divisors if your application must reject them.
+- {@link factory.Quantity.pow | Quantity.pow} supports integer exponents. Exponent zero returns the dimensionless identity (`1` with no units).
+- {@link factory.Quantity.clone | Quantity.clone} creates a new instance but shares scalar and unit arrays; it preserves the configured parser and does not retain the source quantity. For Quantity or definition inputs, `initValue` is a normalized snapshot containing only `scalar`, `numerator`, and `denominator`. String, number, and native backend scalar inputs remain unchanged; other numeric objects are saved as parsed backend scalars.
+- Quantities expose read-only values. Assigning to `scalar`, `signature`, `baseScalar`, `numerator`, `denominator`, or `initValue` is unsupported in TypeScript and rejected in strict-mode JavaScript. Create a new quantity to change its value or units.

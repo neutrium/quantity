@@ -1,16 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Quantity } from '@neutrium/quantity';
 import { Quantity as RegexQuantity } from '@neutrium/quantity/regex';
-import { NearleyQtyParser, RegexQtyParser } from '@neutrium/quantity/parsers.js';
+import { NearleyParser, RegexParser } from '@neutrium/quantity/parsers.js';
 
 
 for (const Constructor of [Quantity, RegexQuantity]) {
 	describe(`conversion cache retention with ${Constructor === Quantity ? 'Nearley' : 'Regex'}`, () => {
 		it('shares equivalent target results and bounds expression retention', () => {
-			const Parser = Constructor === Quantity ? NearleyQtyParser : RegexQtyParser;
+			const Parser = Constructor === Quantity ? NearleyParser : RegexParser;
 			const parser = new Parser();
 			const parse = vi.spyOn(parser, 'parse');
-			const Q = Constructor.withConfig({ conversionCache: { maxEntries: 2 } });
+			const Q = Constructor.withConfig({ cache: { conversionResults: { maxEntries: 2 } } });
 			const source = new Q('1 m', undefined, parser);
 			const first = source.to('cm');
 			expect(source.to('0 cm')).toBe(first);
@@ -26,7 +26,7 @@ for (const Constructor of [Quantity, RegexQuantity]) {
 		});
 
 		it('bounds distinct unit results and retains frequently used entries', () => {
-			const Q = Constructor.withConfig({ conversionCache: { maxEntries: 2 } });
+			const Q = Constructor.withConfig({ cache: { conversionResults: { maxEntries: 2 } } });
 			const source = new Q('1 m');
 			const hot = source.to('cm');
 			const cold = source.to('m*s/s');

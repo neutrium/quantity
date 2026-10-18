@@ -26,19 +26,37 @@ The standalone scripts share `benchmark/measure.js`: five samples of at least 20
 - A Nearley-only workload varies the scalar in `n/2 (kg·m/s)²` to exercise cached scalar operations and Unicode notation.
 - Construction covers the public Quantity API with the default parser, an explicit Regex parser, separate scalar/units, and a preparsed definition.
 - Conversions cover length, speed and absolute temperature. Each measures construction plus conversion, first conversion on a fresh instance prepared outside the timer, and repeated conversion on a warmed instance.
-- Arithmetic uses prepared operands for addition, subtraction, multiplication, division, scalar multiplication and positive/negative integer powers. Different-unit addition combines exact unit factors before final rounding; it does not benchmark a call to `to()`.
+- Arithmetic uses prepared operands for addition, subtraction, multiplication, division, scalar multiplication and positive/negative integer powers. Different-unit addition reuses cached unit plans and evaluates the complete rational sum before final backend rounding; it does not use the per-Quantity conversion-result cache or call `to()`. Prepared-operand cases also cover unitless quantity multipliers, compound products without cancellation, and `pow(1)`.
 - Comparisons cover `lte` and `gte` with string operands and `compareTo` with an existing quantity.
+- Unit identity compares shared arrays and distinct equal/unequal records with metadata caching enabled and disabled, using both short and longer unit structures.
+- Metadata workloads compare repeated reads, construction with formatting, and base conversion with default caching, metadata caching disabled, and all caches disabled, for Decimal and double backends.
 
 All workloads validate their results before timing and consume and validate the last measured result afterwards. Assertions and expected-value construction are outside timed callbacks. Setup hooks allocate fresh instances outside the timer; their allocations can still affect garbage collection during a run.
 
-These are steady-state measurements: module initialization and both parsers' shared unit-expression caches are warmed. Constructing a new parser wrapper does not clear these caches. Nearley evaluates the scalar on every call and creates an internal Nearley parser only on a unit-expression cache miss, with isolated lexer state. The compiled grammar is shared across calls and wrappers. Fresh-instance conversion
-cases measure an empty instance conversion cache, not a cold process.
+These are steady-state measurements: module initialization and both parsers' shared unit-expression caches are warmed. Constructing a new parser wrapper does not clear these caches. Nearley evaluates the scalar on every call and creates an internal Nearley parser only on a unit-expression cache miss, with isolated lexer state. The compiled grammar is shared across calls and wrappers. Fresh-instance conversion cases measure an empty instance conversion cache, not a cold process. Workloads that explicitly disable caching recalculate the affected values on every call.
 
 The changing-scalar parser workload cycles through 2,048 values with fixed units, while the distinct-unit workload cycles through 2,048 unit powers to exceed the 1,024-entry expression caches. The latter includes parsing and cache maintenance on misses, with grammar initialization and individual unit definitions still warm.
 
 The scalar-expression/Unicode implementation was also compared with the preceding LRU/deferred-resolution implementation on an Apple M4 Pro, Node 26.5.0. Using `tools/benchmark-nearley-cold.mjs` (five samples of at least 200 ms, clearing the expression cache outside timing), simple and two-unit misses were essentially unchanged: 1.56 → 1.58 µs and 4.88 → 4.77 µs. Long uncached chains were about 11–12% slower: 400 distinct terms took 706 → 783 µs. The broader grammar has a measurable cost despite eliminating repeated prefix lexing. These are local microbenchmarks, not application-wide estimates; raw settings and results are in `benchmark/results/nearley-expression-results.json`.
 
-The cached-conversion cases time **100 calls per operation** across 100 warmed instances, retaining every result in a preallocated array. This reduces timer overhead and avoids a loop whose identical results are discarded. Array access and result storage are included. Their reported throughput is batches/second: multiply by 100 for calls/second, or divide latency by 100 for average time/call. Other cases perform one library operation per measurement. Rankings across different workloads show relative costs, not interchangeable implementations.
+The cached-conversion cases time **100 calls per operation** across 100 warmed instances, retaining every result in a preallocated array. This reduces timer overhead and avoids a loop whose identical results are discarded. Array access and result storage are included. Their reported throughput is batches/second: multiply by 100 for calls/second, or divide latency by 100 for average time/call. Unit-identity and metadata cases also use batches, as described below. Other cases perform one library operation per measurement. Rankings across different workloads show relative costs, not interchangeable implementations.
+
+## Unit identity
+
+Run `npm run build`, then:
+
+```sh
+npx vitest bench --run --config vitest.benchmark.config.js benchmark/unit-identity.bench.js
+```
+
+Each callback performs 1,024 comparisons. Cases use one or eight numerator records
+and one denominator record. Cached cases are warmed before measurement; shared-array
+cases exercise the identity shortcut. Set `BENCH_REVERSE=1` to reverse case order.
+These timings isolate structural comparisons, not complete Quantity operations.
+
+## Metadata and cache modes
+
+Run `npm run benchmark -- metadata` to measure `isBase()`, `units()`, `baseScalar`, `toBase()`, and construction with Decimal and double backends. Each callback performs 256 operations; divide the reported batch time by 256 for time per operation. The `isBase` case checks two quantities per operation. Repeated reads use warmed instances. Construction cases parse the same input on each call, including parser work when all caches are disabled. Set `BENCH_REVERSE=1` to reverse case order.
 
 ## Measurement settings
 
@@ -146,7 +164,7 @@ The script imports compiled `dist` files and uses the public `parser.clearCache(
 
 ## Lazy base values and read-only quantity fields
 
-Construction now validates units and dimensions without calculating numerical base values. `baseScalar` evaluates on first access, caches the result, and refreshes when the shared Decimal settings change. These measurements include the getter-only public fields and frozen input snapshots.
+Construction now validates units and dimensions without calculating numerical base values. `baseScalar` evaluates on first access and caches the result when metadata caching is enabled. Global `Decimal.config` changes do not invalidate existing quantities or their caches. These measurements include the getter-only public fields and frozen input snapshots.
 
 Local Node 26.5.0 measurements using `node tools/benchmark-base-values.mjs`: warm inputs, median of five samples of at least 200 ms each. Scalar and base-value correctness is checked outside the timed loop.
 
@@ -160,3 +178,73 @@ Local Node 26.5.0 measurements using `node tools/benchmark-base-values.mjs`: war
 | Explicit `toBase()` | 0.25 | 0.26 | 0.96× |
 
 The improvements apply when the numerical base value is unused. A first base-value read still pays for that calculation; these are microbenchmarks, not application speedups. Raw results are in `benchmark/results/lazy-base-values-results.json`.
+
+## Scalar normalization and conversion plans
+
+Run `npm run build`, then:
+
+```sh
+BENCH_TIME_MS=400 BENCH_WARMUP_MS=200 node_modules/.bin/vitest bench --run --config vitest.benchmark.config.js benchmark/hot-paths.bench.js
+```
+
+These cases cover scalar construction, expression construction, separate scalar/units construction, arithmetic result construction, cloning with and without reading the input snapshot, and repeated numerical conversion with varying scalars. The conversion case calls the internal scaling function to exclude per-Quantity result-cache hits from the measurement.
+
+A local before/after run on Node 26.5.0 showed about 20% less time for Decimal scalar construction and 10–14% less time for repeated scaling with Decimal and double backends. This is one pair of warmed microbenchmark runs, not an application performance guarantee. Raw local results are saved in `benchmark/results/hot-paths-comparison.json`.
+
+Construction avoids normalizing parser-produced and internally calculated scalars a second time. Cloning reuses the immutable scalar. Public construction from definitions or quantities still adopts the receiver's numeric context. Unit-factor plans and reduced conversion plans are shared across scalars and backends. Each cache has a maximum of 1,024 entries and a separate 1 MiB estimated retention budget, including keys and factor payloads. They contain catalog factors only; numerical output rounding, range checks and temperature validation still run for each calculation.
+
+## Temperature constants
+
+After `npm run build`, run:
+
+```sh
+BENCH_TIME_MS=400 BENCH_WARMUP_MS=200 node_modules/.bin/vitest bench --run --config vitest.benchmark.config.js benchmark/rounding-temperature.bench.js
+```
+
+Temperature cases measure construction and interval shifts with reused operands. They exercise the adapter-specific constant cache without using conversion-result cache hits. Standalone rational rounding belongs to the numeric backend and is no longer benchmarked here.
+
+Temperature boundary scalars, rational boundaries and Kelvin offsets are reused per immutable adapter instance. Weak keys allow discarded adapters and their constants to be collected; each adapter retains at most four temperature scales. Distinct adapter configurations keep separate constants even when they share scalar representations.
+
+## Rational representations and conversion keys
+
+After `npm run build`, run:
+
+```sh
+BENCH_TIME_MS=500 BENCH_WARMUP_MS=250 node_modules/.bin/vitest bench --run --config vitest.benchmark.config.js benchmark/rational-cache.bench.js benchmark/hot-paths.bench.js
+```
+
+The rational-cache cases compare reused and fresh Decimal scalar objects, then add prepared cross-unit operands. The scaling cases cycle through 32 prepared scalars and bypass Quantity's conversion-result cache. Fresh scalar extraction is a control for cache admission and garbage-collection costs; it is not equivalent to reading a previously cached rational term.
+
+Before native adapters moved to direct arithmetic, a local before/after pair on Node 26.5.0 with 250 ms warmup and 500 ms measurement per case gave these mean times:
+
+| Workload | Before µs/op | After µs/op |
+| --- | ---: | ---: |
+| Extract reused Decimal scalar | 0.210 | 0.030 |
+| Extract fresh Decimal scalar | 0.251 | 0.283 |
+| Reused scale, varying Decimal scalars | 1.093 | 0.615 |
+| Reused scale, varying double scalars | 0.589 | 0.353 |
+| Add reused cross-unit Decimal operands | 1.929 | 1.287 |
+| Add reused cross-unit double operands | 1.230 | 0.896 |
+
+Repeated scaling took about 40–44% less time and cross-unit addition 27–33% less time. Fresh Decimal scalar extraction took about 13% more time because admission adds work even when the value is never reused. These are warmed microbenchmarks, sensitive to allocation and garbage collection, not application-wide performance guarantees. Raw local reports and the comparison are retained in `benchmark/results/rational-cache-comparison.json`.
+
+Quantity caches extracted rational terms using weak scalar keys scoped to the adapter instance. Primitive scalars are not cached. Scalars with a reported size above 4,096 bytes are evaluated without admission. Two generations of at most 1,024 entries each bound cache metadata even during streams of fresh objects; recent hits are promoted when necessary. Neither adapter nor scalar objects are kept alive by this cache.
+
+Immutable unit arrays also share their structural key and one recent conversion-pair key of at most 4,096 characters. Changing the target or reciprocal mode replaces the recent key. Weak references avoid retaining target identities. Every conversion still looks up its plan in the byte-budgeted cache, so key reuse does not bypass eviction or retain numerical results.
+
+
+## Cache policy comparisons
+
+After building, run `npm run benchmark --cache-modes` to compare default caches, disabled scalar-term caching, and `cache: false` with Decimal and native doubles. The cases cover reused cross-unit operands, fresh cross-unit operands, and repeated conversion to an existing target. Each validates its result before and after timing.
+
+Repeated conversion with default caches measures result-cache hits; the disabled case performs the conversion each time. These are intentionally different retention policies. Use the fresh/reused arithmetic cases to evaluate scalar-cache admission for the application's workload. Results from short smoke runs validate the benchmark only and should not be used as performance estimates.
+
+## Native adapter arithmetic
+
+Run `npm run benchmark -- backend-arithmetic` to compare float, double and Decimal calculations with prepared operands. Conversion-result caching is disabled, so conversions evaluate the scalar on every call while reusing catalog plans and native factors. The cases cover conversion, cross-unit addition and multiplication, temperature conversion and temperature shifts. Float and double use adapter arithmetic without scalar serialization or BigInt rational intermediates; Decimal retains the exact path. The older native rational timings above describe the previous implementation.
+
+`cache.scalarTerms` affects object scalars on the exact calculation path; it does not affect native number arithmetic. Native conversion factors use `cache.conversionPlans`, and native temperature factors use `cache.temperatureConstants`. All policies still support `cache: false`.
+
+## High-precision Quantity calculations
+
+The `exact-rounding` cases compare Quantity conversion and cross-unit arithmetic at precision 20 and precision 100,000. They measure the complete Quantity operation, including its selected backend. Short validation runs confirm results but do not establish a performance improvement.

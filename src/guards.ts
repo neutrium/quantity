@@ -1,52 +1,31 @@
-import { Decimal } from '@neutrium/decimal'
+import type { ArithmeticAdapter } from '@neutrium/utilities/numeric/arithmetic';
 import { Quantity } from './QuantityCore.js'
 import type { QuantityDefinition } from './QuantityDefinition.js';
 import { normalizePowers } from './operations/unit-powers.js';
 
 /**
- * Input types shared by the constructor and arithmetic methods.
- *
- * A string may contain a scalar and units (`"2 m"`) or just a scalar (`"2"`).
- * Numbers, Decimal instances and objects with numeric toString() output become
- * dimensionless quantities when units are omitted. In addition and subtraction,
- * scalar inputs are dimensionless; they do not inherit the receiver's units.
- *
- * @remarks This union describes the shared input shape, not every valid combination
- * for every method. Consult the receiving method's parameters.
- */
-export type QuantityInitParam = string | number | Decimal | NumericStringifiable | QuantityDefinition | Quantity;
-
-/** An object whose toString() returns a numeric literal, validated at construction. */
-export type NumericStringifiable = object & {
-	/** Return a numeric literal without units; called once during construction. */
-	toString(): string;
-};
-
-/**
- * Validate the scalar and counted unit records of a quantity definition.
- *
- * @param value - Any value, including null or undefined.
- * @returns Whether the value has a Decimal scalar and valid counted unit arrays.
- * Invalid or unreadable properties return false. Inputs are never normalized in place.
- * @remarks Checks registered unit/prefix tokens, positive safe-integer powers, and
- * duplicate-count overflow. NaN and Infinity are valid Decimal scalars. This does
- * not check physical temperature restrictions; construct a Quantity for those.
- * Decimal instances from the same installed package, including clones, are accepted;
- * serialized numeric or string scalars must first be converted to Decimal.
+ * Validate a definition using its intended numeric backend.
+ * Checks scalar representation, registered tokens and safe unit counts without mutating input.
+ * Physical temperature restrictions are checked by Quantity construction.
+ * @param value - Candidate definition, including untrusted or unknown values.
+ * @param numeric - Backend expected to recognize the definition's scalar.
+ * @returns False for malformed definitions; does not throw or convert scalars.
  * @example
  * ```ts
+ * import { Quantity } from '@neutrium/quantity/number';
  * import { isQuantityDefinition } from '@neutrium/quantity/guards.js';
- *
- * isQuantityDefinition({ scalar: 1 }); // false
- * isQuantityDefinition(null); // false
+ * const q = new Quantity('2 m');
+ * const definition = { scalar: 2, numerator: q.numerator, denominator: [] };
+ * isQuantityDefinition(definition, q.numeric); // true
+ * isQuantityDefinition({ scalar: '2' }, q.numeric); // false
  * ```
  */
-export function isQuantityDefinition(value: unknown): value is QuantityDefinition
+export function isQuantityDefinition<T>(value: unknown, numeric: ArithmeticAdapter<T>): value is QuantityDefinition<T>
 {
 	try
 	{
 		if (value === null || typeof value !== 'object' || !('scalar' in value) ||
-			!(value.scalar instanceof Decimal) || !('numerator' in value) || !('denominator' in value))
+			!numeric.isValue(value.scalar) || !('numerator' in value) || !('denominator' in value))
 		{
 			return false;
 		}
@@ -70,7 +49,7 @@ export function isQuantityDefinition(value: unknown): value is QuantityDefinitio
 }
 
 /**
- * Test whether a value belongs to this package's shared Quantity core.
+ * Test whether a value is a Quantity from any backend in this package.
  * @param x - Any value, including null or undefined.
  * @returns Whether the value is a Quantity from the default, regex, or custom entry point.
  * @remarks Plain definitions and instances from another copy of the package do
@@ -85,4 +64,4 @@ export function isQuantityDefinition(value: unknown): value is QuantityDefinitio
  * isQuantity({ scalar: 1 }); // false
  * ```
  */
-export const isQuantity = (x: unknown): x is Quantity => x instanceof Quantity
+export const isQuantity = (x: unknown): x is Quantity<unknown> => x instanceof Quantity
