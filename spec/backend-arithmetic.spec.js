@@ -96,6 +96,10 @@ it('evaluates a non-stringifiable custom representation entirely through its ari
 	expect(converted.scalar).toBeInstanceOf(Scalar);
 	expect(converted.scalar.value).toBe(200);
 	expect(new Q('2 m').compareTo('200 cm')).toBe(0);
+	const largeFactor = new Q('1 inch200').to('cm200');
+	expect(largeFactor.scalar).toBeInstanceOf(Scalar);
+	expect(Math.abs(largeFactor.scalar.value / 2.54 ** 200 - 1)).toBeLessThan(1e-12);
+	expect(new Q('1 inch150').compareTo('1e100 cm150')).toBe(-1);
 	expect(new Q('2 cm').toBase().scalar.value).toBe(0.02);
 	expect(new Q('2 m').pow(new Scalar(-2)).scalar.value).toBe(0.25);
 	expect(new Q('(2 m)^3').scalar.value).toBe(8);

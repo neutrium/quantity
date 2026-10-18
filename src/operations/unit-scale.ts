@@ -8,7 +8,7 @@ import { copyCacheText } from '../utils/cache-memory.js';
 import { BudgetCache } from '@neutrium/utilities/cache';
 import { scalarTerm, finish } from './exact-sum.js';
 import { addFactor, reduceFactors, factorRatio, factoredValue, type Factors, type RationalValue } from '@neutrium/utilities/numeric/factors';
-import { parseRationalTerm, scaleTerm, negateValue, evaluateRational, hasRationalArithmetic, type RationalArithmeticAdapter } from '@neutrium/utilities/numeric/rational';
+import { parseRationalTerm, scaleTerm, negateValue, evaluateRational, hasRationalArithmetic, type RationalArithmeticAdapter, type RationalTerm } from '@neutrium/utilities/numeric/rational';
 
 function factorBytes(factors: ReadonlyMap<bigint, bigint>): number
 {
@@ -33,6 +33,48 @@ interface ConversionPlan
 	readonly exact?: readonly [bigint, bigint];
 }
 
+/** Enclose a positive catalog ratio with a decimal coefficient and a separate exponent. */
+function decimalBound(term: RationalTerm, precision: number, up: boolean): RationalTerm
+{
+	// Scale only by coefficient lengths and working precision, never by the unit power.
+	const shift = precision + term.denominator.toString().length - term.numerator.toString().length;
+	const numerator = shift > 0 ? term.numerator * 10n ** BigInt(shift) : term.numerator;
+	const denominator = shift < 0 ? term.denominator * 10n ** BigInt(-shift) : term.denominator;
+	const coefficient = numerator / denominator + (up && numerator % denominator !== 0n ? 1n : 0n);
+
+	return {
+		numerator: coefficient,
+		 denominator: 1n,
+		 exponent: term.exponent - BigInt(shift)
+	};
+}
+
+/** Normalize catalog constants before backend conversion; never serialize a live scalar. */
+function boundedAdapterFactor<T>(plan: ConversionPlan, n: ArithmeticAdapter<T>): T
+{
+	let value: RationalValue;
+
+	if (plan.exact)
+	{
+		value = { exact: { numerator: plan.exact[0], denominator: plan.exact[1], exponent: plan.exponent } };
+	}
+	else
+	{
+		const factors = new Map(plan.factors);
+		addFactor(factors, 10n, plan.exponent);
+		value = factoredValue(factors);
+	}
+
+	return evaluateRational([{
+		bounds(precision) {
+			const [lower, upper] = 'exact' in value ? [value.exact, value.exact] : value.bounds(precision);
+			return [decimalBound(lower, precision, false), decimalBound(upper, precision, true)];
+		},
+	}], ([term]) => n.from(`${term.numerator}e${term.exponent}`), {
+		equal: (lower, upper) => n.compare(lower, upper) === 0,
+	});
+}
+
 /** Catalog factors may be exact; live scalars and calculated factors stay in the backend. */
 function adapterFactor<T>(plan: ConversionPlan, n: ArithmeticAdapter<T>, scope: CacheScope): T
 {
@@ -41,22 +83,24 @@ function adapterFactor<T>(plan: ConversionPlan, n: ArithmeticAdapter<T>, scope: 
 	const cached = factors?.get(plan);
 	if (cached !== undefined) return cached as T;
 	let value: T;
-	if (plan.exact)
+	if (plan.exact && Number.isSafeInteger(Number(plan.exponent)))
 	{
 		value = n.div(n.from(plan.exact[0]), n.from(plan.exact[1]));
+		if (plan.exponent)
+		{
+			value = n.mul(value, n.powInteger(n.from(10), Number(plan.exponent)));
+		}
+
+		// Catalog factors are strictly positive. Zero/nonfinite intermediates may
+		// hide a representable factor, so retry with bounded scientific literals.
+		if (!n.isFinite(value) || n.compare(value, n.from(0)) === 0)
+		{
+			value = boundedAdapterFactor(plan, n);
+		}
 	}
 	else
 	{
-		value = n.from(1);
-		for (const [factor, count] of plan.factors)
-		{
-			value = n.mul(value, n.powInteger(n.from(factor), Number(count)));
-		}
-	}
-
-	if (plan.exponent)
-	{
-		value = n.mul(value, n.powInteger(n.from(10), Number(plan.exponent)));
+		value = boundedAdapterFactor(plan, n);
 	}
 
 	// Unknown object scalars have no reliable size estimate; retain only fixed-size primitives.
