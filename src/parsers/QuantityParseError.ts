@@ -1,20 +1,24 @@
 /** Stable categories for syntax and expression-evaluation failures. */
 export type QuantityParseErrorCode = 'INVALID_INPUT' | 'UNEXPECTED_TOKEN' | 'UNEXPECTED_END'
-	| 'UNKNOWN_UNIT' | 'INVALID_EXPONENT' | 'DIVISION_BY_ZERO' | 'INVALID_SCALAR' | 'AMBIGUOUS_EXPRESSION';
+	| 'LIMIT_EXCEEDED' | 'UNKNOWN_UNIT' | 'INVALID_EXPONENT' | 'DIVISION_BY_ZERO' | 'INVALID_SCALAR' | 'AMBIGUOUS_EXPRESSION';
 
 /**
- * A Nearley parsing failure located in the original input.
+ * An expression parsing failure located in the original input.
  * `offset` uses zero-based UTF-16 indices; `line` and `column` are one-based.
  * Use `code` for application logic and `message` for a source line with a caret.
  * Quantity's dimensional and temperature validation errors are separate.
  * @example
  * ```ts
  * import { Quantity } from '@neutrium/quantity';
- * import { QuantityParseError } from '@neutrium/quantity/parsers/nearley';
- * try {
+ * import { QuantityParseError } from '@neutrium/quantity/parsers/pratt';
+ * try
+ * {
  *     new Quantity('kg/(m*s');
- * } catch (error) {
- *     if (error instanceof QuantityParseError) {
+ * }
+ * catch (error)
+ * {
+ *     if (error instanceof QuantityParseError)
+ * {
  *         error.code; // "UNEXPECTED_END"
  *         error.input; // "kg/(m*s"
  *     }
@@ -39,10 +43,19 @@ export class QuantityParseError extends SyntaxError
 		/** Expected token hints when available; empty for evaluation failures. */
 		readonly expected: readonly string[] = [],
 	) {
-		const before = input.slice(0, offset);
-		const line = before.split('\n').length;
-		const column = offset - before.lastIndexOf('\n');
-		const source = input.split('\n')[line - 1] ?? '';
+		const breaks = /\r\n|[\r\n\u2028\u2029]/g;
+		let line = 1, start = 0;
+		let next = breaks.exec(input);
+
+		while (next && breaks.lastIndex <= offset)
+		{
+			line++;
+			start = breaks.lastIndex;
+			next = breaks.exec(input);
+		}
+
+		const column = offset - start + 1;
+		const source = input.slice(start, next?.index ?? input.length);
 
 		super(`${reason} at ${line}:${column}\n${source}\n${' '.repeat(column - 1)}^`);
 		this.name = 'QuantityParseError';
@@ -51,7 +64,7 @@ export class QuantityParseError extends SyntaxError
 	}
 }
 
-/** Discriminated result returned by NearleyParser.tryParse(). */
+/** Discriminated result returned by NearleyParser.tryParse() and PrattParser.tryParse(). */
 export type QuantityParseResult<T> = {
 	/** True when the expression was parsed and evaluated successfully. */
 	success: true;

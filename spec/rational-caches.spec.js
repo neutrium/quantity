@@ -1,16 +1,29 @@
 import { overrideAdapter } from './helpers/numeric.js';
 import { describe, expect, it, vi } from 'vitest';
 import { Quantity } from '../dist/Quantity.js';
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const decimalAdapter = new DecimalScientificAdapter();
-import { NumberAdapter } from '@neutrium/utilities/number';
+import { NumberAdapter } from '@neutrium/math/adapters/number';
 const numberAdapter = new NumberAdapter();
-import { scalarTerm } from '../dist/operations/exact-sum.js';
+import { scalarTerm } from '../dist/operations/rational-terms.js';
 import { conversionKey } from '../dist/operations/unit-identity.js';
 import { scale } from '../dist/operations/unit-scale.js';
 import { BudgetCache } from '@neutrium/utilities/cache';
 import { CacheScope } from '../dist/utils/CacheScope.js';
 import { resolveQuantityCache } from '../dist/QuantityConfig.js';
+import { rootedValue } from '@neutrium/math/numeric/roots';
+
+vi.mock('@neutrium/math/numeric/roots', async original => {
+	const module = await original();
+	return { ...module, rootedValue: vi.fn(module.rootedValue) };
+});
+
+it.each([true, false])('prepares an irrational conversion scale once per plan, cache=%s', cache => {
+	const Q = Quantity.withConfig({ cache });
+	rootedValue.mockClear();
+	for (let i = 1; i <= 4; i++) new Q(i, 'km^(1/2)').to('m^(1/2)');
+	expect(rootedValue).toHaveBeenCalledTimes(cache ? 1 : 4);
+});
 
 describe('rational scalar caching', () => {
 	function adapter()
@@ -93,7 +106,7 @@ it('declines oversized unit-factor keys without preventing conversion', () => {
 	try
 	{
 		expect(scale(2, source, undefined, numberAdapter)).toBe(2);
-		const index = set.mock.calls.findIndex(([, value]) => value instanceof Map);
+		const index = set.mock.calls.findIndex(([, value]) => value?.factors instanceof Map && !('exponent' in value));
 		expect(index).toBeGreaterThanOrEqual(0);
 		const [key] = set.mock.calls[index], cache = set.mock.contexts[index];
 		expect(cache.stats.maxBytes).toBe(1024 * 1024);

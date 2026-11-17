@@ -1,10 +1,10 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it } from 'vitest';
 import { parseExpression } from '../helpers/nearley.js';
 import { NearleyParser } from '../../dist/parsers/NearleyParser.js';
 import { Quantity } from '../../dist/Quantity.js';
-import { MooQtyLexer } from '../../dist/parsers/MooQtyLexer.js';
+import { lexerTemplate } from '../../dist/parsers/MooQtyLexer.js';
 
 const parser = new NearleyParser();
 
@@ -20,7 +20,7 @@ describe('Nearley alternative power syntax', () => {
 		parseExpression(input);
 	});
 
-	it.each(['m**', 'm***2', 'm * * 2', 'm**2.0', 'm**1e3', 'm**9007199254740992'])
+	it.each(['m**', 'm***2', 'm * * 2', 'm**9007199254740992'])
 		('rejects invalid power %j', input => {
 			expect(() => parser.parse(input, testNumeric)).toThrow();
 		});
@@ -54,7 +54,7 @@ describe('Nearley scientific notation', () => {
 	});
 });
 
-describe('Nearley whitespace', () => {
+describe('expression whitespace', () => {
 	it.each([' ', '   ', '\t', '\n', '\r\n', '\u00a0', ' \t\n '])(
 		'accepts whitespace %j at expression boundaries and unit separators', whitespace => {
 			const quantity = new Quantity(`${whitespace}2${whitespace}kg${whitespace}m${whitespace}/${whitespace}s${whitespace}^${whitespace}2${whitespace}`);
@@ -73,13 +73,13 @@ describe('Nearley whitespace', () => {
 	});
 
 	it('tracks token locations across whitespace containing newlines', () => {
-		const tokens = new MooQtyLexer().tokenize('m\r\n  s');
+		const tokens = Array.from(lexerTemplate.clone().reset('m\r\n  s'));
 		expect(tokens.map(token => token.type)).toEqual(['unit', 'ws', 'unit']);
 		expect(tokens[2]).toMatchObject({ line: 2, col: 3, value: 's' });
 	});
 });
 
-it.each(['1e', '1e+', '1E-', '1e2e3 m', 'm^1e3', 'm1e3', 'm^2.0', 'm^9007199254740992', '', ' \t\n ', 'm / ', 'm ^ '])
+it.each(['1e', '1e+', '1E-', '1e2e3 m', 'm1e3', 'm^9007199254740992', '', ' \t\n ', 'm / ', 'm ^ '])
 	('rejects malformed or unsupported input %j and recovers on the next call', input => {
 		expect(() => parser.parse(input, testNumeric)).toThrow();
 		expect(parser.parse('1e3 m', testNumeric).scalar.toString()).toBe('1000');

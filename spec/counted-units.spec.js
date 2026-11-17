@@ -1,14 +1,16 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it } from 'vitest';
 import { Decimal } from '@neutrium/decimal';
 import { Quantity } from '@neutrium/quantity';
+import { isQuantityDefinition } from '@neutrium/quantity/guards.js';
+import { createQuantityClass } from '@neutrium/quantity/factory';
 import { Quantity as RegexQuantity } from '@neutrium/quantity/regex';
-import { NearleyParser, RegexParser } from '@neutrium/quantity/parsers.js';
+import { NearleyParser, PrattParser, RegexParser } from '@neutrium/quantity/parsers.js';
 
 const term = (unit, exponent, prefix) => ({ unit, ...(prefix ? { prefix } : {}), exponent });
 
-for (const [Constructor, Parser] of [[Quantity, NearleyParser], [RegexQuantity, RegexParser]])
+for (const [Constructor, Parser] of [[Quantity, PrattParser], [RegexQuantity, RegexParser]])
 {
 	describe(`counted units with ${Parser.name}`, () => {
 		it('stores million-sized positive, negative and zero powers without expansion', () => {
@@ -84,7 +86,7 @@ for (const [Constructor, Parser] of [[Quantity, NearleyParser], [RegexQuantity, 
 				expect(() => new Constructor('1 m').pow(exponent)).toThrow(/safe integer/);
 			}
 
-			for (const exponent of [NaN, Infinity, -Infinity, 0.5])
+			for (const exponent of [NaN, Infinity, -Infinity])
 			{
 				expect(() => new Constructor('1 m').pow(exponent)).toThrow();
 			}
@@ -93,7 +95,26 @@ for (const [Constructor, Parser] of [[Quantity, NearleyParser], [RegexQuantity, 
 			expect(max.numerator[0].exponent).toBe(Number.MAX_SAFE_INTEGER);
 			expect(() => max.pow(2)).toThrow(/safe integer/);
 			expect(() => max.mul('m')).toThrow(/safe integer/);
+			for (const units of ['m9007199254740991/m', 'm9007199254740991/m^(1/2)']) {
+				const overlap = new Constructor(units);
+				expect(() => overlap.div(overlap)).toThrow(/safe integer/);
+			}
+			const safe = new Constructor('m9007199254740991/s');
+			expect(safe.div(safe).isUnitless()).toBe(true);
 			expect(() => new Constructor('N9007199254740991')).toThrow(/safe integer/);
+		});
+
+		it('checks expanded base dimensions before arithmetic cancels unit records', () => {
+			for (const exponent of ['2251799813685247', '2251799813685248', '3000000000000000']) {
+				const q = new Constructor(`N${exponent}/N${exponent}`);
+				for (const operation of [() => q.pow(2), () => q.pow(-2), () => q.mul(q), () => q.div(q)]) {
+					if (exponent === '2251799813685247') expect(operation().isUnitless()).toBe(true);
+					else expect(operation).toThrow(/safe integer/);
+				}
+			}
+			// The same base unit can come from opposite sides of two different catalog units.
+			const q = new Constructor('N4000000000000000*s2000000000000000');
+			expect(() => q.div(q)).toThrow(/safe integer/);
 		});
 
 		it('preserves absolute-temperature restrictions and interval powers', () => {
@@ -165,4 +186,45 @@ it('supports regex power syntax and signed denominator powers without expansion'
 	const q = new RegexQuantity('2 km**1000000/s^-1000000');
 	expect(q.numerator).toEqual([term('<meter>', 1000000, '<kilo>'), term('<second>', 1000000)]);
 	expect(q.denominator).toEqual([]);
+});
+
+it.each([NearleyParser, PrattParser, RegexParser])('%s rejects unsafe expanded dimensions before caching a plan', Parser => {
+	const parser = new Parser({ cache: { maxEntries: 8 } });
+	for (const [input, token] of [
+		['  12 N^4503599627370496', '4503'],
+		['1/N4503599627370496', '4503'],
+		['N4503599627370495/s2', 's2'],
+		['m9007199254740991*ft', 'ft'],
+	])
+	{
+		expect(() => parser.parse(input, testNumeric)).toThrow(/safe integer/);
+		if (parser.tryParse) expect(parser.tryParse(input, testNumeric).error).toMatchObject({
+			code: 'INVALID_EXPONENT', offset: input.indexOf(token),
+		});
+	}
+	expect(parser.cacheStats.entries).toBe(0);
+	const valid = parser.parse('N4503599627370495/s', testNumeric);
+	expect(() => new Quantity(valid)).not.toThrow();
+	expect(parser.cacheStats.entries).toBe(1);
+});
+
+it.each([NearleyParser, PrattParser, RegexParser])('%s definitions agree with the guard and construction in both cache modes', Parser => {
+	for (const cache of [true, false])
+	{
+		const Q = createQuantityClass({ numeric: testNumeric, parser: c => new Parser(c), config: { cache } });
+		const parser = new Parser({ cache: { maxEntries: cache ? 8 : 0 } });
+		for (const input of ['3 kg*m/s2', '2 m^(1/2)/s', 'N4503599627370495/s', 'm*m/cm'])
+		{
+			const definition = parser.parse(input, testNumeric);
+			expect(isQuantityDefinition(definition, testNumeric)).toBe(true);
+			expect(new Q(definition).same(new Q(input))).toBe(true);
+		}
+		const invalid = { scalar: testNumeric.from(1), numerator: [term('<newton>', 2 ** 52)], denominator: [] };
+		expect(isQuantityDefinition(invalid, testNumeric)).toBe(false);
+		expect(() => new Q(invalid)).toThrow(/safe integer/);
+		// Structural acceptance deliberately precedes absolute-temperature physics.
+		const cold = parser.parse('-300 tempC', testNumeric);
+		expect(isQuantityDefinition(cold, testNumeric)).toBe(true);
+		expect(() => new Q(cold)).toThrow(/absolute zero/);
+	}
 });

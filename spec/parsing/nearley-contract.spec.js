@@ -1,4 +1,4 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it, vi } from 'vitest';
 import Nearley from 'nearley';
@@ -37,8 +37,8 @@ describe('Nearley expression contract', () => {
 			expect(result.error.message).toContain('explicit multiplication');
 		});
 
-	it.each(['m^.5', '(m)^.5', '(m/m)^.5', '(m^0)^.5', '(2 m)^2.0', '(m)^1e3', '(m)^9007199254740992'])
-		('keeps safe-integer syntax for expressions containing units: %j', input => {
+	it.each(['(m)^9007199254740992', 'm^(1/0)', '(m)^(1/0)'])
+		('rejects invalid exponents for expressions containing units: %j', input => {
 			expect(new NearleyParser().tryParse(input, testNumeric).success).toBe(false);
 		});
 
@@ -95,18 +95,21 @@ describe('Regex syntax is a subset of Nearley syntax', () => {
 });
 
 describe('Nearley diagnostic adapter', () => {
-	it.each(['m^', 'm**', 'm ^ \n'])('requests an integer exponent at the end of %j', input => {
+	it.each(['m^', 'm**', 'm ^ \n'])('requests an exponent at the end of %j', input => {
 		const result = new NearleyParser().tryParse(input, testNumeric);
 		expect(result.error.code).toBe('UNEXPECTED_END');
 		expect(result.error.offset).toBe(input.length);
-		expect(result.error.expected).toEqual(['integer']);
+		expect(result.error.expected).toEqual(['integer', 'lParen', 'signedFloat']);
 		expect(result.error.message).toContain('Expected an exponent');
 	});
 
 	it('allows numeric exponent hints for scalar groups and keeps closing-parenthesis hints', () => {
 		const parser = new NearleyParser();
-		expect(parser.tryParse('(4)^', testNumeric).error.expected).toEqual(['integer', 'signedFloat']);
+		expect(parser.tryParse('(4)^', testNumeric).error.expected).toEqual(['integer', 'lParen', 'signedFloat']);
 		expect(parser.tryParse('(m', testNumeric).error.expected).toEqual([')']);
+		expect(parser.tryParse('m^(1', testNumeric).error.expected).toEqual(['div']);
+		expect(parser.tryParse('m^(1/', testNumeric).error.expected).toEqual(['integer']);
+		expect(parser.tryParse('m^(1/2', testNumeric).error.expected).toEqual([')']);
 	});
 
 	it('does not depend on Nearley English error wording', () => {
@@ -114,8 +117,8 @@ describe('Nearley diagnostic adapter', () => {
 
 		try
 		{
-			const result = new NearleyParser().tryParse('m^2.0', testNumeric);
-			expect(result.error.expected).toEqual(['integer']);
+			const result = new NearleyParser().tryParse('m^*', testNumeric);
+			expect(result.error.expected).toEqual(['integer', 'lParen', 'signedFloat']);
 			expect(result.error.offset).toBe(2);
 		}
 		finally

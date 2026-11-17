@@ -1,4 +1,4 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const testNumeric = new DecimalScientificAdapter();
 import { expect, it, vi } from 'vitest';
 import Nearley from 'nearley/lib/nearley.js';

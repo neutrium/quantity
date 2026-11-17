@@ -1,190 +1,305 @@
-import type { RationalTerm, RationalValue } from '@neutrium/utilities/numeric/factors';
+import type { RationalTerm, RationalValue } from '@neutrium/math/numeric/factors';
+import { fractionFromTerm, addFractions } from '@neutrium/math/numeric/fractions';
 import { CacheScope } from '../utils/CacheScope.js';
-import type { ArithmeticAdapter } from '@neutrium/utilities/numeric/arithmetic';
+import type { ArithmeticAdapter } from '@neutrium/math/numeric/arithmetic';
 import type { Quantity } from '../QuantityCore.js';
+import { integerAsNumber, scalarSign } from '../numeric/support.js';
+import { isTemperature, temperatureChecks, type ParsedTemperatureChecks } from './temperature-units.js';
 import type { UnitStructure } from '../QuantityDefinition.js';
-import { TEMPERATURE_SIGNATURE } from './unit-signatures.js';
-import { normalizePowers, UNITY } from './unit-powers.js';
-import { scale, unitValue } from './unit-scale.js';
-import { scalarTerm } from './exact-sum.js';
-import { parseRationalTerm, scaleTerm, negateValue, evaluateRational, hasRationalArithmetic, type RationalArithmeticAdapter } from '@neutrium/utilities/numeric/rational';
+import { baseUnitValue, sameUnitScale, scale, scaledTerm } from './unit-scale.js';
+import { canCompareRationalTerms, canSumRationalTerms, evaluateRoundedScalar, scalarTerm } from './rational-terms.js';
+import { scaleTerm, negateValue, evaluateRational, rationalToScalar, hasRationalComparison, hasRationalConstruction, hasRationalExtraction, type RationalConstruction } from '@neutrium/math/numeric/rational';
+import { boundaryAdjustment, boundaryTerm, hasZeroTemperatureOffset, makeResult, representedTerm,
+	kelvinOffsetTerm, scaleReading, temperatureConstants, temperatureLiteral, type TemperatureConstants, temperatures } from './temperature-boundary.js';
 
-/** Fixed catalog structures contain no scalar, adapter or cache state. */
-function temperatureUnits(unit: string): UnitStructure
+/** Adopt a temperature reading without inferring its representation from unrelated scalars. */
+function adoptReading<T, S>(value: S, source: ArithmeticAdapter<S>, receiver: ArithmeticAdapter<T>, scope: CacheScope): T
 {
-	return Object.freeze({ numerator: normalizePowers([{ unit, exponent: 1 }]), denominator: UNITY });
-}
-
-/** Shared absolute-kelvin result units, including when optional caches are disabled. */
-export const ABSOLUTE_KELVIN_UNITS = temperatureUnits('<temp-K>');
-
-// Kelvin = (reading + offset) * numerator / denominator; final entry is the interval structure.
-const temperatures: Record<string, readonly [bigint, bigint, string, UnitStructure]> = {
-	'<temp-K>': [1n, 1n, '0', temperatureUnits('<kelvin>')],
-	'<temp-C>': [1n, 1n, '273.15', temperatureUnits('<celsius>')],
-	'<temp-F>': [5n, 9n, '459.67', temperatureUnits('<fahrenheit>')],
-	'<temp-R>': [5n, 9n, '0', temperatureUnits('<rankine>')],
-};
-
-export function isDegrees(a: UnitStructure & { readonly signature?: string }): boolean
-{
-	return (a.signature === undefined || a.signature === TEMPERATURE_SIGNATURE) &&
-		a.numerator.length === 1 && a.denominator.length === 0 &&
-		a.numerator[0].exponent === 1 && !a.numerator[0].prefix &&
-		/^(<temp-[CFRK]>|<(kelvin|celsius|rankine|fahrenheit)>)$/.test(a.numerator[0].unit);
-}
-
-export function isTemperature(a: UnitStructure & { readonly signature?: string }): boolean
-{
-	return isDegrees(a) && a.numerator[0].unit.startsWith('<temp-');
-}
-
-interface TemperatureConstants<T>
-{
-	readonly boundary: T;
-	term?: RationalTerm;
-	/** Offset already expressed in kelvin. */
-	offset?: RationalTerm;
-	toKelvin?: T;
-	fromKelvin?: T;
-}
-
-// The adapter instance identifies an immutable configuration. Weak keys release
-// discarded contexts; each live adapter retains at most the four absolute scales.
-const constantsKey = Symbol();
-
-function temperatureConstants<T>(unit: string, numeric: ArithmeticAdapter<T>, scope: CacheScope): TemperatureConstants<T>
-{
-	const constants = scope.get('temperatureConstants', constantsKey, () => new WeakMap<object, Map<string, TemperatureConstants<unknown>>>());
-	let scales = constants?.get(numeric);
-
-	if (!scales && constants)
+	if (typeof value === 'number' || receiver.isValue(value))
 	{
-		constants.set(numeric, scales = new Map());
+		return receiver.from(value);
 	}
 
-	let value = scales?.get(unit) as TemperatureConstants<T> | undefined;
-
-	if (!value)
+	if (!source.isFinite(value))
 	{
-		const offset = temperatures[unit][2];
-		// Construct the literal: negation itself can round with some backends.
-		value = { boundary: numeric.from(offset === '0' ? '0' : '-' + offset) };
-		scales?.set(unit, value);
+		return receiver.from(source.toNumber(value));
 	}
 
-	return value;
+	if (!hasRationalExtraction(source))
+	{
+		let literal;
+		try
+		{
+			literal = temperatureLiteral(value, source);
+		}
+		catch (error)
+		{
+			// Formatting can be unavailable. A native receiver can still adopt the owner's double.
+			const native = source.toNumber(value);
+
+			if (!receiver.isValue(native) || !Number.isFinite(native) || (native === 0 && !source.isInteger(value)) ||
+				source.compare(source.from(native), value) !== 0)
+			{
+				throw error;
+			}
+
+			literal = native;
+		}
+		return receiver.from(literal);
+	}
+
+	const term = scalarTerm(value, source, scope);
+
+	if (!term.numerator)
+	{
+		return receiver.from(source.toNumber(value));
+	}
+
+	if (hasRationalConstruction(receiver))
+	{
+		return receiver.fromRationalSum([term]);
+	}
+
+	if (term.denominator === 1n)
+	{
+		return receiver.from(`${term.numerator}e${term.exponent}`);
+	}
+
+	return rationalToScalar(receiver, { exact: term });
 }
 
-function boundary<T>(unit: string, numeric: ArithmeticAdapter<T>, scope: CacheScope): T
+/** Copy a point on the same scale, translating the represented zero between adapters. */
+export function copyTemperatureReading<T, S>(temp: UnitStructure & { numeric: ArithmeticAdapter<S>; scalar: S },
+	n: ArithmeticAdapter<T>, scope: CacheScope, destination: TemperatureConstants<T>, origin?: TemperatureConstants<S>): T
 {
-	return temperatureConstants(unit, numeric, scope).boundary;
+	return mapTemperatureReading(temp, n, scope, destination, origin,
+		reading => adoptReading(reading, temp.numeric, n, scope));
 }
 
-/** Inputs use the same absolute scale; matching boundaries cancel without arithmetic. */
-function sameTemperatureBoundary<T>(a: Quantity<T>, b: Quantity<T>, scope: CacheScope): boolean
+/** Absolute zero maps to the destination boundary. Other readings retain their original scalar until a boundary shift is needed. */
+function mapTemperatureReading<S, T>(temp: UnitStructure & { numeric: ArithmeticAdapter<S>; scalar: S },
+	n: ArithmeticAdapter<T>, scope: CacheScope, destination: TemperatureConstants<T>, origin: TemperatureConstants<S> | undefined,
+	fromSource: (reading: S) => T, operation?: (reading: T) => T): T
 {
-	return sameBoundary(a.numerator[0].unit, b.numeric, a.numeric, scope);
+	const source = temp.numeric, reading = temp.scalar, unit = temp.numerator[0].unit;
+
+	if (hasZeroTemperatureOffset(temp) || !source.isFinite(reading))
+	{
+		return fromSource(reading);
+	}
+
+	origin ??= temperatureConstants(unit, source, scope);
+	const sourceMinimum = origin.boundary;
+	const minimum = destination.boundary;
+
+	if (source.compare(reading, sourceMinimum) === 0)
+	{
+		checkTemperatureRange(minimum, n);
+		// A neutral operation must keep the physical endpoint. At a displayed zero
+		// the adapter still decides its sign from the operands.
+		if (!operation || integerAsNumber(n, minimum) !== 0)
+		{
+			return minimum;
+		}
+
+		return integerAsNumber(source, reading) === 0 ? fromSource(reading) : operation(minimum);
+	}
+	// Use native arithmetic only on values the receiver actually recognizes.
+	if (!hasRationalConstruction(n) && n.isValue(sourceMinimum) &&
+		source.isFinite(sourceMinimum) && n.isFinite(minimum))
+	{
+		if (n.compare(sourceMinimum, minimum) === 0)
+		{
+			return fromSource(reading);
+		}
+
+		if (n.isValue(reading))
+		{
+			const translated = translateAboveZero(reading, sourceMinimum, minimum, n);
+			return operation ? operation(translated) : translated;
+		}
+	}
+
+	const adjustment = boundaryAdjustment(source, n, scope, origin, destination);
+
+	if (adjustment === null)
+	{
+		return fromSource(reading);
+	}
+
+	let value: T;
+
+	if (hasRationalConstruction(n))
+	{
+		value = n.fromRationalSum([representedTerm(reading, source, n, scope), ...adjustment]);
+	}
+	else
+	{
+		const scalar = n.isValue(reading) ? reading : adoptReading(reading, source, n, scope);
+		value = n.add(scalar, offsetScalar(adjustment, n));
+	}
+
+	const translated = clamp(checkTemperatureRange(value, n), minimum, n);
+
+	return operation ? operation(translated) : translated;
 }
 
-function sameBoundary<T>(unit: string, source: ArithmeticAdapter<T>, receiver: ArithmeticAdapter<T>, scope: CacheScope): boolean
+/** A zero shift or unit multiplier preserves the physical reading, with final rounding and signed zero from the receiver. */
+function applyTemperatureIdentity<T>(temp: Quantity<T>, n: ArithmeticAdapter<T>, scope: CacheScope,
+	destination: TemperatureConstants<T>, origin: TemperatureConstants<T> | undefined, operation: (reading: T) => T): T
 {
-	return source === receiver || receiver.compare(boundary(unit, source, scope), boundary(unit, receiver, scope)) === 0;
+	const result = mapTemperatureReading(temp, n, scope, destination, origin, operation, operation);
+
+	return clamp(checkTemperatureRange(result, n), destination.boundary, n);
 }
 
-/** Keep each input's represented boundary, evaluating only their difference in the receiver. */
-function boundaryDifference<T>(a: Quantity<T>, b: Quantity<T>, scope: CacheScope): T
+/** Standalone catalog intervals have only two sizes: kelvin/Celsius and rankine/Fahrenheit. */
+function matchingInterval(absolute: UnitStructure, interval: UnitStructure): boolean | undefined
 {
-	return a.numeric.sub(boundary(a.numerator[0].unit, a.numeric, scope), boundary(b.numerator[0].unit, b.numeric, scope));
+	if (interval.numerator.length !== 1 || interval.denominator.length)
+	{
+		return undefined;
+	}
+
+	const term = interval.numerator[0];
+
+	if (term.prefix || term.exponent !== 1)
+	{
+		return undefined;
+	}
+
+	switch (term.unit)
+	{
+		case '<kelvin>': case '<celsius>': return temperatures[absolute.numerator[0].unit][0] === 1n;
+		case '<rankine>': case '<fahrenheit>': return temperatures[absolute.numerator[0].unit][0] === 5n;
+		default: return undefined;
+	}
 }
 
-/** Preserve native boundary quantization, but never turn a catalog offset into infinity. */
-function boundaryTerm<T>(unit: string, numeric: RationalArithmeticAdapter<T>, scope: CacheScope, source: ArithmeticAdapter<T> = numeric): RationalTerm
+function sameAbsoluteAndIntervalScale(absolute: UnitStructure, interval: UnitStructure, scope: CacheScope): boolean
 {
-	const cached = temperatureConstants(unit, source, scope);
-
-	return cached.term ??= source.isFinite(cached.boundary) ? scalarTerm(cached.boundary, numeric, scope)
-		: parseRationalTerm('-' + temperatures[unit][2]);
+	return hasZeroTemperatureOffset(absolute) && (matchingInterval(absolute, interval) ?? sameUnitScale(absolute, interval, scope));
 }
+
+// Parsers defer physical errors until construction while preserving scalar diagnostics.
+export class BelowAbsoluteZeroError extends Error {}
+export class TemperatureRangeError extends RangeError {}
 
 function rejectBelowZero(): never
 {
-	throw new Error('Temperatures must not be less than absolute zero');
+	throw new BelowAbsoluteZeroError('Temperatures must not be less than absolute zero');
 }
 
 /** Construction checks represented inputs; only valid calculated results may be clamped. */
-export function isBelowAbsoluteZero<T>(a: Quantity<T>): boolean
+export function validateParsedTemperatures<T>(definition: UnitStructure & ParsedTemperatureChecks<T>, numeric: ArithmeticAdapter<T>, scope: CacheScope): void
 {
-	const n = a.numeric, unit = a.numerator[0].unit, scope = a.cacheScope;
-	const minimum = boundary(unit, n, scope);
+	const checks = definition[temperatureChecks];
 
-	if (n.isFinite(minimum))
+	if (typeof checks === 'string')
 	{
-		return n.compare(a.scalar, minimum) < 0;
+		throw new Error(checks);
 	}
 
-	// A negative-infinite reading is never absolute zero, even when the
-	// configured range also overflows the boundary to negative infinity.
-	if (!n.isFinite(a.scalar))
+	if (checks instanceof Error)
 	{
-		return n.compare(a.scalar, n.from(0)) < 0;
+		throw checks;
 	}
 
-	if (hasRationalArithmetic(n))
+	if (checks)
 	{
-		return n.compareRationalSum([
-			scalarTerm(a.scalar, n, scope), scaleTerm(boundaryTerm(unit, n, scope), -1n),
-		]) < 0;
+		for (const { unit, scalar } of checks)
+		{
+			validateTemperatureReading(unit, scalar, numeric, scope);
+		}
 	}
+}
 
-	return n.compare(a.scalar, minimum) < 0;
+export function validateTemperatureReading<T>(unit: string, scalar: T, n: ArithmeticAdapter<T>, scope: CacheScope,
+	constants = temperatureConstants(unit, n, scope)): void
+{
+	const minimum = constants.boundary;
+
+	if (!n.isFinite(minimum) && n.isFinite(scalar) && canCompareRationalTerms(n))
+	{
+		if (n.compareRationalSum([scalarTerm(scalar, n, scope), scaleTerm(boundaryTerm(constants, n, n, scope), -1n)]) < 0)
+		{
+			rejectBelowZero();
+		}
+	}
+	else if (n.compare(scalar, minimum) < 0 || !n.isFinite(scalar) && scalarSign(n, scalar) < 0)
+	{
+		rejectBelowZero();
+	}
 }
 
 /** Check only the completed result, never an intermediate rational bound. */
 function checkTemperatureRange<T>(value: T, numeric: ArithmeticAdapter<T>): T
 {
-	if (!numeric.isFinite(value) && numeric.compare(value, numeric.from(0)) < 0)
+	if (!numeric.isFinite(value) && scalarSign(numeric, value) < 0)
 	{
-		throw new RangeError('Absolute temperature is outside the numeric backend range');
+		throw new TemperatureRangeError('Absolute temperature is outside the numeric backend range');
 	}
 
 	return value;
 }
 
-/** A valid zero-kelvin result still needs a finite reading in the target scale. */
-function absoluteZero<T>(unit: string, numeric: ArithmeticAdapter<T>, scope: CacheScope): T
+/** Translate a valid reading by the difference of finite represented boundaries. */
+function translateAboveZero<T>(value: T, from: T, to: T, n: ArithmeticAdapter<T>): T
 {
-	return checkTemperatureRange(boundary(unit, numeric, scope), numeric);
+	return clamp(checkTemperatureRange(n.add(value, n.sub(to, from)), n), to, n);
 }
 
 /** Clamp a validated result if output rounding pushes it below its represented boundary. */
-function clamp<T>(value: T, unit: string, numeric: ArithmeticAdapter<T>, scope: CacheScope): T
+function clamp<T>(value: T, minimum: T, numeric: ArithmeticAdapter<T>): T
 {
-	const minimum = boundary(unit, numeric, scope);
 	const comparison = numeric.compare(value, minimum);
 	return comparison < 0 ? minimum : value;
 }
 
-function temperatureFactor<T>(unit: string, n: ArithmeticAdapter<T>, scope: CacheScope, inverse = false): T
+/** Convert the difference of two catalog offsets using the receiver's arithmetic. */
+function offsetScalar<T>(adjustment: readonly [RationalTerm, RationalTerm], n: ArithmeticAdapter<T>): T
 {
-	const constants = temperatureConstants(unit, n, scope);
-	const [num, den] = temperatures[unit];
+	const [to, from] = adjustment;
+	const difference = addFractions(fractionFromTerm(to), fractionFromTerm(from));
+	const top = n.from(difference.numerator), bottom = n.from(difference.denominator);
 
-	return inverse ? constants.fromKelvin ??= n.div(n.from(den), n.from(num))
-		: constants.toKelvin ??= n.div(n.from(num), n.from(den));
+	return n.isFinite(top) && n.isFinite(bottom) ? n.div(top, bottom)
+		: rationalToScalar(n, { exact: { ...difference, exponent: 0n } });
+}
+
+function offsetChange<T>(origin: TemperatureConstants<T>, source: ArithmeticAdapter<T>, n: ArithmeticAdapter<T>,
+	scope: CacheScope, destination: TemperatureConstants<T>): T | undefined
+{
+	const adjustment = boundaryAdjustment(source, n, scope, origin, destination);
+
+	return adjustment ? offsetScalar(adjustment, n) : undefined;
+}
+
+/** Express the destination's displayed zero in source degrees, then scale the distance from it. */
+function convertPointReading<T>(reading: T, source: ArithmeticAdapter<T>, n: ArithmeticAdapter<T>, scope: CacheScope,
+	origin: TemperatureConstants<T>, destination: TemperatureConstants<T>): T
+{
+	const [sn, sd] = temperatures[origin.unit], [dn, dd] = temperatures[destination.unit];
+	const anchor = offsetScalar([boundaryTerm(origin, source, n, scope),
+		scaleTerm(boundaryTerm(destination, n, source, scope), -dn * sd, dd * sn)], n);
+	const distance = n.sub(reading, anchor);
+
+	return sn === dn ? distance : scaleReading(distance, sn === 1n ? destination.unit : origin.unit, n, scope, sn === 1n);
 }
 
 /** Native/custom arithmetic retains the adapter's own intermediate rounding and range. */
-function adapterPhysical<T>(a: Quantity<T>, n: ArithmeticAdapter<T>, scope: CacheScope): T
+function adapterPhysical<T>(a: Quantity<T>, n: ArithmeticAdapter<T>, scope: CacheScope, constants?: TemperatureConstants<T>): T
 {
-	if (!a.isTemperature())
+	if (!isTemperature(a))
 	{
 		return scale(a.scalar, a, undefined, n, false, scope);
 	}
 
 	const unit = a.numerator[0].unit;
+	constants ??= temperatureConstants(unit, a.numeric, scope);
+	const distance = n.sub(a.scalar, constants.boundary);
 
-	return n.mul(n.sub(a.scalar, boundary(unit, a.numeric, scope)), temperatureFactor(unit, n, scope));
+	return scaleReading(distance, unit, n, scope, false, a.numeric === n ? constants : undefined);
 }
 
 /** Evaluate an absolute temperature in physical kelvin using its own backend. */
@@ -197,189 +312,238 @@ export function temperatureBaseScalar<T>(a: Quantity<T>): T
 		return a.scalar;
 	}
 
-	if (!hasRationalArithmetic(numeric))
+	if (!canSumRationalTerms(numeric))
 	{
 		return adapterPhysical(a, numeric, scope);
 	}
 
-	return evaluateRational(
-		physicalTerms(a, numeric, scope),
-		terms => numeric.fromRationalSum(terms),
-		{ equal: (a, b) => numeric.compare(a, b) === 0 }
-	);
+	return numeric.fromRationalSum(absoluteKelvinTerms(a, numeric, scope));
 }
 
-export function temperatureTargetScalar<T>(source: Quantity<T>, target: Quantity<unknown>, reciprocal: boolean): T
+export function temperatureTargetScalar<T>(source: Quantity<T>, target: UnitStructure, reciprocal: boolean, constants: TemperatureConstants<T>): T
 {
 	const scope = source.cacheScope;
-	const n = source.numeric, unit = target.numerator[0].unit;
+	const n = source.numeric, unit = constants.unit;
 
-	if (!n.isFinite(source.scalar))
+	const absolute = isTemperature(source);
+	// The result constructor validates an unchanged kelvin/rankine interval.
+	if (!reciprocal && !absolute && sameAbsoluteAndIntervalScale(target, source, scope))
 	{
-		if (n.compare(source.scalar, n.from(0)) < 0)
-		{
-			rejectBelowZero();
-		}
-
-		if (reciprocal && n.compare(source.scalar, n.from(0)) > 0)
-		{
-			return absoluteZero(unit, n, scope);
-		}
-
 		return source.scalar;
 	}
 
-	if (!hasRationalArithmetic(n))
+	if (!n.isFinite(source.scalar))
 	{
-		const zero = n.from(0);
-		// All catalog scales are positive: reject negative intervals before underflow.
-		if (!source.isTemperature() && n.compare(source.scalar, zero) < 0)
-		{
-			rejectBelowZero();
-		}
-
-		const kelvin = reciprocal ? scale(source.scalar, source, undefined, n, true, scope)
-			: adapterPhysical(source, n, scope);
-		const sign = n.compare(kelvin, zero);
+		const sign = scalarSign(n, source.scalar);
 
 		if (sign < 0)
 		{
 			rejectBelowZero();
 		}
 
-		if (sign === 0)
-		{
-			return absoluteZero(unit, n, scope);
-		}
-
-		return checkTemperatureRange(clamp(n.add(n.mul(kelvin, temperatureFactor(unit, n, scope, true)), boundary(unit, n, scope)), unit, n, scope), n);
+		return reciprocal && sign > 0 ? checkTemperatureRange(constants.boundary, n) : source.scalar;
 	}
-	const values = reciprocal ? [unitValue(source, undefined, n, true, scope)] : physicalTerms(source, n, scope);
-	const sign = evaluateRational(values, terms => n.compareRationalSum(terms));
+
+	const origin = absolute ? temperatureConstants(source.numerator[0].unit, n, scope) : undefined;
+	// A positive catalog factor cannot change the sign. Inspect the input before
+	// conversion or reciprocal rounding, including when it is already absolute zero.
+	const sign = origin ? n.compare(source.scalar, origin.boundary) : scalarSign(n, source.scalar);
 
 	if (sign < 0)
 	{
 		rejectBelowZero();
 	}
-	else if (sign === 0)
+
+	if (sign === 0)
 	{
-		return absoluteZero(unit, n, scope);
+		return checkTemperatureRange(constants.boundary, n);
+	}
+
+	if (!canSumRationalTerms(n))
+	{
+		if (origin && (!n.isFinite(origin.boundary) || !n.isFinite(constants.boundary)))
+		{
+			return clamp(checkTemperatureRange(convertPointReading(source.scalar, n, n, scope, origin, constants), n), constants.boundary, n);
+		}
+
+		const kelvin = reciprocal ? scale(source.scalar, source, undefined, n, true, scope)
+			: adapterPhysical(source, n, scope, origin);
+		const reading = n.add(scaleReading(kelvin, unit, n, scope, true, constants), constants.boundary);
+
+		return clamp(checkTemperatureRange(reading, n), constants.boundary, n);
 	}
 
 	const [num, den] = temperatures[unit];
-	const minimum = boundaryTerm(unit, n, scope);
+	const minimum = boundaryTerm(constants, n, n, scope);
+	const output = (terms: RationalTerm[]) => {
+		const scaled = num === den ? terms : terms.map(term => scaleTerm(term, den, num));
+		return clamp(n.fromRationalSum([...scaled, minimum]), constants.boundary, n);
+	};
 
-	return checkTemperatureRange(evaluateRational(values, terms => clamp(n.fromRationalSum([
-		...terms.map(term => scaleTerm(term, den, num)), minimum,
-	]), unit, n, scope), { equal: (a, b) => n.compare(a, b) === 0 }), n);
+	if (origin)
+	{
+		return checkTemperatureRange(output(absoluteKelvinTerms(source, n, scope, origin)), n);
+	}
+	const value = baseUnitValue(source, n, reciprocal, scope);
+
+	return checkTemperatureRange('exact' in value ? output([value.exact]) : evaluateRoundedScalar(n, [value], output), n);
 }
 
-function physicalTerms<T>(a: Quantity<T>, n: RationalArithmeticAdapter<T>, scope: CacheScope): RationalValue[]
+function absoluteKelvinTerms<T>(a: Quantity<T>, n: ArithmeticAdapter<T>, scope: CacheScope,
+	constants?: TemperatureConstants<T>): RationalTerm[]
 {
-	// The receiver extracts compatible scalars; each input retains its own represented boundary.
-	if (!a.isTemperature())
+	const unit = a.numerator[0].unit, [num, den] = temperatures[unit];
+	const scalar = representedTerm(a.scalar, a.numeric, n, scope);
+	const reading = num === den ? scalar : scaleTerm(scalar, num, den);
+
+	return [reading, kelvinOffsetTerm(unit, a.numeric, n, scope, constants)];
+}
+
+/** A positive unit factor preserves order. For subtraction, express both points
+ * relative to their own boundaries in the left point's degrees before rounding. */
+function pointDifference<T>(a: Quantity<T>, b: Quantity<T>, compare: true): number;
+function pointDifference<T>(a: Quantity<T>, b: Quantity<T>, compare: false): T;
+function pointDifference<T>(a: Quantity<T>, b: Quantity<T>, compare: boolean): T | number
+{
+	const n = a.numeric, scope = a.cacheScope;
+	const unit = a.numerator[0].unit, other = b.numerator[0].unit;
+	const sameScale = unit === other;
+
+	if (compare && sameScale && n === b.numeric)
 	{
-		return [unitValue(a, undefined, n, false, scope)];
+		return n.compare(a.scalar, b.scalar);
 	}
 
-	const [num, den] = temperatures[a.numerator[0].unit];
-	const scalar = scalarTerm(a.scalar, n, scope);
-	const cached = temperatureConstants(a.numerator[0].unit, a.numeric, scope);
-	const offset = cached.offset ??= scaleTerm(boundaryTerm(a.numerator[0].unit, n, scope, a.numeric), -num, den);
+	const evaluate: false | ((terms: Iterable<RationalTerm>) => T | number) = compare
+		? canCompareRationalTerms(n) && n.compareRationalSum
+		: canSumRationalTerms(n) && n.fromRationalSum;
 
-	return [{ exact: scaleTerm(scalar, num, den) }, { exact: offset }];
-}
-
-/** Compare absolute values with offsets and intervals without offsets, using the receiver's adapter. */
-export function compareTemperatures<T>(a: Quantity<T>, b: Quantity<T>): number
-{
-	const scope = a.cacheScope;
-	const n = a.numeric;
+	if (sameScale && n === b.numeric && (!evaluate || integerAsNumber(n, a.scalar) !== 0 || integerAsNumber(n, b.scalar) !== 0))
+	{
+		return n.sub(a.scalar, b.scalar);
+	}
 
 	if (!n.isFinite(a.scalar) || !n.isFinite(b.scalar))
 	{
-		return n.compare(a.scalar, b.scalar);
+		return compare ? n.compare(a.scalar, b.scalar) : n.sub(a.scalar, b.scalar);
 	}
 
-	const sameScale = a.isTemperature() && b.isTemperature() && a.numerator[0].unit === b.numerator[0].unit;
+	const left = temperatureConstants(unit, n, scope);
+	const right = sameScale && n === b.numeric ? left : temperatureConstants(other, b.numeric, scope);
+	const common = n === b.numeric || n.isValue(right.boundary);
 
-	if (sameScale && sameTemperatureBoundary(a, b, scope))
+	if (sameScale && common && n.compare(left.boundary, right.boundary) === 0)
+	{
+		if (compare)
+		{
+			return n.compare(a.scalar, b.scalar);
+		}
+
+		// For exact zero readings retain the zero sign produced by offset cancellation.
+		if (!evaluate || integerAsNumber(n, a.scalar) !== 0 || integerAsNumber(n, b.scalar) !== 0)
+		{
+			return n.sub(a.scalar, b.scalar);
+		}
+	}
+
+	if (!evaluate)
+	{
+		if (sameScale)
+		{
+			const readings = n.sub(a.scalar, b.scalar);
+			const offset = common && n.isFinite(left.boundary) && n.isFinite(right.boundary)
+				? n.sub(left.boundary, right.boundary) : offsetChange(right, b.numeric, n, scope, left);
+
+			if (offset === undefined)
+			{
+				return compare ? n.compare(a.scalar, b.scalar) : readings;
+			}
+
+			return compare ? n.compare(readings, offset) : n.sub(readings, offset);
+		}
+		const localRight = !b.numeric.isFinite(right.boundary) && b.numeric !== n
+			? temperatureConstants(other, n, scope) : right;
+
+		if (!n.isFinite(left.boundary) || !n.isValue(localRight.boundary) || !n.isFinite(localRight.boundary)
+			|| localRight !== right && boundaryAdjustment(b.numeric, n, scope, right, localRight) !== null)
+		{
+			const converted = convertPointReading(b.scalar, b.numeric, n, scope, right, left);
+			return compare ? n.compare(a.scalar, converted) : n.sub(a.scalar, converted);
+		}
+
+		const x = adapterPhysical(a, n, scope, left), y = adapterPhysical(b, n, scope, localRight);
+
+		return compare ? n.compare(x, y) : scaleReading(n.sub(x, y), unit, n, scope, true, left);
+	}
+
+	const [an, ad] = temperatures[unit], [bn, bd] = temperatures[other];
+	const top = an === bn ? 1n : bn * ad, bottom = an === bn ? 1n : bd * an;
+	const terms = [representedTerm(a.scalar, n, b.numeric, scope), scaleTerm(boundaryTerm(left, n, b.numeric, scope), -1n),
+		scaleTerm(representedTerm(b.scalar, b.numeric, n, scope), -top, bottom),
+		scaleTerm(boundaryTerm(right, b.numeric, n, scope), top, bottom)];
+	return evaluate.call(n, terms);
+}
+
+/** Compare points in physical kelvin and intervals by their positive catalog scale. */
+export function compareTemperatures<T>(a: Quantity<T>, b: Quantity<T>, aAbsolute: boolean): number
+{
+	const n = a.numeric, scope = a.cacheScope;
+
+	if (aAbsolute && isTemperature(b))
+	{
+		return pointDifference(a, b, true);
+	}
+
+	// An interval compares a foreign point as it would be constructed in the receiver's context.
+	if (!aAbsolute && b.numeric !== n)
+	{
+		b = a.createQuantity(b);
+	}
+
+	const point = aAbsolute ? a : b, interval = aAbsolute ? b : a;
+
+	if (!n.isFinite(a.scalar) || !n.isFinite(b.scalar) || sameAbsoluteAndIntervalScale(point, interval, scope))
 	{
 		return n.compare(a.scalar, b.scalar);
 	}
 
-	// On one scale the positive Kelvin factor cancels. Compare differences to
-	// avoid adding a large common offset that can hide distinct native readings.
-	if (!hasRationalArithmetic(n))
+	if (!canCompareRationalTerms(n))
 	{
-		return sameScale
-			? n.compare(n.sub(a.scalar, b.scalar), boundaryDifference(a, b, scope))
-			: n.compare(adapterPhysical(a, n, scope), adapterPhysical(b, n, scope));
-	}
-	const values = [...physicalTerms(a, n, scope), ...physicalTerms(b, n, scope).map(negateValue)];
+		const x = adapterPhysical(point, n, scope), y = scale(interval.scalar, interval, undefined, n, false, scope);
 
-	return evaluateRational(values, terms => n.compareRationalSum(terms));
+		return aAbsolute ? n.compare(x, y) : n.compare(y, x);
+	}
+
+	const pointTerms = absoluteKelvinTerms(point, n, scope);
+	const delta = baseUnitValue(interval, n, false, scope);
+	const order = (term: RationalTerm) => n.compareRationalSum([...pointTerms, scaleTerm(term, -1n)]);
+	const result = 'exact' in delta ? order(delta.exact) : evaluateRational([delta], ([term]) => order(term));
+
+	return aAbsolute ? result : -result;
 }
 
 export function subtractTemperatures<T, C extends object>(a: Quantity<T, C>, b: Quantity<T>): Quantity<T, C>
 {
-	const scope = a.cacheScope;
-	const n = a.numeric;
-	const [num, den, , units] = temperatures[a.numerator[0].unit];
-
-	if (!hasRationalArithmetic(n))
-	{
-		let scalar: T;
-
-		if (a.numerator[0].unit === b.numerator[0].unit)
-		{
-			scalar = n.sub(a.scalar, b.scalar);
-			if (!sameTemperatureBoundary(a, b, scope) && n.isFinite(a.scalar) && n.isFinite(b.scalar))
-			{
-				scalar = n.sub(scalar, boundaryDifference(a, b, scope));
-			}
-		}
-		else
-		{
-			scalar = n.mul(n.sub(adapterPhysical(a, n, scope), adapterPhysical(b, n, scope)),
-				temperatureFactor(a.numerator[0].unit, n, scope, true));
-		}
-
-		return a.createResult(scalar, units);
-	}
-
-	if (!n.isFinite(a.scalar) || !n.isFinite(b.scalar))
-	{
-		return a.createResult(n.sub(a.scalar, b.scalar), units);
-	}
-
-	if (n === b.numeric && a.numerator[0].unit === b.numerator[0].unit)
-	{
-		// Identical contexts and scales have the same represented boundary and factor.
-		// Cancel those symbolically, then round the difference of the readings once.
-		const left = scalarTerm(a.scalar, n, scope), right = scalarTerm(b.scalar, n, scope);
-
-		// Two zero readings still need offset cancellation to preserve the adapter's zero sign.
-		if (left.numerator !== 0n || right.numerator !== 0n)
-		{
-			return a.createResult(n.fromRationalSum([left, scaleTerm(right, -1n)]), units);
-		}
-	}
-
-	const scalar = evaluateRational([...physicalTerms(a, n, scope), ...physicalTerms(b, n, scope).map(negateValue)],
-		terms => n.fromRationalSum(terms.map(term => scaleTerm(term, den, num))),
-		{ equal: (a, b) => n.compare(a, b) === 0 });
-
-	return a.createResult(scalar, units);
+	return a.createResult(pointDifference(a, b, false), temperatures[a.numerator[0].unit][3]);
 }
 
 /** Validate in the source scale, then round the reading in the receiver's scale once. */
-function checkedReading<T>(values: RationalValue[], temp: Quantity<T>, n: RationalArithmeticAdapter<T>, scope: CacheScope): T
+function checkedReading<T>(reading: RationalTerm, source: ArithmeticAdapter<T>, n: ArithmeticAdapter<T> & RationalConstruction<T>, scope: CacheScope,
+	origin: TemperatureConstants<T>, destination: TemperatureConstants<T>, delta?: RationalValue): T
 {
-	const unit = temp.numerator[0].unit;
-	const minimum = boundaryTerm(unit, n, scope, temp.numeric);
-	// Validate the complete expression, not individual enclosure endpoints.
-	const sign = evaluateRational(values, terms => n.compareRationalSum([...terms, scaleTerm(minimum, -1n)]));
+	const negativeMinimum = scaleTerm(boundaryTerm(origin, source, n, scope), -1n);
+	const terms = [reading];
+
+	if (delta && 'exact' in delta)
+	{
+		terms.push(delta.exact);
+	}
+
+	const bounded = delta && 'bounds' in delta ? [delta] : undefined;
+	const compare = (values: RationalTerm[]) => hasRationalComparison(n) ? n.compareRationalSum(values)
+		: scalarSign(n, n.fromRationalSum(values));
+	const sign = bounded ? evaluateRational(bounded, ([change]) => compare([reading, change, negativeMinimum]))
+		: compare([...terms, negativeMinimum]);
 
 	if (sign < 0)
 	{
@@ -388,22 +552,18 @@ function checkedReading<T>(values: RationalValue[], temp: Quantity<T>, n: Ration
 
 	if (sign === 0)
 	{
-		return absoluteZero(unit, n, scope);
+		return checkTemperatureRange(destination.boundary, n);
 	}
 
-	const adjustment = sameBoundary(unit, temp.numeric, n, scope) ? undefined
-		: [scaleTerm(minimum, -1n), boundaryTerm(unit, n, scope)];
+	const adjustment = boundaryAdjustment(source, n, scope, origin, destination);
+	const finish = (values: RationalTerm[]) => clamp(n.fromRationalSum(adjustment ? [...values, ...adjustment] : values), destination.boundary, n);
 
-	return checkTemperatureRange(evaluateRational(values,
-		terms => clamp(n.fromRationalSum(adjustment ? [...terms, ...adjustment] : terms), unit, n, scope),
-		{ equal: (a, b) => n.compare(a, b) === 0 }), n);
+	return checkTemperatureRange(bounded ? evaluateRoundedScalar(n, bounded, ([change]) => finish([reading, change])) : finish(terms), n);
 }
 
-/** Finish a represented interval above absolute zero without changing backend arithmetic. */
-function readingAboveZero<T>(distance: T, unit: string, n: ArithmeticAdapter<T>, scope: CacheScope): T
+/** Compare against the source boundary before translating the reading into the destination. */
+function translateReading<T>(reading: T, sign: number, from: T, to: T, n: ArithmeticAdapter<T>): T
 {
-	const sign = n.compare(distance, n.from(0));
-
 	if (sign < 0)
 	{
 		rejectBelowZero();
@@ -411,98 +571,248 @@ function readingAboveZero<T>(distance: T, unit: string, n: ArithmeticAdapter<T>,
 
 	if (sign === 0)
 	{
-		return absoluteZero(unit, n, scope);
+		return to;
 	}
 
-	return checkTemperatureRange(clamp(n.add(distance, boundary(unit, n, scope)), unit, n, scope), n);
+	return translateAboveZero(reading, from, to, n);
 }
 
 /** Shift an absolute reading by an interval without rounding the validation operands. */
 export function changeTemperature<T, C extends object>(temp: Quantity<T>, interval: Quantity<T>, subtract: boolean, owner: Quantity<T, C>): Quantity<T, C>
 {
-	const scope = owner.cacheScope;
-	const n = owner.numeric, unit = temp.numerator[0].unit;
+	const n = owner.numeric, scope = owner.cacheScope;
+	const destination = temperatureConstants(temp.numerator[0].unit, n, scope);
+	const scalar = shiftReading(temp, interval, subtract, n, scope, destination);
 
-	if (!hasRationalArithmetic(n) || !n.isFinite(temp.scalar) || !n.isFinite(interval.scalar))
+	return owner[makeResult](scalar, temp, destination);
+}
+
+function shiftReading<T>(temp: Quantity<T>, interval: Quantity<T>, subtract: boolean, n: ArithmeticAdapter<T>,
+	scope: CacheScope, destination: TemperatureConstants<T>): T
+{
+	const source = temp.numeric, origin = source === n ? destination : temperatureConstants(destination.unit, source, scope);
+	const finite = n.isFinite(temp.scalar) && n.isFinite(interval.scalar);
+	const matching = matchingInterval(temp, interval);
+
+	if (finite && canSumRationalTerms(n))
 	{
-		const direction = n.compare(interval.scalar, n.from(0)) * (subtract ? -1 : 1);
-		const minimum = boundary(unit, temp.numeric, scope);
+		const reading = representedTerm(temp.scalar, source, n, scope);
+		const term = representedTerm(interval.scalar, interval.numeric, n, scope);
 
-		if (direction < 0 && n.compare(temp.scalar, minimum) === 0)
+		// Rational zero has no sign. Positive interval factors preserve the input zero's sign.
+		if (!reading.numerator && !term.numerator && boundaryAdjustment(source, n, scope, origin, destination) === null)
 		{
-			rejectBelowZero();
+			return subtract ? n.sub(temp.scalar, interval.scalar) : n.add(temp.scalar, interval.scalar);
 		}
 
-		const delta = scale(interval.scalar, interval, temp, n, false, scope);
+		const delta = matching || !term.numerator ? { exact: term } : scaledTerm(term, interval, temp, false, scope);
 
-		if (!sameBoundary(unit, temp.numeric, n, scope) && n.isFinite(temp.scalar) && n.isFinite(interval.scalar))
-		{
-			// A source boundary represents zero even if the receiver rounds it differently.
-			const distance = n.sub(temp.scalar, minimum);
-
-			return owner.createResult(readingAboveZero(subtract ? n.sub(distance, delta) : n.add(distance, delta), unit, n, scope), temp);
-		}
-
-		return owner.createResult(subtract ? n.sub(temp.scalar, delta) : n.add(temp.scalar, delta), temp);
+		return checkedReading(reading, source, n, scope, origin, destination, subtract ? negateValue(delta) : delta);
 	}
 
-	const delta = unitValue(interval, temp, n, false, scope);
-	const values: RationalValue[] = [{ exact: scalarTerm(temp.scalar, n, scope) }, subtract ? negateValue(delta) : delta];
+	const direction = scalarSign(n, interval.scalar) * (subtract ? -1 : 1);
 
-	return owner.createResult(checkedReading(values, temp, n, scope), temp);
+	if (finite && source !== n && direction === 0)
+	{
+		return applyTemperatureIdentity(temp, n, scope, destination, origin,
+			reading => subtract ? n.sub(reading, interval.scalar) : n.add(reading, interval.scalar));
+	}
+
+	const atZero = source.compare(temp.scalar, origin.boundary) === 0;
+	if (atZero && direction < 0)
+	{
+		rejectBelowZero();
+	}
+
+	const delta = matching ? interval.scalar : scale(interval.scalar, interval, temp, n, false, scope);
+	const reading = subtract ? n.sub(temp.scalar, delta) : n.add(temp.scalar, delta);
+
+	if (!finite)
+	{
+		return reading;
+	}
+
+	if (source === n)
+	{
+		return checkTemperatureRange(reading, n);
+	}
+
+	if (!n.isValue(origin.boundary) || !n.isFinite(origin.boundary) || !n.isFinite(destination.boundary))
+	{
+		const offset = offsetChange(origin, source, n, scope, destination);
+		const shifted = offset === undefined ? reading : n.add(reading, offset);
+
+		if (n.isFinite(shifted))
+		{
+			return shifted;
+		}
+
+		// A wider source may still be able to compare the cooling with the distance to zero.
+		if (direction < 0 && scalarSign(n, shifted) < 0 && source.isFinite(origin.boundary) &&
+			source.isValue(delta) && source.isFinite(delta))
+		{
+			const available = source.sub(temp.scalar, origin.boundary);
+
+			if (source.compare(available, subtract ? delta : source.neg(delta)) < 0)
+			{
+				rejectBelowZero();
+			}
+		}
+
+		return checkTemperatureRange(shifted, n);
+	}
+
+	const from = origin.boundary;
+
+	if (n.compare(from, destination.boundary) === 0)
+	{
+		return reading;
+	}
+
+	if (atZero)
+	{
+		return subtract ? n.sub(destination.boundary, delta) : n.add(destination.boundary, delta);
+	}
+
+	// Compare cooling against the available distance before rounding the displayed reading.
+	const sign = direction < 0 ? n.compare(n.sub(temp.scalar, from), subtract ? delta : n.neg(delta)) : 1;
+
+	return translateReading(reading, sign, from, destination.boundary, n);
 }
 
 /** Scalar multiplication/division uses the same physical-boundary rules as addition. */
 export function scaleTemperature<T, C extends object>(temp: Quantity<T>, factor: T, divide: boolean, owner: Quantity<T, C>): Quantity<T, C>
 {
-	const scope = owner.cacheScope;
-	const n = owner.numeric;
-	const rational = hasRationalArithmetic(n);
-	let scalar: T;
+	const n = owner.numeric, scope = owner.cacheScope, unit = temp.numerator[0].unit;
+	const destination = temperatureConstants(unit, n, scope);
+	const scalar = temp.numeric !== n && !canSumRationalTerms(n) && integerAsNumber(n, factor) === 1
+		? applyTemperatureIdentity(temp, n, scope, destination, undefined,
+			reading => divide ? n.div(reading, factor) : n.mul(reading, factor))
+		: scaleTemperatureReading(unit, temp.scalar, factor, divide, n, scope, temp.numeric, destination);
 
-	if (!rational)
+	return owner[makeResult](scalar, temp, destination);
+}
+
+/** Scale a displayed reading using the source boundary and the receiver's final rounding. */
+export function scaleTemperatureReading<T>(unit: string, reading: T, factor: T, divide: boolean,
+	n: ArithmeticAdapter<T>, scope: CacheScope, source: ArithmeticAdapter<T> = n, destination = temperatureConstants(unit, n, scope)): T
+{
+	const origin = source === n ? destination : temperatureConstants(unit, source, scope);
+	const exactBoundary = canSumRationalTerms(n);
+	const finiteInputs = n.isFinite(reading) && n.isFinite(factor);
+
+	if (finiteInputs)
 	{
-		const zero = n.from(0);
-		if (n.compare(boundary(temp.numerator[0].unit, n, scope), zero) === 0 &&
-			n.compare(temp.scalar, zero) * n.compare(factor, zero) < 0)
+		if (exactBoundary)
 		{
-			rejectBelowZero();
-		}
-	}
+			const a = representedTerm(reading, source, n, scope);
+			const b = representedTerm(factor, n, source, scope);
 
-	if (!rational || !n.isFinite(temp.scalar) || !n.isFinite(factor) || divide && n.compare(factor, n.from(0)) === 0)
-	{
-		scalar = divide ? n.div(temp.scalar, factor) : n.mul(temp.scalar, factor);
-		const unit = temp.numerator[0].unit;
-
-		if (!sameBoundary(unit, temp.numeric, n, scope) && n.isFinite(scalar))
-		{
-			if (rational)
+			// Rational terms have unsigned zero. Keep exact zero operands in the backend.
+			if (a.numerator && b.numerator)
 			{
-				scalar = checkedReading([{ exact: scalarTerm(scalar, n, scope) }], temp, n, scope);
+				const term = divide ? scaleTerm({ ...a, exponent: a.exponent - b.exponent }, b.denominator, b.numerator)
+					: scaleTerm({ ...a, exponent: a.exponent + b.exponent }, b.numerator, b.denominator);
+				return checkedReading(term, source, n, scope, origin, destination);
 			}
-			else
+		}
+		else
+		{
+			if (integerAsNumber(source, origin.boundary) === 0)
 			{
-				const minimum = boundary(unit, temp.numeric, scope);
-				// Compare represented readings before subtracting: that difference may underflow.
-				if (n.compare(scalar, minimum) < 0)
+				// A negative finite product or quotient may underflow to signed zero.
+				const readingSign = scalarSign(n, reading), factorSign = scalarSign(n, factor);
+
+				if ((readingSign > 0 && factorSign < 0) || (readingSign < 0 && factorSign > 0))
 				{
 					rejectBelowZero();
 				}
-
-				scalar = readingAboveZero(n.sub(scalar, minimum), unit, n, scope);
 			}
 		}
 	}
-	else
+
+	const scalar = divide ? n.div(reading, factor) : n.mul(reading, factor);
+
+	if (!finiteInputs)
 	{
-		const a = scalarTerm(temp.scalar, n, scope), b = scalarTerm(factor, n, scope);
-		const term = divide ? scaleTerm({ ...a, exponent: a.exponent - b.exponent }, b.denominator, b.numerator)
-			: scaleTerm({ ...a, exponent: a.exponent + b.exponent }, b.numerator, b.denominator);
-		scalar = checkedReading([{ exact: term }], temp, n, scope);
+		return scalar;
 	}
 
-	return owner.createResult(scalar, temp);
+	if (source === n)
+	{
+		return checkTemperatureRange(scalar, n);
+	}
+
+	const to = destination.boundary;
+
+	if (exactBoundary)
+	{
+		if (!n.isFinite(scalar))
+		{
+			return scalar;
+		}
+
+		const sameBoundary = boundaryAdjustment(source, n, scope, origin, destination) === null;
+
+		if (sameBoundary)
+		{
+			return scalar;
+		}
+
+		return checkedReading(representedTerm(scalar, n, source, scope), source, n, scope, origin, destination);
+	}
+
+	if (!n.isValue(origin.boundary) || !n.isFinite(origin.boundary) || !n.isFinite(to))
+	{
+		// Only a finite source boundary can identify absolute zero before translation.
+		if (source.isFinite(origin.boundary) && source.isValue(factor))
+		{
+			const product = divide ? source.div(reading, factor) : source.mul(reading, factor);
+			const order = source.compare(product, origin.boundary);
+
+			if (order < 0)
+			{
+				rejectBelowZero();
+			}
+
+			if (order === 0)
+			{
+				return checkTemperatureRange(to, n);
+			}
+		}
+
+		const offset = offsetChange(origin, source, n, scope, destination);
+
+		return checkTemperatureRange(offset === undefined ? scalar : n.add(scalar, offset), n);
+	}
+
+	const from = origin.boundary;
+	// Compare at the receiver's precision first. When both results round together,
+	// use the original operands in the source context to distinguish them.
+	let sign = n.compare(scalar, n.add(from, n.sub(factor, factor)));
+
+	if (sign === 0 && source.isValue(factor))
+	{
+		const product = divide ? source.div(reading, factor) : source.mul(reading, factor);
+		sign = source.compare(product, from);
+	}
+
+	if (sign < 0)
+	{
+		rejectBelowZero();
+	}
+
+	if (sign === 0)
+	{
+		return checkTemperatureRange(to, n);
+	}
+
+	if (n.compare(from, to) === 0)
+	{
+		return clamp(checkTemperatureRange(scalar, n), to, n);
+	}
+
+	return translateAboveZero(scalar, from, to, n);
 }
 
 /** Absolute values can be shifted by intervals; two absolute values can only be subtracted. */

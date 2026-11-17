@@ -1,7 +1,7 @@
 import { numericSettings, type NumericSettings } from './numeric/backend.js';
 import { Quantity, type QuantityInput } from './QuantityCore.js';
 import type { QuantityConfigInput } from './QuantityConfig.js';
-import type { ArithmeticAdapter } from '@neutrium/utilities/numeric/arithmetic';
+import type { ArithmeticAdapter } from '@neutrium/math/numeric/arithmetic';
 import type { Parser } from './parsers/Parser.js';
 import type { ParserConfig } from './parsers/ParserConfig.js';
 import type { CacheConfig } from '@neutrium/utilities/cache';
@@ -9,8 +9,8 @@ import { resolveQuantityCache, type QuantityConfig } from './QuantityConfig.js';
 import { CacheScope } from './utils/CacheScope.js';
 import { parserConfig } from './parsers/ParserConfig.js';
 import { assertKnownKeys } from '@neutrium/utilities/validation';
-import type { NumericOptions } from '@neutrium/utilities/numeric/helpers';
-export type { NumericOptions } from '@neutrium/utilities/numeric/helpers';
+import type { NumericOptions } from '@neutrium/math/numeric/helpers';
+export type { NumericOptions } from '@neutrium/math/numeric/helpers';
 export type { NumericSettings } from './numeric/backend.js';
 
 /**
@@ -63,7 +63,7 @@ export interface NumericQuantityConstructor<T, Options = never, Resolved extends
  * Create a Quantity class with a chosen numeric backend and parser.
  * @param options - Adapter instance, parser factory, and optional Quantity configuration.
  * The parser factory receives resolved parser-cache settings. Its parser must evaluate
- * scalars with the adapter supplied to `parse`; wrappers should forward its cache scope.
+ * scalars with the adapter supplied to `parse`; wrappers should forward its cache scope and optional replacement scalar.
  * @returns A class whose instances, clones and calculated results retain this configuration.
  * @throws TypeError for unknown options, an invalid parser factory, or an adapter
  * missing the arithmetic capabilities required by Quantity.
@@ -71,7 +71,7 @@ export interface NumericQuantityConstructor<T, Options = never, Resolved extends
  * ```ts
  * import { createQuantityClass } from '@neutrium/quantity/factory';
  * import { RegexParser } from '@neutrium/quantity/parsers/regex';
- * import { NumberAdapter } from '@neutrium/utilities/number';
+ * import { NumberAdapter } from '@neutrium/math/adapters/number';
  *
  * const NativeQuantity = createQuantityClass({
  *     numeric: new NumberAdapter(),
@@ -125,15 +125,17 @@ export function createQuantityClass<A extends ArithmeticAdapter<any>>(options: {
 }
 
 export { Quantity };
-export type { QuantityInput };
+export type { QuantityInput, QuantityOperand } from './QuantityCore.js';
 export type { QuantityConfigInput, QuantityConfig, QuantityCacheInput, QuantityCacheConfig, CacheSetting } from './QuantityConfig.js';
 export type { Parser } from './parsers/Parser.js';
 export type { QuantityDefinition, UnitStructure, UnitPower } from './QuantityDefinition.js';
 /** Recognize quantities from any backend in this installed package. */
 export { isQuantity } from './guards.js';
 
-export type { ArithmeticAdapter } from '@neutrium/utilities/numeric/arithmetic';
-export type { ScientificAdapter } from '@neutrium/utilities/numeric/scientific';
+export type { ArithmeticAdapter } from '@neutrium/math/numeric/arithmetic';
+export type { ScientificAdapter } from '@neutrium/math/numeric/scientific';
 
 export type { ParserConfigInput, ParserConfig, ParserCacheConfigInput, ParserCacheStats } from './parsers/ParserConfig.js';
 export type { CacheConfigInput, CacheConfig } from '@neutrium/utilities/cache';
+
+export type { RationalExponent, UnitExponent } from './QuantityDefinition.js';

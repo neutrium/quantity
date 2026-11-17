@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Quantity } from '@neutrium/quantity';
 import { Quantity as RegexQuantity } from '@neutrium/quantity/regex';
-import { NearleyParser, RegexParser } from '@neutrium/quantity/parsers.js';
+import { PrattParser } from '@neutrium/quantity/parsers/pratt';
+import { RegexParser } from '@neutrium/quantity/parsers/regex';
 
 
-for (const Constructor of [Quantity, RegexQuantity]) {
-	describe(`conversion cache retention with ${Constructor === Quantity ? 'Nearley' : 'Regex'}`, () => {
+for (const [Constructor, Parser] of [[Quantity, PrattParser], [RegexQuantity, RegexParser]]) {
+	describe(`conversion cache retention with ${Parser.name}`, () => {
 		it('shares equivalent target results and bounds expression retention', () => {
-			const Parser = Constructor === Quantity ? NearleyParser : RegexParser;
 			const parser = new Parser();
 			const parse = vi.spyOn(parser, 'parse');
 			const Q = Constructor.withConfig({ cache: { conversionResults: { maxEntries: 2 } } });

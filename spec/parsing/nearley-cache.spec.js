@@ -1,4 +1,4 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it, vi } from 'vitest';
 import Nearley from 'nearley/lib/nearley.js';
@@ -68,7 +68,7 @@ describe('Nearley unit-expression cache', () => {
 		}
 
 		for (const input of ['', ' \t', '2** m', '2***3 m', '2^ m',
-			'2e m', '2**3**4 m', 'm**1e3', 'm**2.0', 'm**9007199254740992'])
+			'2e m', '2**3**4 m', 'm**9007199254740992'])
 		{
 			expect(() => parser.parse(input, testNumeric), input).toThrow();
 		}

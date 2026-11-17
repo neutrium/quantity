@@ -144,7 +144,7 @@ export class UnitTokenManager
 		}
 	}
 
-	/** Choose an output alias that both bundled parsers resolve to this unit/prefix pair. */
+	/** Choose an output alias that all three bundled parsers resolve to this unit/prefix pair. */
 	public getUnitOutput(unit: string, prefix?: string, scope: CacheScope = defaultCacheScope): string
 	{
 		const outputs = scope.get('metadata', UnitTokenManager.unitOutputsKey, () => new LruCache<string, string>());
@@ -201,6 +201,14 @@ export class UnitTokenManager
 	public getUnit(token: string): UnitDefinition | undefined
 	{
 		return UnitTokenManager.VALUES_MAP[token];
+	}
+
+	/** Match longer aliases first and treat punctuation in catalog names as literal text. */
+	public aliasPattern(type: 'unit' | 'prefix'): string
+	{
+		return Object.keys(this.getMap(type))
+			.sort((a, b) => b.length - a.length)
+			.map(alias => alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
 	}
 
 	public getMap(type: 'unit' | 'prefix' = 'unit') : KeyValue

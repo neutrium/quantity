@@ -1,9 +1,9 @@
 @preprocessor typescript
 
 @{%
-import { MooQtyLexer } from './MooQtyLexer.js';
+import { lexerTemplate } from './MooQtyLexer.js';
 import { numberExpression, unitExpression, product, power, implicitProduct, group, signedGroup, reciprocal } from './quantity-expression.js';
-export const lexer = new MooQtyLexer().lexer;
+export const lexer = lexerTemplate;
 %}
 
 @lexer lexer
@@ -25,7 +25,7 @@ FACTOR -> SCALAR_POWER UNIT_POWER {% data => implicitProduct(data[0], data[1]) %
         | SCALAR_POWER {% id %}
         | UNIT_POWER {% id %}
 
-UNIT_POWER -> ATOM %ws:? %pwr %ws:? %integer {% data => power(data[0], data[4], true) %}
+UNIT_POWER -> ATOM %ws:? %pwr %ws:? EXPONENT {% data => power(data[0], data[4], true) %}
             | ATOM %integer {% data => power(data[0], data[1], true) %}
             | ATOM %superscript {% data => power(data[0], data[1], true) %}
             | ATOM {% id %}
@@ -34,15 +34,19 @@ UNIT_POWER -> ATOM %ws:? %pwr %ws:? %integer {% data => power(data[0], data[4], 
 
 ATOM -> %unit {% data => unitExpression(data[0]) %}
 
-GROUP_POWER -> GROUP %ws:? %pwr %ws:? NUMBER_TOKEN {% data => power(data[0], data[4], true) %}
+GROUP_POWER -> GROUP %ws:? %pwr %ws:? EXPONENT {% data => power(data[0], data[4], true) %}
              | GROUP %integer {% data => power(data[0], data[1], true) %}
              | GROUP %superscript {% data => power(data[0], data[1], true) %}
              | GROUP {% id %}
-GROUP -> %lParen %ws:? EXPR %ws:? %rParen {% data => group(data[2]) %}
+GROUP -> %lParen %ws:? EXPR %ws:? %rParen {% data => group(data[2], data[0].offset) %}
 
-SCALAR_POWER -> NUMBER %ws:? %pwr %ws:? NUMBER_TOKEN {% data => power(data[0], data[4], false) %}
+SCALAR_POWER -> NUMBER %ws:? %pwr %ws:? EXPONENT {% data => power(data[0], data[4], false) %}
               | NUMBER %superscript {% data => power(data[0], data[1], false) %}
               | NUMBER {% id %}
 NUMBER -> NUMBER_TOKEN {% data => numberExpression(data[0]) %}
 NUMBER_TOKEN -> %integer {% id %}
               | %signedFloat {% id %}
+
+# Parentheses distinguish an exact fraction exponent from division of quantities.
+EXPONENT -> NUMBER_TOKEN {% id %}
+          | %lParen %ws:? %integer %ws:? %div %ws:? %integer %ws:? %rParen {% data => ({ ...data[2], value: data[2].value + "/" + data[6].value }) %}

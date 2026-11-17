@@ -4,7 +4,7 @@ import { Quantity as RegexQuantity } from '@neutrium/quantity/regex';
 
 for (const Entry of [Quantity, RegexQuantity])
 {
-	it(`keeps exact conversions compact at high precision with ${Entry === Quantity ? 'Nearley' : 'Regex'}`, () => {
+	it(`keeps exact conversions compact at high precision with ${Entry === Quantity ? 'Pratt' : 'Regex'}`, () => {
 		const Q = Entry.withConfig({ numeric: { precision: 100000, maxOutputDigits: 30 } });
 		for (const [source, target, expected] of [['1 m', 'cm', '100'], ['3 in', 'ft', '0.25'],
 			['8 m', '1/m', '0.125'], ['1 tempC', 'tempF', '33.8']])

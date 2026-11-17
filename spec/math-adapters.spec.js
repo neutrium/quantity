@@ -1,11 +1,11 @@
 import { overrideAdapter } from './helpers/numeric.js';
 import { describe, it, expect } from 'vitest';
-import { NumberAdapter } from '@neutrium/utilities/number';
+import { NumberAdapter } from '@neutrium/math/adapters/number';
 const numberAdapter = new NumberAdapter();
 import { floatAdapter } from './helpers/numeric.js';
-import { DecimalArithmeticAdapter } from '@neutrium/utilities/decimal/arithmetic';
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
-import { DecimalCoreAdapter } from '@neutrium/utilities/decimal/core';
+import { DecimalArithmeticAdapter } from '@neutrium/math/adapters/decimal/arithmetic';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
+import { DecimalCoreAdapter } from '@neutrium/math/adapters/decimal/core';
 const coreDecimal = new DecimalCoreAdapter();
 import { createQuantityClass } from '../dist/factory.js';
 import { NearleyParser } from '../dist/parsers/NearleyParser.js';
@@ -18,7 +18,7 @@ for (const [name, numeric] of [
 	['Decimal arithmetic', new DecimalArithmeticAdapter({ precision: 30 })],
 	['Decimal scientific', new DecimalScientificAdapter({ precision: 30 })],
 ]) {
-	describe('unmodified utilities adapter: ' + name, () => {
+	describe('unmodified math adapter: ' + name, () => {
 		const Q = configure(numeric);
 		it('parses, calculates and converts using the supplied scalar representation', () => {
 			const q = new Q('1 km').add('500 m').to('m');
@@ -35,7 +35,7 @@ for (const [name, numeric] of [
 			expect(numeric.toNumber(new Q('2 m').pow(3).scalar)).toBe(8);
 			expect(numeric.toNumber(new Q('2 m').pow(-2).scalar)).toBe(0.25);
 			expect(numeric.toNumber(new Q('(2 m)^3').scalar)).toBe(8);
-			for (const exponent of ['1e-10000', '1.00000000000000000001', '9007199254740992']) {
+			for (const exponent of ['1e-10000', 'NaN', '9007199254740992']) {
 				expect(() => new Q('1 m').pow(exponent)).toThrow();
 			}
 		});

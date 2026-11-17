@@ -4,16 +4,21 @@ import { build } from 'vite';
 import { fileURLToPath } from 'node:url';
 
 const noDecimal = ['@neutrium/decimal', '/utilities/dist/decimal/'];
+const nearleyModules = ['NearleyParser', '/nearley/', 'qty-grammar'];
+const prattModules = ['PrattParser', '/parsing/pratt'];
+const expressionParserModules = [...nearleyModules, ...prattModules, 'MooQtyLexer', '/moo/'];
 const cases = [
-	['default', "import { Quantity } from '@neutrium/quantity'; export const result = new Quantity('2 m').add('1 m').scalar.toString();", ['RegexParser'], ['NearleyParser', '/nearley/', '/moo/']],
-	['regex', "import { Quantity } from '@neutrium/quantity/regex'; import { isQuantity } from '@neutrium/quantity/guards.js'; export const result = isQuantity(new Quantity('1e3 m').add('2 m'));", ['NearleyParser', 'qty-grammar', 'MooQtyLexer', '/nearley/', '/moo/'], ['RegexParser']],
-	['custom', "import { createQuantityClass } from '@neutrium/quantity/factory'; import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific'; const decimalAdapter = new DecimalScientificAdapter(); const Quantity = createQuantityClass({ numeric: decimalAdapter, parser: () => ({ parse: (text, n) => ({ scalar: n.from(text), numerator: [], denominator: [] }) }) }); export const result = new Quantity('2').add('3').scalar.toString();", ['NearleyParser', 'RegexParser', 'qty-grammar', 'MooQtyLexer', '/nearley/', '/moo/'], []],
-	['number', "import { Quantity } from '@neutrium/quantity/number'; export const result = new Quantity('2 m').add('3 m').scalar;", noDecimal, ['NearleyParser', '/nearley/']],
-	['number-regex', "import { createQuantityClass } from '@neutrium/quantity/factory'; import { NumberAdapter } from '@neutrium/utilities/number'; const numberAdapter = new NumberAdapter(); import { RegexParser } from '@neutrium/quantity/parsers/regex'; const Q = createQuantityClass({ numeric: numberAdapter, parser: c => new RegexParser(c) }); export const result = new Q('2 m').add('3 m').scalar;", [...noDecimal, '/nearley/', '/moo/', 'qty-grammar'], ['RegexParser']],
-	['number-custom-parser', "import { createQuantityClass } from '@neutrium/quantity/factory'; import { NumberAdapter } from '@neutrium/utilities/number'; const numberAdapter = new NumberAdapter(); const Q = createQuantityClass({ numeric: numberAdapter, parser: () => ({ parse: (text, n) => ({ scalar: n.from(text), numerator: [], denominator: [] }) }) }); export const result = new Q('2').add('3').scalar;", [...noDecimal, 'NearleyParser', 'RegexParser', '/nearley/', '/moo/'], []],
+	['decimal-arithmetic', "import { createQuantityClass } from '@neutrium/quantity/factory'; import { PrattParser } from '@neutrium/quantity/parsers/pratt'; import { DecimalArithmeticAdapter } from '@neutrium/math/adapters/decimal/arithmetic'; const Q = createQuantityClass({ numeric: new DecimalArithmeticAdapter(), parser: c => new PrattParser(c) }); export const result = new Q('25 m2').sqrt().scalar.toString();", ['DecimalScientificAdapter', '/decimal/dist/scientific', '/decimal/dist/ScientificDecimal.js', ...nearleyModules], ['DecimalArithmeticAdapter', ...prattModules]],
+	['default', "import { Quantity } from '@neutrium/quantity'; export const result = new Quantity('2 m').add('1 m').scalar.toString();", ['RegexParser', ...nearleyModules], [...prattModules, '/moo/']],
+	['regex', "import { Quantity } from '@neutrium/quantity/regex'; import { isQuantity } from '@neutrium/quantity/guards.js'; export const result = isQuantity(new Quantity('1e3 m').add('2 m'));", expressionParserModules, ['RegexParser']],
+	['custom', "import { createQuantityClass } from '@neutrium/quantity/factory'; import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific'; const decimalAdapter = new DecimalScientificAdapter(); const Quantity = createQuantityClass({ numeric: decimalAdapter, parser: () => ({ parse: (text, n) => ({ scalar: n.from(text), numerator: [], denominator: [] }) }) }); export const result = new Quantity('2').add('3').scalar.toString();", ['RegexParser', ...expressionParserModules], []],
+	['number', "import { Quantity } from '@neutrium/quantity/number'; export const result = new Quantity('2 m').add('3 m').scalar;", [...noDecimal, 'RegexParser', ...nearleyModules], [...prattModules, '/moo/']],
+	['number-nearley', "import { createQuantityClass } from '@neutrium/quantity/factory'; import { NumberAdapter } from '@neutrium/math/adapters/number'; import { NearleyParser } from '@neutrium/quantity/parsers/nearley'; const Q = createQuantityClass({ numeric: new NumberAdapter(), parser: c => new NearleyParser(c) }); export const result = new Q('2 (m/s)^2').add('3 m2/s2').scalar;", [...noDecimal, 'RegexParser', ...prattModules], [...nearleyModules, '/moo/']],
+	['number-regex', "import { createQuantityClass } from '@neutrium/quantity/factory'; import { NumberAdapter } from '@neutrium/math/adapters/number'; const numberAdapter = new NumberAdapter(); import { RegexParser } from '@neutrium/quantity/parsers/regex'; const Q = createQuantityClass({ numeric: numberAdapter, parser: c => new RegexParser(c) }); export const result = new Q('2 m').add('3 m').scalar;", [...noDecimal, ...expressionParserModules], ['RegexParser']],
+	['number-custom-parser', "import { createQuantityClass } from '@neutrium/quantity/factory'; import { NumberAdapter } from '@neutrium/math/adapters/number'; const numberAdapter = new NumberAdapter(); const Q = createQuantityClass({ numeric: numberAdapter, parser: () => ({ parse: (text, n) => ({ scalar: n.from(text), numerator: [], denominator: [] }) }) }); export const result = new Q('2').add('3').scalar;", [...noDecimal, 'RegexParser', ...expressionParserModules], []],
 	['number-custom-backend', `
 		import { createQuantityClass } from '@neutrium/quantity/factory';
-		import { NumberAdapter } from '@neutrium/utilities/number'; const numberAdapter = new NumberAdapter();
+		import { NumberAdapter } from '@neutrium/math/adapters/number'; const numberAdapter = new NumberAdapter();
 		import { RegexParser } from '@neutrium/quantity/parsers/regex';
 		class Box { constructor(value) { this.value = value; Object.freeze(this); } }
 		const value = x => x instanceof Box ? x.value : numberAdapter.from(x);
@@ -32,7 +37,7 @@ const cases = [
 		};
 		const Q = createQuantityClass({ numeric, parser: c => new RegexParser(c) });
 		export const result = new Q('2 m').add('300 cm').scalar.value;
-	`, [...noDecimal, '/nearley/', '/moo/'], ['RegexParser']],
+	`, [...noDecimal, ...expressionParserModules], ['RegexParser']],
 
 
 ];

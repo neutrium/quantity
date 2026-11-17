@@ -1,6 +1,6 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const testNumeric = new DecimalScientificAdapter();
-// Run after npm run build; optional first argument overrides the default report path.
+// Run after pnpm run build; optional first argument overrides the default report path.
 import assert from 'node:assert/strict';
 import { measure, measurementDefaults } from '../benchmark/measure.js';
 import { writeResults } from '../benchmark/write-results.js';
@@ -16,14 +16,23 @@ for (const prefix of new Set(Object.values(manager.getMap('prefix'))))
 {
 	for (const [unit, definition] of Object.entries(manager.values))
 	{
-		if (definition.category === 'prefix' || unit === '<1>' || unit.startsWith('<temp-')) continue;
+		if (definition.category === 'prefix' || unit === '<1>' || unit.startsWith('<temp-'))
+		{
+			continue;
+		}
 
 		aliases.push(manager.getUnitOutput(unit, prefix));
 
-		if (aliases.length === 400) break;
+		if (aliases.length === 400)
+		{
+			break;
+		}
 	}
 
-	if (aliases.length === 400) break;
+	if (aliases.length === 400)
+	{
+		break;
+	}
 }
 
 const parser = new NearleyParser();
@@ -42,6 +51,7 @@ for (const [name, input] of cases)
 		assert.deepEqual(value.numerator, expected.numerator);
 		assert.deepEqual(value.denominator, expected.denominator);
 	};
+
 	results[name] = {
 		characters: input.length,
 		microsecondsPerOperation: measure({
@@ -51,10 +61,12 @@ for (const [name, input] of cases)
 		}),
 	};
 }
+
 const report = {
 	environment: { node: process.version, platform: process.platform, architecture: process.arch, cpu: cpus()[0].model },
 	settings: { ...measurementDefaults, unitExpressionCache: 'cleared before each parse, outside timing' },
 	results,
 };
+
 writeResults('nearley-cold.json', report, process.argv[2]);
 console.table(results);

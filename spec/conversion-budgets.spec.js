@@ -1,4 +1,4 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it, vi } from 'vitest';
 import { Decimal } from '@neutrium/decimal';
@@ -6,13 +6,12 @@ import { Quantity } from '@neutrium/quantity';
 import { Quantity as RegexQuantity } from '@neutrium/quantity/regex';
 import { createQuantityClass } from '@neutrium/quantity/factory';
 import { RegexParser } from '@neutrium/quantity/parsers/regex';
-import { NearleyParser } from '@neutrium/quantity/parsers/nearley';
+import { PrattParser } from '@neutrium/quantity/parsers/pratt';
 
 
-for (const Entry of [Quantity, RegexQuantity])
+for (const [Entry, Parser] of [[Quantity, PrattParser], [RegexQuantity, RegexParser]])
 {
-	const Parser = Entry === Quantity ? NearleyParser : RegexParser;
-	describe(`conversion budgets: ${Entry === Quantity ? 'Nearley' : 'Regex'}`, () => {
+	describe(`conversion budgets: ${Parser.name}`, () => {
 		it('does not retain padded or oversized targets while reusing the converted result', () => {
 			const Q = Entry.withConfig({ cache: { parser: { maxBytes: 0 }, conversionResults: { maxBytes: 4096 } } });
 			const parser = new Parser(Q.parserConfig), parse = vi.spyOn(parser, 'parse');

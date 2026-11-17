@@ -3,7 +3,7 @@ import { Quantity } from '../dist/Quantity.js';
 import { Quantity as RegexQuantity } from '../dist/regex.js';
 
 for (const Constructor of [Quantity, RegexQuantity]) {
-	describe(`capacitance with ${Constructor === Quantity ? 'Nearley' : 'Regex'}`, () => {
+	describe(`capacitance with ${Constructor === Quantity ? 'Pratt' : 'Regex'}`, () => {
 		it('converts between farads and prefixed farads in both directions', () => {
 			const farad = new Constructor('1 farad');
 			for (const [units, count] of [['millifarad', '1000'], ['microfarad', '1000000'], ['kilofarad', '0.001']]) {

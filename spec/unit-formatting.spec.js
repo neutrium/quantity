@@ -1,9 +1,10 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it } from 'vitest';
 import { Quantity } from '../dist/Quantity.js';
 import { Quantity as RegexQuantity } from '../dist/regex.js';
 import { NearleyParser } from '../dist/parsers/NearleyParser.js';
+import { PrattParser } from '../dist/parsers/PrattParser.js';
 import { RegexParser } from '../dist/parsers/RegexParser.js';
 import { UnitTokenManager } from '../dist/UnitTokenManager.js';
 import { stringifyUnits } from '../dist/operations/unit-strings.js';
@@ -11,7 +12,7 @@ import { stringifyUnits } from '../dist/operations/unit-strings.js';
 describe('unit expression round trips', () => {
 	for (const Constructor of [Quantity, RegexQuantity])
 	{
-		it(`preserves compound denominators and reciprocals from ${Constructor === Quantity ? 'Nearley' : 'Regex'}`, () => {
+		it(`preserves compound denominators and reciprocals from ${Constructor === Quantity ? 'Pratt' : 'Regex'}`, () => {
 			for (const [input, expected] of [
 				['kg/m/s', 'kg/m.s'], ['kg/cm/ms', 'kg/cm.ms'],
 				['m/s/kg', 'm/s.kg'], ['1/m', '1/m'], ['1/m/s', '1/m.s'],
@@ -66,9 +67,9 @@ describe('unit expression round trips', () => {
 		expect(reciprocal.inverse().units()).toBe('cm*h');
 	});
 
-	it('round trips every catalog unit with common prefixes through both parsers', () => {
+	it('round trips every catalog unit with common prefixes through all three parsers', () => {
 		const manager = UnitTokenManager.instance;
-		const parsers = [new NearleyParser(), new RegexParser()];
+		const parsers = [new PrattParser(), new NearleyParser(), new RegexParser()];
 
 		for (const [unit, definition] of Object.entries(manager.values))
 		{

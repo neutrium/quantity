@@ -1,11 +1,80 @@
-import type { ScientificAdapter } from '@neutrium/utilities/numeric/scientific';
-import type { ArithmeticAdapter } from '@neutrium/utilities/numeric/arithmetic';
-import { toSafeInteger, IntegerConversionError } from '@neutrium/utilities/numeric/helpers';
+import type { NumericAdapter } from '@neutrium/math/numeric/core';
+import type { ArithmeticAdapter } from '@neutrium/math/numeric/arithmetic';
+import { hasRationalExtraction } from '@neutrium/math/numeric/rational';
+import { powRational } from '@neutrium/math/numeric/powers';
+import type { UnitExponent, RationalExponent } from '../QuantityDefinition.js';
+import { parseExponent, normalizeExponent, exponentTerm, checkedExponent } from '../operations/exponents.js';
+
+/** Check integrality before conversion so rounding to a native zero or one cannot give a false match. */
+export function integerAsNumber<T>(numeric: NumericAdapter<T>, value: T): number | undefined
+{
+	return numeric.isInteger(value) ? numeric.toNumber(value) : undefined;
+}
+
+/** Signed zero survives native conversion. A noninteger that underflows still has a sign. */
+export function scalarSign<T>(numeric: NumericAdapter<T>, value: T): number
+{
+	const number = numeric.toNumber(value);
+	if (number !== 0 || numeric.isInteger(value)) return Math.sign(number);
+	return Object.is(number, -0) ? -1 : 1;
+}
+
+/** Read dimensional powers before adapter rounding or display formatting can change them. */
+export function quantityExponent<T>(numeric: ArithmeticAdapter<T>, value: string | number | T | RationalExponent): UnitExponent
+{
+	if (typeof value === 'number')
+	{
+		return Number.isInteger(value) ? checkedExponent(value) : parseExponent(String(value));
+	}
+
+	if (!numeric.isValue(value))
+	{
+		if (typeof value === 'string')
+		{
+			return parseExponent(value.trim());
+		}
+
+		if (value && typeof value === 'object' && 'numerator' in value && 'denominator' in value)
+		{
+			return normalizeExponent(value as RationalExponent);
+		}
+		throw new TypeError('Invalid exponent');
+	}
+	if (!numeric.isFinite(value))
+	{
+		throw new TypeError('Invalid exponent');
+	}
+
+	if (numeric.isInteger(value))
+	{
+		return checkedExponent(numeric.toNumber(value));
+	}
+
+	if (hasRationalExtraction(numeric))
+	{
+		return exponentTerm(numeric.toRationalTerm(value));
+	}
+
+	const text = numeric.toString(value);
+
+	if (numeric.compare(numeric.from(text), value) !== 0)
+	{
+		throw new TypeError('The adapter rounded the exponent text. Supply an explicit exponent string or rational record.');
+	}
+
+	return parseExponent(text);
+}
+
+/** Scalar roots follow backend precision; dimensional powers remain exact. */
+export function rationalPower<T>(numeric: ArithmeticAdapter<T>, value: T, exponent: UnitExponent): T
+{
+	return typeof exponent === 'number' ? numeric.powInteger(value, exponent) : powRational(numeric, value, exponent);
+}
 
 /** Quantity accepts numeric stringifiable objects in addition to adapter-native inputs. */
 export function scalarFrom<T>(numeric: ArithmeticAdapter<T>, value: unknown): T
 {
-	if (!numeric.isValue(value) && value !== null && typeof value === 'object')
+	if (value !== null && typeof value === 'object' && !numeric.isValue(value))
 	{
 		value = value.toString();
 
@@ -18,63 +87,8 @@ export function scalarFrom<T>(numeric: ArithmeticAdapter<T>, value: unknown): T
 	return numeric.from(value);
 }
 
-/** Validate dimensional exponents before backend precision or range can change them. */
-export function integerExponent<T>(numeric: ArithmeticAdapter<T>, value: string | number | T): number
-{
-	try
-	{
-		return toSafeInteger(value, numeric);
-	}
-	catch (error)
-	{
-		if (!(error instanceof IntegerConversionError))
-		{
-			throw error;
-		}
-
-		if (error.reason === 'fractional')
-		{
-			throw new Error('Raising quantities to a fractional power not currently supported');
-		}
-
-		if (error.reason === 'invalid')
-		{
-			throw new TypeError('Invalid exponent');
-		}
-
-		throw new RangeError('Unit exponent must be a safe integer');
-	}
-}
-
-/** Parser scalar powers also accept fractional literals when the backend supports them. */
-export function power<T>(numeric: ArithmeticAdapter<T>, value: T, exponent: string): T
-{
-	if (numeric.tier === 'scientific')
-	{
-		let integer: number;
-		try
-		{
-			integer = toSafeInteger(exponent);
-		}
-		catch (error)
-		{
-			if (!(error instanceof IntegerConversionError))
-			{
-				throw error;
-			}
-
-			// Preserve fractional and large literals for the scientific backend.
-			return (numeric as ScientificAdapter<T>).pow(value, exponent);
-		}
-
-		return numeric.powInteger(value, integer);
-	}
-
-	return numeric.powInteger(value, integerExponent(numeric, exponent));
-}
-
 /** Unknown/expensive scalar sizes disable caching of that result, never its calculation. */
-export function scalarBytes<T>(numeric: ArithmeticAdapter<T>, value: T): number
+export function scalarBytes<T>(numeric: NumericAdapter<T>, value: T): number
 {
 	try
 	{

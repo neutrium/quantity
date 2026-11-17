@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { Decimal } from '@neutrium/decimal';
 import { Quantity } from '@neutrium/quantity';
 import { Quantity as RegexQuantity } from '@neutrium/quantity/regex';
-import { NearleyParser, RegexParser } from '@neutrium/quantity/parsers.js';
+import { PrattParser, RegexParser } from '@neutrium/quantity/parsers.js';
 import * as unitIdentity from '../dist/operations/unit-identity.js';
 
 
-for (const [Entry, Parser] of [[Quantity, NearleyParser], [RegexQuantity, RegexParser]])
+for (const [Entry, Parser] of [[Quantity, PrattParser], [RegexQuantity, RegexParser]])
 {
 	describe(`same-unit conversion caching: ${Parser.name}`, () => {
 		it.each([true, false, { metadata: false }])('does not construct conversion keys for identity targets with cache %j', cache => {
@@ -20,7 +20,7 @@ for (const [Entry, Parser] of [[Quantity, NearleyParser], [RegexQuantity, RegexP
 			expect(source.to('meter')).toBe(source);
 			expect(key).not.toHaveBeenCalled();
 		});
-		it('parses and constructs each successful identity target only once', () => {
+		it('parses each cached identity expression once without constructing a target quantity', () => {
 			let constructions = 0;
 
 			class Counted extends Entry
@@ -43,7 +43,7 @@ for (const [Entry, Parser] of [[Quantity, NearleyParser], [RegexQuantity, RegexP
 					parse.mockClear();
 					for (let i = 0; i < 10; i++) expect(source.to(expression)).toBe(source);
 					expect(parse).toHaveBeenCalledTimes(1);
-					expect(constructions).toBe(1);
+					expect(constructions).toBe(0);
 				}
 			}
 		});

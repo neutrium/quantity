@@ -1,4 +1,4 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it } from 'vitest';
 import { Decimal } from '@neutrium/decimal';
@@ -10,7 +10,7 @@ import { NearleyParser, RegexParser } from '@neutrium/quantity/parsers.js';
 describe('zero powers', () => {
 	for (const Constructor of [Quantity, RegexQuantity])
 	{
-		it(`returns a dimensionless identity for ${Constructor === Quantity ? 'Nearley' : 'Regex'} quantities`, () => {
+		it(`returns a dimensionless identity for ${Constructor === Quantity ? 'Pratt' : 'Regex'} quantities`, () => {
 			for (const input of ['3 m', '0 m', '2 m/s', '20 tempC', '5'])
 			{
 				const q = new Constructor(input);

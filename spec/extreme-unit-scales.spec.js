@@ -5,7 +5,7 @@ import { Quantity as RegexQuantity } from '../dist/regex.js';
 
 const max = Number.MAX_SAFE_INTEGER;
 for (const Constructor of [Quantity, RegexQuantity]) {
-	describe(`extreme scales with ${Constructor === Quantity ? 'Nearley' : 'Regex'}`, () => {
+	describe(`extreme scales with ${Constructor === Quantity ? 'Pratt' : 'Regex'}`, () => {
 		it('cancels overflowing and underflowing factors before evaluating powers', () => {
 			for (const units of ['km', 'mm', 'Yft', 'Kibyte']) {
 				const input = `2 ${units}${max}/${units}${max}`;

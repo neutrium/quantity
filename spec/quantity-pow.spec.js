@@ -17,7 +17,21 @@ describe("Neutrium Quantity Power Tests", function() {
 		expect(q1.eq(q2)).toEqual(true);
 	});
 
-	it("should (10m)^0.5 throw Error", function() {
-		expect(() => new Quantity("10m").pow(0.5)).toThrow(new Error("Raising quantities to a fractional power not currently supported"));
+	it("should (10m)^0.5 retain fractional units", function() {
+		expect(new Quantity("10m").pow(0.5).units()).toBe("m^(1/2)");
+	});
+
+	it('accepts surrounding whitespace in exponent strings', () => {
+		const area = new Quantity('4 m2');
+		for (const exponent of ['2', '-2', '0.5', '5e-1', '1/2']) {
+			expect(area.pow(' \t' + exponent + '\n').same(area.pow(exponent))).toBe(true);
+		}
+	});
+
+	it('rejects blank exponents and whitespace within a literal', () => {
+		const area = new Quantity('4 m2');
+		for (const exponent of [' \t\n', '1 2', '1 / 2']) {
+			expect(() => area.pow(exponent)).toThrow('Invalid exponent');
+		}
 	});
 });

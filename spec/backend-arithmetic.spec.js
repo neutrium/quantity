@@ -1,6 +1,6 @@
 import { overrideAdapter } from './helpers/numeric.js';
 import { describe, expect, it, vi } from 'vitest';
-import { NumberAdapter } from '@neutrium/utilities/number';
+import { NumberAdapter } from '@neutrium/math/adapters/number';
 const numberAdapter = new NumberAdapter();
 import { floatAdapter } from './helpers/numeric.js';
 import { createQuantityClass } from '../dist/factory.js';
@@ -9,9 +9,21 @@ import { RegexParser } from '../dist/parsers/RegexParser.js';
 
 const noFormatting = () => { throw new Error('Calculation serialized a scalar'); };
 
+it('checks temperature scaling before underflow with a difference-based comparator', () => {
+	const numeric = overrideAdapter(numberAdapter, { compare: (a, b) => a === b ? 0 : a - b });
+	const Q = createQuantityClass({ numeric, parser: c => new RegexParser(c) });
+	const temp = new Q('1e-300 tempK');
+	expect(() => temp.mul(-1e-100)).toThrow('absolute zero');
+	expect(() => new Q(-1e-100).mul(temp)).toThrow('absolute zero');
+	expect(temp.mul(1e-100).scalar).toBe(0);
+	expect(temp.mul(-0).scalar).toBe(-0);
+	expect(temp.mul(NaN).scalar).toBeNaN();
+});
+
 for (const base of [numberAdapter, floatAdapter])
 {
-	for (const Parser of [NearleyParser, RegexParser]) {
+	for (const Parser of [NearleyParser, RegexParser])
+	{
 		describe(`${base.id} arithmetic through ${Parser.name}`, () => {
 			for (const cache of [true, false])
 			{
@@ -138,15 +150,18 @@ it('keeps large integer exponents exact for float quantities and parsed scalar p
 	const powInteger = vi.fn(floatAdapter.powInteger), pow = vi.fn(floatAdapter.pow);
 	const numeric = overrideAdapter(floatAdapter, { powInteger, pow, toString: noFormatting });
 	const Q = createQuantityClass({ numeric, parser: c => new NearleyParser(c) });
+
 	for (const exponent of [16777217, -16777217])
 	{
 		expect(new Q('-1 m').pow(exponent).scalar).toBe(-1);
 		expect(new Q(`(-1 m)^${exponent}`).scalar).toBe(-1);
 		expect(powInteger).toHaveBeenCalledWith(-1, exponent);
 	}
+
 	expect(pow).not.toHaveBeenCalled();
 	expect(new Q('(4)^0.5 m').scalar).toBe(2);
-	expect(pow).toHaveBeenCalledWith(4, '0.5');
+	expect(new Q('(-1)^9007199254740992').scalar).toBe(1);
+	expect(pow).toHaveBeenCalledWith(-1, '9007199254740992');
 });
 
 it('uses adapter size estimates and bypasses caching when an estimate is unavailable or fails', () => {
@@ -164,6 +179,7 @@ it('uses adapter size estimates and bypasses caching when an estimate is unavail
 		expect(second).not.toBe(first);
 		expect(toBytes).toHaveBeenCalledWith(200);
 	}
+
 	const toBytes = vi.fn(() => 8);
 	const Q = createQuantityClass({ numeric: overrideAdapter(numberAdapter, { toBytes, toString: noFormatting }),
 		parser: c => new RegexParser(c) });

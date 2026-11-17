@@ -7,13 +7,20 @@ import { INPUT_SCALAR } from './scalar-expression.js';
 /** One-shot lexer adapter: inspect the first token once, then continue the same stream. */
 export class PreparedExpression implements Nearley.Lexer
 {
-	readonly key: string;
+	private readonly hasLeadingScalar: boolean;
 	readonly scalar: string;
 	readonly baseOffset: number;
 	readonly scalarOffset: number;
 	last?: Token;
-	openGroups = 0;
 	private initial?: Token;
+
+	static bareKey(input: string): string { return 'bare:' + input.trimEnd(); }
+
+	cacheKey(input: string): string
+	{
+		const suffix = input.slice(this.baseOffset);
+		return this.hasLeadingScalar ? 'scalar:' + suffix.trimEnd() : PreparedExpression.bareKey(suffix);
+	}
 
 	constructor(
 		private readonly lexer: CloneableLexer,
@@ -32,7 +39,7 @@ export class PreparedExpression implements Nearley.Lexer
 		this.scalar = parameter ? first!.value : '1';
 		this.scalarOffset = first?.offset ?? 0;
 		this.baseOffset = parameter ? first!.offset + first!.text.length : first?.offset ?? 0;
-		this.key = scope.enabled('parser') ? (parameter ? 'scalar:' : 'bare:') + input.slice(this.baseOffset).trimEnd() : '';
+		this.hasLeadingScalar = parameter;
 
 		// Moo creates fresh tokens for this call; adjust them in place instead of
 		// allocating a second object for every token in long expressions.
@@ -98,22 +105,16 @@ export class PreparedExpression implements Nearley.Lexer
 
 		if (token)
 		{
-			if (token.type === 'unit') (token as Token & { cacheScope: CacheScope }).cacheScope = this.scope;
-			if (token.type === 'lParen')
+			if (token.type === 'unit')
 			{
-				this.openGroups++;
+				(token as Token & { cacheScope: CacheScope }).cacheScope = this.scope;
 			}
-
-			if (token.type === 'rParen')
-			{
-				this.openGroups--;
-			}
-
 			if (token.type !== 'ws')
 			{
 				this.last = token;
 			}
 		}
+
 		return token;
 	}
 

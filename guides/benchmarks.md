@@ -1,9 +1,9 @@
 # Quantity benchmarks
 
 ```sh
-npm run benchmark
-npm run benchmark -- parsers
-npm run benchmark -- -t conversion
+pnpm run benchmark
+pnpm run benchmark parsers
+pnpm run benchmark -t conversion
 ```
 
 Each command builds fresh `dist` output. The first runs all benchmarks once; the other commands filter by file or benchmark name. Vitest's module runner is disabled so Node executes the compiled ESM without Vite's import getter instrumentation. Benchmarks use a separate configuration, run one file at a time, and do not run with ordinary tests or gate CI. Vitest prints statistics and comparisons to `benchmark/results/vitest.json` (ignored by Git). Each run replaces this report; copy it elsewhere before the next run if you need to retain a baseline. Commit metadata does not describe uncommitted working-tree changes.
@@ -15,6 +15,7 @@ By default, generated reports are local artifacts in the Git-ignored `benchmark/
 | `tools/benchmark-powers.mjs` | `benchmark/results/powers.json` |
 | `tools/benchmark-base-values.mjs` | `benchmark/results/base-values.json` |
 | `tools/benchmark-nearley-cold.mjs` | `benchmark/results/nearley-cold.json` |
+| `tools/benchmark-parsers.mjs` | `benchmark/results/parsers-comparison.json` |
 
 An optional first argument overrides a standalone script's output path. To keep a baseline in the ignored directory, for example, pass `benchmark/results/base-values-before.json`. Default paths resolve relative to the repository; explicit relative paths resolve from the current working directory. Historical `*-results.json` reports referenced below also live in this directory when available locally; they are not distributed with a fresh checkout. New runs use the default filenames above and do not overwrite those historical reports.
 
@@ -22,18 +23,18 @@ The standalone scripts share `benchmark/measure.js`: five samples of at least 20
 
 ## Workloads
 
-- Parser comparisons cover simple, compound, powered and scientific-notation expressions. Each compares constructing a wrapper and parsing with reusing the wrapper. A separate case covers Nearley's parenthesized expressions, which the Regex parser does not support.
-- A Nearley-only workload varies the scalar in `n/2 (kg·m/s)²` to exercise cached scalar operations and Unicode notation.
+- Parser comparisons cover simple, compound, powered and scientific-notation expressions. Each compares constructing a wrapper and parsing with reusing the wrapper. Separate cases cover Nearley and Pratt parenthesized expressions, which the Regex parser does not support.
+- A Nearley/Pratt workload varies the scalar in `n/2 (kg·m/s)²` to exercise cached scalar operations and Unicode notation.
 - Construction covers the public Quantity API with the default parser, an explicit Regex parser, separate scalar/units, and a preparsed definition.
 - Conversions cover length, speed and absolute temperature. Each measures construction plus conversion, first conversion on a fresh instance prepared outside the timer, and repeated conversion on a warmed instance.
-- Arithmetic uses prepared operands for addition, subtraction, multiplication, division, scalar multiplication and positive/negative integer powers. Different-unit addition reuses cached unit plans and evaluates the complete rational sum before final backend rounding; it does not use the per-Quantity conversion-result cache or call `to()`. Prepared-operand cases also cover unitless quantity multipliers, compound products without cancellation, and `pow(1)`.
+- Arithmetic uses prepared operands for addition, subtraction, multiplication, division, scalar multiplication and positive/negative integer powers. Different-unit addition reuses cached unit plans and submits the complete rational sum to adapters that support it; it does not use the per-Quantity conversion-result cache or call `to()`. Prepared-operand cases also cover unitless quantity multipliers, compound products without cancellation, and `pow(1)`.
 - Comparisons cover `lte` and `gte` with string operands and `compareTo` with an existing quantity.
 - Unit identity compares shared arrays and distinct equal/unequal records with metadata caching enabled and disabled, using both short and longer unit structures.
 - Metadata workloads compare repeated reads, construction with formatting, and base conversion with default caching, metadata caching disabled, and all caches disabled, for Decimal and double backends.
 
 All workloads validate their results before timing and consume and validate the last measured result afterwards. Assertions and expected-value construction are outside timed callbacks. Setup hooks allocate fresh instances outside the timer; their allocations can still affect garbage collection during a run.
 
-These are steady-state measurements: module initialization and both parsers' shared unit-expression caches are warmed. Constructing a new parser wrapper does not clear these caches. Nearley evaluates the scalar on every call and creates an internal Nearley parser only on a unit-expression cache miss, with isolated lexer state. The compiled grammar is shared across calls and wrappers. Fresh-instance conversion cases measure an empty instance conversion cache, not a cold process. Workloads that explicitly disable caching recalculate the affected values on every call.
+These are steady-state measurements: module initialization and all three parsers' shared unit-expression caches are warmed. Constructing a new parser wrapper does not clear these caches. Nearley evaluates the scalar on every call and creates an internal Nearley parser only on a unit-expression cache miss, with isolated lexer state. The compiled grammar is shared across calls and wrappers. Fresh-instance conversion cases measure an empty instance conversion cache, not a cold process. Workloads that explicitly disable caching recalculate the affected values on every call.
 
 The changing-scalar parser workload cycles through 2,048 values with fixed units, while the distinct-unit workload cycles through 2,048 unit powers to exceed the 1,024-entry expression caches. The latter includes parsing and cache maintenance on misses, with grammar initialization and individual unit definitions still warm.
 
@@ -41,12 +42,44 @@ The scalar-expression/Unicode implementation was also compared with the precedin
 
 The cached-conversion cases time **100 calls per operation** across 100 warmed instances, retaining every result in a preallocated array. This reduces timer overhead and avoids a loop whose identical results are discarded. Array access and result storage are included. Their reported throughput is batches/second: multiply by 100 for calls/second, or divide latency by 100 for average time/call. Unit-identity and metadata cases also use batches, as described below. Other cases perform one library operation per measurement. Rankings across different workloads show relative costs, not interchangeable implementations.
 
+## Regex, Nearley and Pratt parsers
+
+Run `pnpm run benchmark:parsers` to build and compare all three parsers with Decimal and JavaScript number scalars. To use an existing build or choose a report location, run `node tools/benchmark-parsers.mjs [output.json]`. The usual `pnpm run benchmark parsers` also includes Pratt, disabled caches, changing scalars, distinct unit expressions, and Nearley/Pratt grouping cases.
+
+Measured on 1 November 2026 with an Apple M4 Pro, macOS arm64, Node 26.13.0. These are median microseconds per parse from five samples of at least 200 ms after 20 warmup calls. Each case validates its definition against Nearley outside timing. The cold-plan mode clears the expression plan before each call outside timing, retaining token caches; module initialization is already warm. Regex is omitted where the syntax requires an expression parser.
+
+Cold expression plans, using Decimal:
+
+| Workload | Regex µs/op | Nearley µs/op | Pratt µs/op | Nearley/Pratt speedup |
+| --- | ---: | ---: | ---: | ---: |
+| `m` | 0.516 | 2.074 | 1.715 | 1.21× |
+| `3.5 kg.m/s^2` | 1.082 | 10.282 | 3.841 | 2.68× |
+| Long chain: 50 copies of `kg*m/s^2` | 21.298 | 387.115 | 68.065 | 5.69× |
+| `1.3e-2 (kg.s)^2` | unsupported | 10.372 | 3.537 | 2.93× |
+| `3/2 (kg·m/s)²` | unsupported | 15.234 | 5.476 | 2.78× |
+
+The long chain contains 150 unit terms and follows the normal left-to-right multiplication/division rules. Pratt was 2.68–2.93× faster than Nearley for the shorter compound/grouped workloads and 5.69× faster for the long chain. Regex remained fastest on shared syntax. With native numbers, the corresponding compound, grouped and long-chain speedups were 2.71×, 3.02× and 5.68×.
+
+Warm expression plans:
+
+| Backend and workload | Regex µs/op | Nearley µs/op | Pratt µs/op |
+| --- | ---: | ---: | ---: |
+| Decimal, compound units | 0.301 | 0.410 | 0.411 |
+| Decimal, scalar arithmetic and Unicode | unsupported | 0.829 | 0.826 |
+| Decimal, changing scalars | 0.241 | 0.380 | 0.378 |
+| number, compound units | 0.151 | 0.268 | 0.267 |
+| number, changing scalars | 0.150 | 0.282 | 0.274 |
+
+Nearley and Pratt have essentially the same cache-hit cost because both reuse compiled plans and evaluate scalars through the same backend. Changing-scalar cases cycle through 2,048 values with fixed units. The report also includes fully disabled expression and token caches: for the Decimal compound expression, Regex/Nearley/Pratt took 0.938/10.079/3.943 µs per call. Cache-disabled timings should not be equated with cold plans that retain token caches.
+
+These results measure parser calls, not complete Quantity construction or application performance. Cold cases include per-call timer overhead; warm cases time a batch. Small differences are sensitive to runtime and machine noise. The complete results and environment are saved locally in `benchmark/results/parsers-comparison.json` (ignored by Git).
+
 ## Unit identity
 
-Run `npm run build`, then:
+Run `pnpm run build`, then:
 
 ```sh
-npx vitest bench --run --config vitest.benchmark.config.js benchmark/unit-identity.bench.js
+pnpm exec vitest bench --run --config vitest.benchmark.config.js benchmark/unit-identity.bench.js
 ```
 
 Each callback performs 1,024 comparisons. Cases use one or eight numerator records
@@ -56,20 +89,20 @@ These timings isolate structural comparisons, not complete Quantity operations.
 
 ## Metadata and cache modes
 
-Run `npm run benchmark -- metadata` to measure `isBase()`, `units()`, `baseScalar`, `toBase()`, and construction with Decimal and double backends. Each callback performs 256 operations; divide the reported batch time by 256 for time per operation. The `isBase` case checks two quantities per operation. Repeated reads use warmed instances. Construction cases parse the same input on each call, including parser work when all caches are disabled. Set `BENCH_REVERSE=1` to reverse case order.
+Run `pnpm run benchmark metadata` to measure `isBase()`, `units()`, `baseScalar`, `toBase()`, and construction with Decimal and double backends. Each callback performs 256 operations; divide the reported batch time by 256 for time per operation. The `isBase` case checks two quantities per operation. Repeated reads use warmed instances. Construction cases parse the same input on each call, including parser work when all caches are disabled. Set `BENCH_REVERSE=1` to reverse case order.
 
 ## Measurement settings
 
 The defaults are 250 ms warmup and 500 ms measurement per case, with at least 64 iterations in each phase. For more stable local comparisons:
 
 ```sh
-BENCH_WARMUP_MS=1000 BENCH_TIME_MS=2000 npm run benchmark
+BENCH_WARMUP_MS=1000 BENCH_TIME_MS=2000 pnpm run benchmark
 ```
 
 For a fast correctness smoke run (not useful performance evidence):
 
 ```sh
-BENCH_WARMUP_MS=10 BENCH_TIME_MS=20 npm run benchmark
+BENCH_WARMUP_MS=10 BENCH_TIME_MS=20 pnpm run benchmark
 ```
 
 Compare repeated runs on the same machine and Node version with other intensive work stopped. Inspect sample variation and relative margin of error before attributing small changes to the code. Shared CI runners are suitable for smoke
@@ -99,7 +132,7 @@ The ordinary workloads above also improved, but their smaller differences are mo
 Reproduce the candidate measurements after building:
 
 ```sh
-npm run build
+pnpm run build
 LARGE_POWERS=1 node tools/benchmark-powers.mjs
 ```
 
@@ -130,7 +163,7 @@ Timing is not a test assertion.
 Reproduce the candidate measurements after building:
 
 ```sh
-npm run build
+pnpm run build
 node tools/benchmark-base-values.mjs
 ```
 
@@ -156,7 +189,7 @@ The 400-term case takes 95.6% less time, and the measured flat-product cost now 
 Reproduce the candidate measurements after building:
 
 ```sh
-npm run build
+pnpm run build
 node tools/benchmark-nearley-cold.mjs
 ```
 
@@ -181,7 +214,7 @@ The improvements apply when the numerical base value is unused. A first base-val
 
 ## Scalar normalization and conversion plans
 
-Run `npm run build`, then:
+Run `pnpm run build`, then:
 
 ```sh
 BENCH_TIME_MS=400 BENCH_WARMUP_MS=200 node_modules/.bin/vitest bench --run --config vitest.benchmark.config.js benchmark/hot-paths.bench.js
@@ -195,7 +228,7 @@ Construction avoids normalizing parser-produced and internally calculated scalar
 
 ## Temperature constants
 
-After `npm run build`, run:
+After `pnpm run build`, run:
 
 ```sh
 BENCH_TIME_MS=400 BENCH_WARMUP_MS=200 node_modules/.bin/vitest bench --run --config vitest.benchmark.config.js benchmark/rounding-temperature.bench.js
@@ -207,7 +240,7 @@ Temperature boundary scalars, rational boundaries and Kelvin offsets are reused 
 
 ## Rational representations and conversion keys
 
-After `npm run build`, run:
+After `pnpm run build`, run:
 
 ```sh
 BENCH_TIME_MS=500 BENCH_WARMUP_MS=250 node_modules/.bin/vitest bench --run --config vitest.benchmark.config.js benchmark/rational-cache.bench.js benchmark/hot-paths.bench.js
@@ -235,13 +268,13 @@ Immutable unit arrays also share their structural key and one recent conversion-
 
 ## Cache policy comparisons
 
-After building, run `npm run benchmark --cache-modes` to compare default caches, disabled scalar-term caching, and `cache: false` with Decimal and native doubles. The cases cover reused cross-unit operands, fresh cross-unit operands, and repeated conversion to an existing target. Each validates its result before and after timing.
+After building, run `pnpm run benchmark cache-modes` to compare default caches, disabled scalar-term caching, and `cache: false` with Decimal and native doubles. The cases cover reused cross-unit operands, fresh cross-unit operands, and repeated conversion to an existing target. Each validates its result before and after timing.
 
 Repeated conversion with default caches measures result-cache hits; the disabled case performs the conversion each time. These are intentionally different retention policies. Use the fresh/reused arithmetic cases to evaluate scalar-cache admission for the application's workload. Results from short smoke runs validate the benchmark only and should not be used as performance estimates.
 
 ## Native adapter arithmetic
 
-Run `npm run benchmark -- backend-arithmetic` to compare float, double and Decimal calculations with prepared operands. Conversion-result caching is disabled, so conversions evaluate the scalar on every call while reusing catalog plans and native factors. The cases cover conversion, cross-unit addition and multiplication, temperature conversion and temperature shifts. Float and double use adapter arithmetic without scalar serialization or BigInt rational intermediates; Decimal retains the exact path. The older native rational timings above describe the previous implementation.
+Run `pnpm run benchmark backend-arithmetic` to compare float, double and Decimal calculations with prepared operands. Conversion-result caching is disabled, so conversions evaluate the scalar on every call while reusing catalog plans and native factors. The cases cover conversion, cross-unit addition and multiplication, temperature conversion and temperature shifts. Float and double use adapter arithmetic without scalar serialization or BigInt rational intermediates; Decimal retains the exact path. The older native rational timings above describe the previous implementation.
 
 `cache.scalarTerms` affects object scalars on the exact calculation path; it does not affect native number arithmetic. Native conversion factors use `cache.conversionPlans`, and native temperature factors use `cache.temperatureConstants`. All policies still support `cache: false`.
 

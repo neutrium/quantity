@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
-import { NumberAdapter } from '@neutrium/utilities/number';
+import { NumberAdapter } from '@neutrium/math/adapters/number';
 const numberAdapter = new NumberAdapter();
 import { floatAdapter } from '../spec/helpers/numeric.js';
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const decimalAdapter = new DecimalScientificAdapter();
 import { createQuantityClass } from '../dist/factory.js';
 import { RegexParser } from '../dist/parsers/RegexParser.js';

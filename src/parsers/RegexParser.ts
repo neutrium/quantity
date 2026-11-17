@@ -1,5 +1,6 @@
+import { parseExponent, exponentSign, absExponent, negateExponent } from '../operations/exponents.js';
 import type { CacheScope } from '../utils/CacheScope.js';
-import type { ArithmeticAdapter } from '@neutrium/utilities/numeric/arithmetic';
+import type { ArithmeticAdapter } from '@neutrium/math/numeric/arithmetic';
 import { BudgetCache, WeakCacheRegistry } from '@neutrium/utilities/cache';
 import { unitPlanBytes, copyCacheText } from '../utils/cache-memory.js';
 import { parserConfig, type ParserConfigInput, type ParserConfig, type ParserCacheStats } from './ParserConfig.js';
@@ -7,9 +8,12 @@ import { parserConfig, type ParserConfigInput, type ParserConfig, type ParserCac
 
 import type { QuantityDefinition, UnitPower, UnitStructure } from "../QuantityDefinition.js";
 import { UnitTokenManager } from '../UnitTokenManager.js'
-import { checkedExponent, normalizePowers } from '../operations/unit-powers.js';
+import { temperatureChecks } from '../operations/temperature-units.js';
+import { completeUnitStructure } from '../operations/unit-powers.js';
 
-function createCache(config: ParserConfig): BudgetCache<UnitStructure>
+type UnitPlan = UnitStructure & { [temperatureChecks]?: string };
+
+function createCache(config: ParserConfig): BudgetCache<UnitPlan>
 {
 	return new BudgetCache(config.cache, { detachKey: copyCacheText, measure: plan => unitPlanBytes(plan.numerator) + unitPlanBytes(plan.denominator) });
 }
@@ -23,26 +27,30 @@ export class RegexParser
 {
 	private static readonly caches = new WeakCacheRegistry(createCache);
 	private readonly options: ParserConfig;
+
 	/** Immutable effective parser settings. */
 	get config(): ParserConfig
 	{
 		return this.options;
 	}
+
 	/** Estimated retention for the cache shared by this configuration. */
 	get cacheStats(): ParserCacheStats
 	{
-		return this.cache?.stats ?? Object.freeze({ ...this.options.cache, entries: 0, estimatedBytes: 0 });
+		return RegexParser.caches.peek(this.options)?.stats ?? Object.freeze({ ...this.options.cache, entries: 0, estimatedBytes: 0 });
 	}
+
 	/** Release all plans shared by this parser configuration. */
 	clearCache(): void
 	{
-		this.cache?.clear();
+		RegexParser.caches.peek(this.options)?.clear();
 	}
 
-	private get cache(): BudgetCache<UnitStructure> | undefined
+	private get cache(): BudgetCache<UnitPlan> | undefined
 	{
 		return this.options.cache.maxEntries && this.options.cache.maxBytes ? RegexParser.caches.get(this.options) : undefined;
 	}
+
 	private static UNIT_MATCH_REGEX: RegExp;
 	private static readonly UNIT_SEPARATOR_REGEX = /(?:\s*([.*/])\s*|\s+)/y;
 
@@ -74,14 +82,11 @@ export class RegexParser
 	initialize(): void
 	{
 		const tokenMapper = UnitTokenManager.instance;
-		const alternatives = (map: Record<string, string>) => Object.keys(map)
-			.sort((a, b) => b.length - a.length)
-			.map(value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-		const prefixes = alternatives(tokenMapper.getMap('prefix'));
-		const units = alternatives(tokenMapper.getMap('unit'));
+		const prefixes = tokenMapper.aliasPattern('prefix');
+		const units = tokenMapper.aliasPattern('unit');
 		// Sticky matching consumes one unit and its exponent, never repeated copies.
 		RegexParser.UNIT_MATCH_REGEX = new RegExp(
-			`(${prefixes})??(${units})(?:(?:\\^|\\*\\*)([+-]?\\d+)|([+-]?\\d+))?(?=\\s|[*.\/]|$)`, 'y');
+			`(${prefixes})??(${units})(?:(?:\\^|\\*\\*)([+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[eE][+-]?\\d+)?|\\(\\s*[+-]?\\d+\\s*/\\s*[+-]?\\d+\\s*\\))|([+-]?\\d+))?(?=\\s|[*.\/]|$)`, 'y');
 		// Drop every configured scope without retaining an iterable registry of parsers.
 		RegexParser.caches.clear();
 	}
@@ -91,9 +96,10 @@ export class RegexParser
 	 * @param val - Expression such as `"2 kg*m/s^2"`, `"m"`, or `"2"`.
 	 * @param Numeric - Adapter used to evaluate the scalar.
 	 * @param scope - Optional Quantity cache scope; wrappers should forward it unchanged.
+	 * @param scalar - Optional replacement scalar. The parser validates the units and skips scalar evaluation.
 	 * @returns A definition accepted by Quantity. Empty sides represent unity.
-	 * @throws If syntax, unit tokens, or integer exponents are invalid.
-	 * @remarks Grouped expressions and scalar arithmetic require Nearley.
+	 * @throws If syntax, unit tokens, or rational exponents are invalid.
+	 * @remarks Grouped expressions and scalar arithmetic require Nearley or Pratt.
 	 * Absolute-zero validation occurs when a Quantity is constructed from the definition.
 	 * @example
 	 * ```ts
@@ -103,7 +109,7 @@ export class RegexParser
 	 * new Quantity(parsed).units(); // "m/s"
 	 * ```
 	 */
-	parse<T>(val: string, Numeric: ArithmeticAdapter<T>, scope?: CacheScope): QuantityDefinition<T>
+	parse<T>(val: string, Numeric: ArithmeticAdapter<T>, scope?: CacheScope, scalar?: T): QuantityDefinition<T>
 	{
 		val = String(val).trim();
 		const result = val && RegexParser.QTY_STRING_REGEX.exec(val);
@@ -113,18 +119,17 @@ export class RegexParser
 			throw new Error('Quantity not recognized');
 		}
 
-		const scalarText = result[1] === '-' ? '-' + result[2] : result[2] ?? '1';
-		const scalar = Numeric.from(scalarText);
+		if (scalar === undefined)
+		{
+			const scalarText = result[1] === '-' ? '-' + result[2] : result[2] ?? '1';
+			scalar = Numeric.from(scalarText);
+		}
 		const units = this.parseUnits(result[3].trim(), scope?.enabled('parser') !== false);
 
-		return {
-			scalar,
-			numerator: units.numerator,
-			denominator: units.denominator
-		};
+		return { scalar, ...units };
 	}
 
-	private parseUnits(units: string, enabled: boolean): UnitStructure
+	private parseUnits(units: string, enabled: boolean): UnitPlan
 	{
 		const cache = enabled ? this.cache : undefined;
 		const cached = cache?.get(units);
@@ -138,6 +143,7 @@ export class RegexParser
 		const num: UnitPower[] = [], den: UnitPower[] = [];
 		let cursor = 0;
 		let divide = false;
+		let temperatureError: string | undefined;
 
 		// The scalar has already been removed, leaving /m in inputs such as 2/m.
 		if (units.startsWith('/'))
@@ -161,13 +167,20 @@ export class RegexParser
 				throw new Error('Unit not recognized');
 			}
 
-			cursor += match[0].length;
-			// A dot immediately followed by a digit is decimal syntax, not unit
-			// multiplication. In particular m^2.1 must not become m^2 * unity.
-			if (units[cursor] === '.' && /[0-9]/.test(units[cursor + 1] ?? ''))
+			// A bare 1 followed by compact digits is a numeric operand, as in m/10.
+			if (!match[1] && match[2] === '1' && match[4] !== undefined)
 			{
-				throw new Error('Unit exponent must use safe integer syntax');
+				throw new Error('Scalar arithmetic requires Nearley or Pratt');
 			}
+
+			// If the prefix is itself a unit, its trailing 1 is a compact exponent.
+			// Backtracking to prefixed unity must not admit a second power.
+			if (match[2] === '1' && (match[3] !== undefined || match[4] !== undefined) && match[1] && tokenMapper.getUnitToken(match[1]))
+			{
+				throw new Error('A unit cannot have two exponents');
+			}
+
+			cursor += match[0].length;
 
 			const unit = tokenMapper.getUnitToken(match[2]);
 			const prefix = match[1] ? tokenMapper.getPrefixToken(match[1]) : undefined;
@@ -177,15 +190,23 @@ export class RegexParser
 				throw new Error('Unit not recognized');
 			}
 
-			const power = checkedExponent(Number(match[3] ?? match[4] ?? 1));
-			const exponent = divide ? -power : power;
+			const exponentText = match[3] ?? match[4];
+			const power = exponentText === undefined ? 1 : parseExponent(exponentText.replace(/[()\s]/g, ''));
+
+			if (unit.startsWith('<temp-'))
+			{
+				if (prefix) temperatureError ??= 'Cannot multiply by temperatures';
+				else if (power !== 0 && power !== 1) temperatureError ??= 'Cannot raise absolute temperatures to powers';
+			}
+
+			const exponent = divide ? negateExponent(power) : power;
 
 			if (exponent)
 			{
-				(exponent > 0 ? num : den).push({
+				(exponentSign(exponent) > 0 ? num : den).push({
 					unit,
 					...(prefix ? { prefix } : {}),
-					exponent: Math.abs(exponent)
+					exponent: absExponent(exponent)
 				});
 			}
 
@@ -200,6 +221,12 @@ export class RegexParser
 				}
 
 				cursor += separator[0].length;
+				// A dot followed immediately by a digit belongs to a decimal, including after whitespace.
+				if (separator[0].endsWith('.') && /[0-9]/.test(units[cursor] ?? ''))
+				{
+					throw new Error(separator[0] === '.' ? 'Fractional unit exponents require ^ or **'
+						: 'Scalar arithmetic requires Nearley or Pratt');
+				}
 				// A dot continues the current tightly bound product. A slash divides
 				// by the whole next dot product; * or whitespace starts a numerator product.
 				if (separator[1] !== '.')
@@ -214,7 +241,12 @@ export class RegexParser
 			}
 		}
 
-		const result = { numerator: normalizePowers(num), denominator: normalizePowers(den) };
+		const result: UnitPlan = completeUnitStructure(num, den);
+		if (temperatureError)
+		{
+			result[temperatureChecks] = temperatureError;
+		}
+
 		// Bound retention when applications parse many distinct large powers.
 		cache?.set(units, result);
 

@@ -1,4 +1,4 @@
-// Run after npm run build; optional first argument overrides the default report path.
+// Run after pnpm run build; optional first argument overrides the default report path.
 import assert from 'node:assert/strict';
 import { measure } from '../benchmark/measure.js';
 import { writeResults } from '../benchmark/write-results.js';
@@ -17,7 +17,7 @@ const cases = [
 	['multiply scaled scalar', () => kilometre.mul(2), '4', '4000'],
 	['clone scaled quantity', () => kilometre.clone(), '2', '2000'],
 	['explicit toBase', () => kilometre.toBase(), '2000', '2000'],
-	['Nearley expression', () => new Quantity('2 km'), '2', '2000'],
+	['Pratt expression', () => new Quantity('2 km'), '2', '2000'],
 	['Regex expression', () => new RegexQuantity('2 km'), '2', '2000'],
 	['Fahrenheit interval construction', () => new Quantity('1 degF'), '1', new Quantity('1 degF').baseScalar.toString()],
 	['Fahrenheit temperature construction', () => new Quantity('1 tempF'), '1', new Quantity('1 tempF').baseScalar.toString()],

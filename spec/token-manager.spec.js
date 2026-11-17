@@ -20,9 +20,9 @@ describe("Neutrium Quantity Token Manager Tests", function() {
 
 	it("should be able to get map from getMap('prefix')", function() {
 
-		var x = tm.getMap('prefix')
+		const prefixes = tm.getMap('prefix');
 
-		expect(Object.keys(x).length).toBe(100);
+		expect(prefixes).toMatchObject({ k: '<kilo>', Yi: '<yebi>', yobi: '<yebi>', yebi: '<yebi>' });
 	});
 
 });

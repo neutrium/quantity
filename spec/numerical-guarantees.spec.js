@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createQuantityClass } from '../dist/factory.js';
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const decimalAdapter = new DecimalScientificAdapter();
-import { NumberAdapter } from '@neutrium/utilities/number';
+import { NumberAdapter } from '@neutrium/math/adapters/number';
 const numberAdapter = new NumberAdapter();
 import { floatAdapter } from './helpers/numeric.js';
 import { NearleyParser } from '../dist/parsers/NearleyParser.js';

@@ -1,64 +1,85 @@
+import { ABSOLUTE_KELVIN_UNITS, makeResult, temperatureConstants, type TemperatureConstants } from './operations/temperature-boundary.js';
 import { assertKnownKeys } from '@neutrium/utilities/validation';
-import { isConfigurableAdapter, type ConfigurableAdapter } from '@neutrium/utilities/numeric/helpers';
-import { numericSettings, acceptsNumericOperand, convertNumericScalar } from './numeric/backend.js';
-import { scalarFrom } from './numeric/support.js';
+import { isConfigurableAdapter, type ConfigurableAdapter } from '@neutrium/math/numeric/helpers';
+import { convertNumericScalar } from '@neutrium/math/numeric/conversion';
+import { numericSettings, acceptsNumericOperand } from './numeric/backend.js';
+import { integerAsNumber, quantityExponent, scalarFrom } from './numeric/support.js';
 import { add, sub, mul, div, pow, inverse } from './operations/arithmetic.js';
 import type { Decimal } from '@neutrium/decimal';
-import type { ArithmeticAdapter } from '@neutrium/utilities/numeric/arithmetic';
+import type { ArithmeticAdapter } from '@neutrium/math/numeric/arithmetic';
+import type { NumericInput } from '@neutrium/math/numeric/core';
 import { compare, convert, base } from './operations/generic.js';
-import { isDegrees, isTemperature, isBelowAbsoluteZero, ABSOLUTE_KELVIN_UNITS } from './operations/temperature.js';
+import { isDegrees, isTemperature, validateTemperatureUnits } from './operations/temperature-units.js';
+import { copyTemperatureReading, temperatureTargetScalar, validateParsedTemperatures, validateTemperatureReading } from './operations/temperature.js';
 import { areInverseSignatures } from './operations/unit-signatures.js';
 import type { Parser } from './parsers/Parser.js';
-import type { QuantityDefinition, UnitPower, UnitStructure } from './QuantityDefinition.js'
+import type { QuantityDefinition, UnitPower, UnitStructure, RationalExponent } from './QuantityDefinition.js'
 import { resolveQuantityCache, type QuantityConfigInput, type QuantityConfig } from './QuantityConfig.js';
 import { CacheScope } from './utils/CacheScope.js';
 import { DEFAULT_PARSER_CONFIG, parserConfig, type ParserConfig } from './parsers/ParserConfig.js';
 import { throwIncompatibleUnits } from "./operations/errors.js";
 import { unitSignature, TEMPERATURE_SIGNATURE } from './operations/unit-signatures.js'
 import { formatUnits } from './operations/unit-strings.js';
-import { basePowers, normalizePowers, UNITY } from './operations/unit-powers.js';
+import { baseUnitMetadata, BaseUnitMetadata, completeNormalizedUnits, ExpandedResultUnits, normalizePowers, UNITY } from './operations/unit-powers.js';
 import { sameUnits, unitKey } from './operations/unit-identity.js';
 
-import { LruCache } from '@neutrium/utilities/cache';
 import type { CacheConfig } from '@neutrium/utilities/cache';
 import { BudgetCache } from '@neutrium/utilities/cache';
 import { conversionExpressionPolicy, conversionResultPolicy } from './operations/conversion-cache.js';
 
-/**
- * Inputs accepted by a quantity using scalar type T.
- * Existing quantities may use another backend: construction converts their scalar
- * while preserving units. Arithmetic still requires compatible quantity backends.
- * Definitions must already contain a scalar native to the destination backend.
- */
-export type QuantityInput<T> = string | number | T | (object & {
+/** Arithmetic accepts scalar inputs, native-scalar definitions, and quantities with compatible backends. */
+export type QuantityOperand<T> = NumericInput<T> | (object & {
+	/** Objects with a scalar are handled as quantities, definitions, or adapter-native values. */
+	readonly scalar?: never;
 	/** Return a numeric literal to be validated by the selected adapter. */
 	toString(): string;
-}) | QuantityDefinition<T> | Quantity<unknown>;
+}) | QuantityDefinition<T> | Quantity<T>;
+
+/** Constructor inputs also include quantities from other backends. Their scalar is converted and their units are preserved. */
+export type QuantityInput<T> = QuantityOperand<T> | Quantity<unknown>;
 
 const pendingInitValue = Symbol();
+const half = Object.freeze({ numerator: 1n, denominator: 2n });
+const third = Object.freeze({ numerator: 1n, denominator: 3n });
 
 /** A result already evaluated by one adapter; other adapters must still adopt it. */
 class QuantityResult<T> implements QuantityDefinition<T>
 {
+	// Carry result constants through the subclass construction hook for final validation.
+	readonly #temperature?: TemperatureConstants<T>;
 	readonly #scalar: T;
 	readonly #numeric: ArithmeticAdapter<T>;
+	readonly #expanded?: ExpandedResultUnits | BaseUnitMetadata;
+	readonly numerator: readonly UnitPower[];
+	readonly denominator: readonly UnitPower[];
 	get scalar(): T { return this.#scalar; }
 	get numeric(): ArithmeticAdapter<T> { return this.#numeric; }
 	constructor(
 		scalar: T,
-		readonly numerator: readonly UnitPower[],
-		readonly denominator: readonly UnitPower[],
-		numeric: ArithmeticAdapter<T>
+		units: UnitStructure,
+		numeric: ArithmeticAdapter<T>,
+		temperature?: TemperatureConstants<T>
 	) {
 		this.#scalar = scalar;
 		this.#numeric = numeric;
+		this.#temperature = temperature;
+		this.numerator = units.numerator;
+		this.denominator = units.denominator;
+		if (units instanceof ExpandedResultUnits || units instanceof BaseUnitMetadata) this.#expanded = units;
 	}
-}
 
-/** Base unit structure with its dimensional signature. */
-interface BaseUnitMetadata extends UnitStructure
-{
-	readonly signature: string;
+	static expandedBase(result: QuantityResult<unknown>, units: UnitStructure): BaseUnitMetadata | undefined
+	{
+		const expanded = result.#expanded;
+		if (expanded && expanded.numerator === units.numerator && expanded.denominator === units.denominator)
+			return expanded instanceof ExpandedResultUnits ? expanded.base : expanded;
+	}
+
+	static temperatureFor<T>(result: QuantityResult<T>, unit: string): TemperatureConstants<T> | undefined
+	{
+		const constants = result.#temperature;
+		return constants?.unit === unit ? constants : undefined;
+	}
 }
 
 /** Validated structural data only; never retain a source quantity or its scalar. */
@@ -102,10 +123,9 @@ type UnitMetadataCache = WeakMap<readonly UnitPower[], WeakMap<readonly UnitPowe
  */
 export abstract class Quantity<T = Decimal, Numeric extends object = object>
 {
-	private static BASE_UNITS = ["<meter>", "<kilogram>", "<second>", "<mole>", "<ampere>", "<radian>", "<kelvin>", "<temp-K>", "<byte>", "<dollar>", "<candela>", "<each>", "<steradian>", "<bel>"];
+	private static BASE_UNITS = ["<meter>", "<kilogram>", "<second>", "<mole>", "<ampere>", "<radian>", "<kelvin>", "<temp-K>", "<byte>", "<dollar>", "<bel>"];
 
 	// Structural metadata is independent of Decimal precision, rounding, and range.
-	private static baseUnitKey = Symbol();
 	private static structuralMetadataKey = Symbol();
 	protected static cacheContext = new CacheScope();
 	protected static resolvedConfig: QuantityConfig;
@@ -322,10 +342,11 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 	 * zero, or absolute-temperature units occur in a compound expression.
 	 *
 	 * @remarks
-	 * Numbers, Decimal instances, numeric strings and objects with numeric `toString()`
+	 * Numbers, bigints, native backend scalars, numeric strings and objects with numeric `toString()`
 	 * output create dimensionless quantities when units are omitted or empty. Use a
 	 * decimal string or Decimal when preserving all input digits matters.
 	 * An existing quantity keeps its units and converts its scalar to this backend.
+	 * Absolute readings account for any difference between the represented absolute-zero boundaries.
 	 * Native destinations use numeric conversion; rational-capable backends can exchange
 	 * exact terms. Other custom representations fall back to numeric text. Destination range and
 	 * representation limits apply, and precision already lost cannot be recovered.
@@ -355,26 +376,49 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 		}
 
 		const sourceQuantity = initValue instanceof Quantity ? initValue : undefined;
-		const ownResult = initValue instanceof QuantityResult && initValue.numeric === this.numeric;
-		const convertBackend = sourceQuantity !== undefined &&
-			!acceptsNumericOperand(this.numeric, sourceQuantity.numeric, sourceQuantity.scalar);
+		const result = initValue instanceof QuantityResult ? initValue : undefined;
+		const source = sourceQuantity ?? result;
 		this.parser = parser;
 
 		// Classify object inputs here; scalar and unit validation below avoids
 		// running the public definition guard and normalization twice.
-		const definitionInput = ownResult || sourceQuantity !== undefined ||
-			!this.numeric.isValue(initValue) && initValue !== null && typeof initValue === 'object' && 'scalar' in initValue;
+		const definitionInput = source !== undefined ||
+			initValue !== null && typeof initValue === 'object' && !this.numeric.isValue(initValue) && 'scalar' in initValue;
 
+		let inputUnits: UnitStructure;
+		let boundary: TemperatureConstants<T> | undefined;
 		if (definitionInput)
 		{
 			const definition = initValue as QuantityDefinition<T>;
-			// Cross-backend construction is an explicit conversion boundary. Never
-			// pass an opaque foreign scalar to an adapter that cannot interpret it.
-			this.#scalar = convertBackend
-				? convertNumericScalar(this.numeric, sourceQuantity.numeric, sourceQuantity.scalar)
-				: definition.scalar;
-			this.#numerator = normalizePowers(definition.numerator);
-			this.#denominator = normalizePowers(definition.denominator);
+			if (!source || result && result.numeric === this.numeric)
+			{
+				if (!source) validateParsedTemperatures(definition, this.numeric, this.cacheScope);
+				this.#scalar = definition.scalar;
+			}
+			else if (result && !result.numeric.isValue(result.scalar))
+			{
+				throw new TypeError(`Quantity scalar must be a ${result.numeric.id}`);
+			}
+			else if (source.numeric !== this.numeric && isTemperature(source))
+			{
+				const unit = source.numerator[0].unit;
+				// A routed result has not yet passed construction in its producing context.
+				const origin = result ? QuantityResult.temperatureFor(result, unit) ??
+					temperatureConstants(unit, source.numeric, this.cacheScope) : undefined;
+
+				if (result)
+				{
+					validateTemperatureReading(unit, result.scalar, result.numeric, this.cacheScope, origin);
+				}
+				boundary = temperatureConstants(unit, this.numeric, this.cacheScope);
+				this.#scalar = copyTemperatureReading(source, this.numeric, this.cacheScope, boundary, origin);
+			}
+			else
+			{
+				this.#scalar = convertNumericScalar(this.numeric, source.numeric, source.scalar);
+			}
+
+			inputUnits = definition;
 		}
 		else
 		{
@@ -382,11 +426,16 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 
 			if (initUnits)
 			{
-				parserResult = { ...this.parse(initUnits), scalar: scalarFrom(this.numeric, initValue) };
+				const scalar = scalarFrom(this.numeric, initValue);
+				const parsed = this.parser.parse(initUnits, this.numeric, this.cacheScope, scalar);
+				validateParsedTemperatures(parsed, this.numeric, this.cacheScope);
+				const { numerator, denominator } = parsed;
+				parserResult = { numerator, denominator, scalar };
 			}
-			else if(typeof initValue === 'string')
+			else if (typeof initValue === 'string' && !this.numeric.isValue(initValue))
 			{
-				parserResult = this.parse(initValue);
+				parserResult = this.parser.parse(initValue, this.numeric, this.cacheScope);
+				validateParsedTemperatures(parserResult, this.numeric, this.cacheScope);
 			}
 			else
 			{
@@ -394,9 +443,11 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 			}
 
 			this.#scalar = parserResult.scalar;
-			this.#numerator = normalizePowers(parserResult.numerator);
-			this.#denominator = normalizePowers(parserResult.denominator);
+			inputUnits = parserResult;
 		}
+
+		this.#numerator = normalizePowers(inputUnits.numerator);
+		this.#denominator = normalizePowers(inputUnits.denominator);
 
 		if (!this.numeric.isValue(this.scalar))
 		{
@@ -404,8 +455,8 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 		}
 
 		// Parsed scalars and internal results are already in this adapter's context.
-		// External definitions and public copies still need context conversion.
-		if (definitionInput && !convertBackend && !ownResult)
+		// External definitions still need context conversion.
+		if (definitionInput && !source)
 		{
 			this.#scalar = this.numeric.from(this.scalar);
 		}
@@ -417,11 +468,12 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 		// Validate dimensions now, without evaluating any numerical conversion factors.
 		// Only previously reused structures are admitted. Fresh arrays, unitless
 		// quantities and disabled metadata caching retain the normal calculation path.
+		const absolute = isTemperature(this);
 		const metadata = (this.numerator.length || this.denominator.length) && this.cacheScope.config.metadata
 			? this.cacheScope.peek<UnitMetadataCache>('metadata', Quantity.structuralMetadataKey)
 				?.get(this.numerator)?.get(this.denominator) : undefined;
 
-		if (metadata && this.isBase === Quantity.prototype.isBase && this.isTemperature === Quantity.prototype.isTemperature)
+		if (metadata && this.isBase === Quantity.prototype.isBase)
 		{
 			this._isBase = metadata.isBase;
 			this.#signature = metadata.signature;
@@ -429,32 +481,40 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 		}
 		else
 		{
-			// Metadata hits already validated these immutable unit arrays.
-			if (this.denominator.some(term => term.unit.startsWith("<temp-")))
+			validateTemperatureUnits(this);
+			const expanded = result && QuantityResult.expandedBase(result, this);
+			if (absolute || this.isBase())
 			{
-				throw new Error("Cannot divide with temperatures");
-			}
-
-			if (this.numerator.some(term => term.unit.startsWith("<temp-")))
-			{
-				if (this.numerator.length > 1 || this.numerator[0].exponent !== 1 || this.numerator[0].prefix !== undefined)
+				if (!expanded)
 				{
-					throw new Error("Cannot multiply by temperatures");
+					completeNormalizedUnits(this);
 				}
 
-				if (this.denominator.length !== 0)
-				{
-					throw new Error("Cannot divide with temperatures");
-				}
+				this.#signature = absolute ? TEMPERATURE_SIGNATURE :
+					expanded && this.isBase === Quantity.prototype.isBase ? expanded.signature : unitSignature(this);
 			}
-
-			this.#signature = this.isBase() ? unitSignature(this)
-				: this.isTemperature() ? TEMPERATURE_SIGNATURE : this.getBaseUnits().signature;
+			else
+			{
+				// Expanding derived units checks each side for overflow before cancellation.
+				this.#signature = this.getBaseUnits(expanded).signature;
+			}
 		}
 
-		if (this.isTemperature() && isBelowAbsoluteZero(this))
+		if (absolute)
 		{
-			throw new Error("Temperatures must not be less than absolute zero");
+			const unit = this.numerator[0].unit;
+
+			if (boundary?.unit !== unit)
+			{
+				boundary = undefined;
+			}
+
+			if (result?.numeric === this.numeric)
+			{
+				boundary = QuantityResult.temperatureFor<T>(result, unit);
+			}
+
+			validateTemperatureReading(unit, this.scalar, this.numeric, this.cacheScope, boundary);
 		}
 	}
 
@@ -467,9 +527,15 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 	/** @internal Construct a result already evaluated by this adapter, retaining all validation. */
 	createResult(scalar: T, units: UnitStructure): Quantity<T, Numeric>
 	{
+		return this[makeResult](scalar, units);
+	}
+
+	/** @internal */
+	[makeResult](scalar: T, units: UnitStructure, temperature?: TemperatureConstants<T>): Quantity<T, Numeric>
+	{
 		// Custom predicates may depend on instance state rather than units alone.
 		if (units instanceof Quantity && (units.numerator.length || units.denominator.length) && this.cacheScope.config.metadata &&
-			units.isBase === Quantity.prototype.isBase && units.isTemperature === Quantity.prototype.isTemperature)
+			units.isBase === Quantity.prototype.isBase)
 		{
 			const metadata = this.cacheScope.get<UnitMetadataCache>('metadata', Quantity.structuralMetadataKey,
 				() => new WeakMap())!;
@@ -484,7 +550,7 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 			}
 		}
 
-		return this.constructQuantity(new QuantityResult(scalar, units.numerator, units.denominator, this.numeric),
+		return this.constructQuantity(new QuantityResult(scalar, units, this.numeric, temperature),
 			undefined, this.parser);
 	}
 
@@ -498,7 +564,7 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 	 * Subclasses whose constructors need additional arguments must override this hook
 	 * and supply them. Use `this.constructor` to preserve classes returned by
 	 * `withConfig()`, and forward input, units and parser without reparsing or converting
-	 * them. The hook also constructs string operands and conversion targets, so input
+	 * them. The hook also constructs string operands, so input
 	 * must accept every `QuantityInput<T>` form, not only result definitions.
 	 * @category Advanced
 	 */
@@ -548,7 +614,7 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 	 * ```
 	 * @category Arithmetic
 	 */
-	add(other: QuantityInput<T>) : Quantity<T, Numeric>
+	add(other: QuantityOperand<T>) : Quantity<T, Numeric>
 	{
 		return add(this, other);
 	}
@@ -569,7 +635,7 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 	 * ```
 	 * @category Arithmetic
 	 */
-	sub(other: QuantityInput<T>) : Quantity<T, Numeric>
+	sub(other: QuantityOperand<T>) : Quantity<T, Numeric>
 	{
 		return sub(this, other);
 	}
@@ -591,7 +657,7 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 	 * ```
 	 * @category Arithmetic
 	 */
-	mul(other: QuantityInput<T>) : Quantity<T, Numeric>
+	mul(other: QuantityOperand<T>) : Quantity<T, Numeric>
 	{
 		return mul(this, other);
 	}
@@ -615,20 +681,25 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 	 * ```
 	 * @category Arithmetic
 	 */
-	div(other: QuantityInput<T>) : Quantity<T, Numeric>
+	div(other: QuantityOperand<T>) : Quantity<T, Numeric>
 	{
 		return div(this, other);
 	}
 
 	/**
-	 * Raise the scalar and units to an integer power.
-	 * @param yy - Safe-integer exponent as a number, numeric string, or backend scalar. Negative
+	 * Raise the scalar and units to an exact rational power.
+	 * @param yy - Exponent as a number, decimal or fraction string, backend scalar, or rational record. Negative
 	 * exponents invert the unit expression.
 	 * @returns A new quantity with the powered scalar and units.
-	 * @throws If the exponent is fractional or invalid, or the resulting units violate
+	 * @throws If the exponent is invalid, the adapter cannot evaluate a fractional power,
+	 * an even root has a negative scalar, or the resulting units violate
 	 * absolute-temperature restrictions. Exponents and resulting counts outside the
-	 * safe-integer range throw RangeError.
+	 * safe-integer magnitude range throw RangeError. Decimal exponent expansion is limited to 4096 places.
 	 * @remarks Exponent zero returns the dimensionless identity, with scalar one.
+	 * Fractional powers require rational extraction and construction or a scientific adapter.
+	 * Both Decimal adapter tiers support them.
+	 * If a custom adapter lacks rational extraction and rounds its exponent text, pass
+	 * an explicit exponent string or rational record.
 	 * Units are stored as counters; powers never allocate repeated unit entries.
 	 * Exponent validation is independent of the numeric backend's range settings;
 	 * those settings apply to the resulting scalar.
@@ -639,9 +710,21 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 	 * ```
 	 * @category Arithmetic
 	 */
-	pow(yy: number | string | T) : Quantity<T, Numeric>
+	pow(yy: number | string | T | RationalExponent) : Quantity<T, Numeric>
 	{
-		return pow(this, yy);
+		return pow(this, quantityExponent(this.numeric, yy));
+	}
+
+	/** Square root with exact fractional units. Equivalent to `pow('1/2')`. */
+	sqrt(): Quantity<T, Numeric>
+	{
+		return pow(this, half);
+	}
+
+	/** Real cube root with exact fractional units. Equivalent to `pow('1/3')`. */
+	cbrt(): Quantity<T, Numeric>
+	{
+		return pow(this, third);
 	}
 
 	/**
@@ -758,7 +841,7 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 	 * @param b - Quantity to compare with this instance.
 	 * @returns Whether scalars and ordered unit/prefix/exponent records match. Different compatible
 	 * units return false even when they represent the same physical value. NaN returns false.
-	 * @throws TypeError when the quantities use incompatible numeric backends.
+	 * @throws TypeError when the argument is not a Quantity or the numeric backends are incompatible.
 	 * @example
 	 * ```ts
 	 * const length = new Quantity('1 m');
@@ -769,7 +852,16 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 	 */
 	same(b: Quantity<T>): boolean
 	{
-		this.assertBackend(b);
+		if (!(b instanceof Quantity))
+		{
+			throw new TypeError('Expected a Quantity operand');
+		}
+
+		if (!acceptsNumericOperand(this.numeric, b.numeric, b.scalar))
+		{
+			throw new TypeError('Cannot mix numeric backends; convert the scalar explicitly');
+		}
+
 		return this.numeric.compare(this.scalar, b.scalar) === 0 && sameUnits(this, b, this.cacheScope);
 	}
 
@@ -813,8 +905,12 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 	 */
 	isInverse(b: string | Quantity<unknown>) : boolean
 	{
-		const other = typeof b === 'string' ? this.createQuantity(b) : b;
-		return other instanceof Quantity && areInverseSignatures(this.signature, other.signature);
+		if (typeof b === 'string')
+		{
+			return areInverseSignatures(this.signature, baseUnitMetadata(this.parseUnits(b), this.cacheScope).signature);
+		}
+
+		return b instanceof Quantity && areInverseSignatures(this.signature, b.signature);
 	}
 
 	/**
@@ -834,14 +930,26 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 	 */
 	isCompatible(b: string | number | Quantity<unknown>) : boolean
 	{
-		const other = typeof b === 'string' ? this.createQuantity(b) : b;
-		return other instanceof Quantity && this.signature === other.signature;
+		if (typeof b === 'string')
+		{
+			return this.signature === baseUnitMetadata(this.parseUnits(b), this.cacheScope).signature;
+		}
+
+		return b instanceof Quantity && this.signature === b.signature;
+	}
+
+	private parseUnits(text: string): UnitStructure
+	{
+		const parsed = this.parser.parse(text, this.numeric, this.cacheScope, this.scalar);
+		validateParsedTemperatures(parsed, this.numeric, this.cacheScope);
+		const units = { numerator: normalizePowers(parsed.numerator), denominator: normalizePowers(parsed.denominator) };
+		validateTemperatureUnits(units);
+		return units;
 	}
 
 	/**
 	 * Test whether the normalized numerator and denominator are both unity.
-	 * @returns True for a quantity without unit tokens. Named dimensionless units such
-	 * as radians and `each` return false.
+	 * @returns True for a quantity without unit tokens. A named unit such as a radian returns false.
 	 * @example
 	 * ```ts
 	 * new Quantity('2').isUnitless(); // true
@@ -898,6 +1006,7 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 	 * any target scalar is ignored, including zero or negative values.
 	 * @returns The quantity expressed in the target units. Empty target strings and
 	 * unchanged units return this instance; repeated conversions can return cached objects.
+	 * @throws TypeError if the target is neither a string nor a Quantity.
 	 * @throws If parsing fails, dimensions are neither compatible nor reciprocal, or
 	 * reciprocal conversion requires inverting a zero value or absolute temperature.
 	 * Invalid absolute-temperature results throw; valid results requiring a negative-infinite
@@ -918,13 +1027,19 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 	 */
 	to(other: string | Quantity<unknown>) : Quantity<T, Numeric>
 	{
-		if (!other)
+		if (other === '')
 		{
 			return this;
 		}
 
+		if (typeof other !== 'string' && !(other instanceof Quantity))
+		{
+			throw new TypeError('Expected a unit expression or Quantity as conversion target');
+		}
+
 		const scope = this.cacheScope;
-		const cacheEnabled = scope.enabled('conversionResults');
+		const customCompatibility = this.isCompatible !== Quantity.prototype.isCompatible || this.isInverse !== Quantity.prototype.isInverse;
+		const cacheEnabled = !customCompatibility && scope.enabled('conversionResults');
 		const expression = typeof other === 'string' ? other : undefined;
 
 		if (cacheEnabled && expression !== undefined)
@@ -944,16 +1059,14 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 			}
 		}
 
-		// Replace the parsed scalar before construction validates the target value.
-		// Existing targets supply units only, even when their backend differs.
-		const target = typeof other === 'string' ? this.createQuantity(1, other) : other;
+		const target = typeof other === 'string' ? this.parseUnits(other) : other;
 		const identity = sameUnits(target, this, scope);
 		const key = cacheEnabled && !identity ? unitKey(target, scope) : undefined;
 		let result = identity ? this : key === undefined ? undefined : this.conversionCache?.get(key);
 
 		if (result === undefined)
 		{
-			result = this.convertToUnits(target);
+			result = this.convertToUnits(target, customCompatibility ? other : undefined);
 
 			if (key !== undefined)
 			{
@@ -973,18 +1086,52 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 		return result;
 	}
 
-	private convertToUnits(target: Quantity<unknown>): Quantity<T, Numeric>
+	private convertToUnits(target: UnitStructure, predicateInput?: string | Quantity<unknown>): Quantity<T, Numeric>
 	{
-		const reciprocal = !this.isCompatible(target);
+		// A conversion target supplies catalog units only, including when a subclass
+		// overrides its public predicates. This also makes its cache identity structural.
+		const absolute = isTemperature(target);
+		let signature;
 
-		if (reciprocal && !this.isInverse(target))
+		if (absolute)
+		{
+			signature = TEMPERATURE_SIGNATURE;
+		}
+		else if (target instanceof Quantity && target.isBase === Quantity.prototype.isBase)
+		{
+			signature = target.#signature;
+		}
+		else
+		{
+			const expanded = new ExpandedResultUnits(target.numerator, target.denominator, this.cacheScope);
+			target = expanded;
+			signature = expanded.base.signature;
+		}
+
+		const reciprocal = predicateInput !== undefined && this.isCompatible !== Quantity.prototype.isCompatible
+			? !this.isCompatible(predicateInput) : this.signature !== signature;
+
+		if (reciprocal && !(predicateInput !== undefined && this.isInverse !== Quantity.prototype.isInverse
+			? this.isInverse(predicateInput) : areInverseSignatures(this.signature, signature)))
 		{
 			throwIncompatibleUnits();
 		}
 
-		if (reciprocal && this.isTemperature())
+		if (reciprocal && isTemperature(this))
 		{
 			throw new Error('Cannot divide with temperatures');
+		}
+
+		if (reciprocal && integerAsNumber(this.numeric, this.scalar) === 0)
+		{
+			throw new Error('Divide by zero');
+		}
+
+		if (absolute)
+		{
+			const unit = target.numerator[0].unit;
+			const constants = temperatureConstants(unit, this.numeric, this.cacheScope);
+			return this[makeResult](temperatureTargetScalar(this, target, reciprocal, constants), target, constants);
 		}
 
 		return this.createResult(convert(this, target, reciprocal), target);
@@ -1007,44 +1154,29 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 	 */
 	toBase() : Quantity<T, Numeric>
 	{
-		if (this.isBase())
+		if (isTemperature(this))
 		{
-			return this;
+			return this.numerator[0].unit === '<temp-K>' ? this : this.createResult(this.baseScalar, ABSOLUTE_KELVIN_UNITS);
 		}
 
-		if (this.isTemperature())
-		{
-			return this.createResult(this.baseScalar, ABSOLUTE_KELVIN_UNITS);
-		}
-
+		if (this.isBase()) return this;
 		const base = this.getBaseUnits();
 		return this.createResult(this.baseScalar, base);
 	}
 
-	private getBaseUnits(): BaseUnitMetadata
+	private getBaseUnits(expanded?: BaseUnitMetadata): BaseUnitMetadata
 	{
 		if (this._baseUnits)
 		{
 			return this._baseUnits;
 		}
 
-		const scope = this.cacheScope;
-		const cache = scope.get('metadata', Quantity.baseUnitKey, () => new LruCache<string, BaseUnitMetadata>());
-		const key = cache ? unitKey(this, scope) : '';
-		let result = cache?.get(key);
+		const result = expanded ?? baseUnitMetadata(this, this.cacheScope);
 
-		if (result === undefined)
-		{
-			const [numerator, denominator] = basePowers(this);
-			result = Object.freeze({ numerator, denominator, signature: unitSignature({ numerator, denominator }) });
-			cache?.set(key, result);
-		}
-
-		if (cache)
+		if (this.cacheScope.enabled('metadata'))
 		{
 			this._baseUnits = result;
 		}
-
 		return result;
 	}
 
@@ -1082,7 +1214,7 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 	 * @remarks Spelling and grouping may differ from the input. Powers use compact
 	 * notation such as `m2`; numerator multiplication uses `*` and denominator
 	 * multiplication uses tightly coupled `.`, as in `kg/m.s`. Output aliases preserve
-	 * unit identity when parsed by either bundled parser. The result is cached when
+	 * unit identity when parsed by any of the three bundled parsers. The result is cached when
 	 * `cache.metadata` is enabled; custom parsers may use a different input syntax.
 	 * @example
 	 * ```ts
@@ -1111,19 +1243,6 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 		return result;
 	}
 
-	private assertBackend(value: unknown): void
-	{
-		if (value instanceof Quantity && !acceptsNumericOperand(this.numeric, value.numeric, value.scalar))
-		{
-			throw new TypeError('Cannot mix numeric backends; convert the scalar explicitly');
-		}
-	}
-
-	private parse(text: string): QuantityDefinition<T>
-	{
-		return this.parser.parse(text, this.numeric, this.cacheScope);
-	}
-
 	private updateBaseScalar(): T
 	{
 		if (this._baseScalar !== undefined)
@@ -1131,7 +1250,7 @@ export abstract class Quantity<T = Decimal, Numeric extends object = object>
 			return this._baseScalar;
 		}
 
-		const result = this.isBase() ? this.scalar : base(this);
+		const result = base(this);
 
 		if (this.cacheScope.enabled('metadata'))
 		{

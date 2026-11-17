@@ -8,7 +8,7 @@ The @neutrium/quantity package is a unit conversion library developed and mainta
 
 First add the @neutrium/quantity package to your project:
 
-	npm install @neutrium/quantity --save
+	pnpm add @neutrium/quantity
 
 Then import `Quantity` where you want to use it:
 
@@ -27,9 +27,7 @@ Perform a unit conversion:
 
 If desired @neutrium/quantity can be configured to use custom numerical backends and parsers so that you are able to balance the tradeoffs between package size, feature set,  performance and numerical precision.
 
-The default configuration is @neutrium/decimal for the numerical backend with a  Nearley parser.
-
-This package also ships with a standard Javascript numerical backend and a simplier Regex  based parser.
+Quantity uses Decimal and Pratt by default. The native-number preset also uses Pratt. You can select Nearley explicitly or use the smaller Regex preset for simple unit expressions.
 
 To use the standard JavaScript numerical backend with the same parser and exclude Decimal from your runtime bundle:
 
@@ -39,20 +37,10 @@ import { Quantity } from '@neutrium/quantity/number';
 new Quantity('1 km').to('m').scalar; // 1000 (number)
 ```
 
-See the [numeric backends guide](guides/numeric-backends.md) for configuration, custom adapters and tree shaking.
+For the parser change, adapter imports and unit exponent type, see [Migrating to version 7](https://neutrium.github.io/quantity/documents/migrating-v7.html).
 
-## Preview documentation locally
+See the [numeric backends guide](https://neutrium.github.io/quantity/documents/numeric-backends.html) for configuration, custom adapters and tree shaking.
 
-```sh
-npm ci
-npm run docs:dev
-```
-
-This builds the API documentation and demo, then serves them at
-[http://127.0.0.1:4173/quantity/](http://127.0.0.1:4173/quantity/).
-Use the **Demo** link to open the interactive demo, and **API reference** to return.
-Stop with Ctrl+C and rerun the command to rebuild after changes. For live demo
-development, use `npm run demo:dev`.
 
 ## Unit Syntax
 
@@ -68,9 +56,9 @@ a dimensionless quantity. An empty or whitespace-only expression is invalid.
 ### \<scalar\>
 
 Numeric literals include integers, decimal fractions, and scientific notation,
-for example `1`, `1.4`, `1e3`, and `-1e-3`. Nearley also evaluates scalar products,
-division, and powers inside expressions; it does not support addition or subtraction
-operators. See the [parser guide](guides/parsers.md) for the complete grammar.
+for example `1`, `1.4`, `1e3`, and `-1e-3`. Pratt and Nearley also evaluate scalar products,
+division, and powers inside expressions. Use `add()` and `sub()` for addition and subtraction.
+See the [parser guide](https://neutrium.github.io/quantity/documents/parsers.html) for the complete grammar.
 
 If creating a quantity using a separate scalar parameter (e.g. new Quantity(1, 'm')) the scalar may be provided as a numeric string, a number, a [Decimal](https://github.com/neutrium/decimal) object, or an object whose `toString()` returns a numeric literal. Omitting units creates a dimensionless quantity: `new Quantity(2)`, `new Quantity('2')`, and `new Quantity(new Decimal(2))` are equivalent.
 
@@ -82,19 +70,19 @@ A unit expression is a string of units combined with any logical combination of 
 |---------------- | ----------------------- | --------------------- |
 | Multiplication  | \* or . or ' '			| kg\*s, kg.s, kg s		|
 | Division        | /                  		| m/s               	|
-| Exponentiation  | ^\<integer\>       		| m^2, kg.m.s^-2      	|
+| Exponentiation  | ^<exponent>       		| m^2, kg.m.s^-2      	|
 | Grouping        | (\<unit-expression\>)   | kg*(m/s)^2          	|
 
-Unit exponents must be safe integers. Both parsers also accept `**` and compact
-powers such as `m2`. The default Nearley parser supports grouped expressions and Unicode notation;
-Regex does not support expression groups.
+Unit exponents support integers, exact decimals (`m^0.5`), and rational fractions
+(`m^(1/3)`). All three parsers accept `**` and compact integer powers such as `m2`.
+Fractional output uses reduced fractions, such as `m^(1/2)`. Nearley and Pratt support grouped expressions and Unicode notation.
 
 Powers bind first, then dot multiplication, then `*`, whitespace multiplication,
 and `/` from left to right. Consequently `kg/m.s` means `kg/(m*s)`, while
-`kg/m*s` means `(kg/m)*s`. Use explicit grouping with Nearley or repeated division
-(`kg/m/s`) with either parser when both terms belong in the denominator.
+`kg/m*s` means `(kg/m)*s`. Use explicit grouping with Nearley or Pratt, or repeated division
+(`kg/m/s`) with any of the three parsers when both terms belong in the denominator.
 `units()` displays compound denominators with tightly coupled dots: `kg/m/s`
-becomes `kg/m.s`, which both parsers interpret as `kg/(m*s)`.
+becomes `kg/m.s`, which all three parsers interpret as `kg/(m*s)`.
 
 ### Examples
 
@@ -205,7 +193,9 @@ Available operators include:
 | qty.sub(other) | Subtract a compatible expression, definition, Quantity, or dimensionless scalar. |
 | qty.mul(other) | Multiply by an expression, definition, Quantity, number, Decimal, or numeric object. |
 | qty.div(other) | Divide by an expression, definition, Quantity, number, Decimal, or numeric object. |
-| qty.pow(y)		| Power - y must be a safe integer stored in a number, string or backend scalar (fractional powers not supported) |
+| qty.pow(y)		| Power - y may be a number, decimal/fraction string, backend scalar, or exact rational record. Fractional powers and roots work with both Decimal tiers, JavaScript doubles, and custom adapters that provide rational extraction and construction or scientific operations. |
+| qty.sqrt() | Square root of the scalar and units |
+| qty.cbrt() | Real cube root of the scalar and units |
 | qty.inverse() | Take the reciprocal; rejects zero and absolute temperatures. |
 
 ### Temperatures
@@ -229,14 +219,14 @@ As you would expect, unit math on temperatures is limited:
 	new Quantity('100 tempC').inverse()			// throws error
 
 
-Valid temperature underflow returns absolute zero when its reading is representable in the target scale. Below-zero inputs are rejected. A valid calculation whose negative reading or absolute-zero boundary is outside the backend range throws `RangeError`. See the [temperature guide](guides/temperatures.md#precision-and-absolute-zero).
+Valid temperature underflow returns absolute zero when its reading is representable in the target scale. Below-zero inputs are rejected. A valid calculation whose negative reading or absolute-zero boundary is outside the backend range throws `RangeError`. See the [temperature guide](https://neutrium.github.io/quantity/documents/temperatures.html#precision-and-absolute-zero).
 
 ### Errors
 
-Nearley reports syntax and evaluation failures as `QuantityParseError`, available
-from `/parsers/nearley` and `/parsers.js`; `tryParse()` returns a discriminated
+Nearley and Pratt report syntax and evaluation failures as `QuantityParseError`, available
+from `/parsers/nearley`, `/parsers/pratt`, and `/parsers.js`; `tryParse()` returns a discriminated
 success/error result. Regex throws ordinary errors and does not expose `tryParse()`.
-Both parsers reject incomplete input.
+All three parsers reject incomplete input.
 
 When @neutrium/quantity cannot parse the provided string, or you attempt to perform an invalid operation (such as multiplying two temperatures), it will throw an [Error](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error). Therefore, when handling dynamic input, it is recommended you use the standard try-catch block.
 
@@ -324,7 +314,7 @@ Additionally the [binary prefixes](https://en.wikipedia.org/wiki/Binary_prefix) 
 | pebi		| Pi, Pebi, pebi 	| 2^50		|
 | exbi		| Ei, Exbi, exbi 	| 2^60		|
 | zebi		| Zi, Zebi, zebi	| 2^70		|
-| yebi		| Yi, Yebi, yebi	| 2^80		|
+| yobi		| Yi, Yobi, yobi, Yebi, yebi	| 2^80		|
 | robi		| Ri, robi			| 2^90		|
 | quebi		| Qi, quebi		 	| 2^100		|
 
@@ -336,55 +326,46 @@ The general conventions listed below are utilised to define unit names. These ca
 - Units are generally lowercase unless there is a solid precedence for capitalisation.
 - The singular form of the unit is generally preferred (e.g. litre rather than litres).
 - Use brackets when clarifying between units that have the same name. For example, long tonne and short tonne will have the abbreviations ton(l) and ton(s).
-- Where a unit is a volume and a weight, the volume unit gets a bracket (f), e.g. mass ounce "oz", fluid ounce "oz(f)"
+- Use `oz` for an ounce of mass, `floz` for an imperial fluid ounce, and `floz(us)` for a US fluid ounce.
 - Where a unit has several localisations (e.g. US, UK or Imperial gallon), the variants will be differentiated by appending the localisation to the unit name. For example gal(us), gal(uk) or gal(imp).
-- Where a unit has both dry and fluid/liquid variants, a d or l is added to the unit respectively e.g. gal(d). Dry and liquid variants are typically used in conjunction with US localised variants. In these cases you would add the d or l to the localisation, for example a US fluid gallon would be represented as gal(usl).
+- Use `gal(usd)` for a US dry gallon and `gal(usl)` for a US liquid gallon.
 
 ## Quantity Parser Selection
 
-The @neutrium/quantity package ships with two unit parsers:
-
-- NearleyParser (default) - A performant parser using a [moo.js](https://github.com/no-context/moo) lexer and [nearley.js](https://github.com/kach/nearley) parser
-- RegexParser - A parser that uses regular expressions and is based on the original [JS-quantities](https://github.com/gentooboontoo/js-quantities) logic
-
-Select the parser through the package entry point:
+`@neutrium/quantity` and `@neutrium/quantity/number` use **Pratt** for grouped expressions, scalar arithmetic and Unicode notation. Pratt supports up to 256 active expression levels. **Nearley** supports the same syntax and is available for deeper nesting or applications that rely on its diagnostics. Both offer `tryParse()` for structured errors and expected-token hints. [Parser guide](https://neutrium.github.io/quantity/documents/parsers.html)
 
 ```ts
-import { Quantity } from '@neutrium/quantity'; // Nearley (default)
-// Or: import { Quantity } from '@neutrium/quantity/regex';
+import { Quantity } from '@neutrium/quantity';
+import { NearleyParser } from '@neutrium/quantity/parsers/nearley';
+
+new Quantity('1/2 (kg·m/s)²').scalar.toString(); // "0.5" using Pratt
+new Quantity('1/2 (kg·m/s)²', undefined, new NearleyParser()).scalar.toString(); // "0.5" using Nearley
 ```
 
-Select the default Nearley parser for full feature set and robust parsing. For simpler expressions, the Regex preset can produce a smaller runtime bundle and is faster on the measured warmed parser workloads. It excludes Nearley and Moo from that bundle; npm still installs declared dependencies.
+Pratt and Nearley share the Moo lexer. The default bundle includes Pratt, and selecting Nearley adds its runtime and generated grammar. npm installs the declared dependencies for all presets. [Moo](https://github.com/no-context/moo) · [Nearley](https://github.com/kach/nearley)
 
-For custom parsers, import `createQuantityClass` and the `Parser` and `QuantityDefinition` types from `@neutrium/quantity/factory`. Derived quantities retain both their configured class and parser, including arithmetic, conversions, and clones.
+For simple unit expressions, `@neutrium/quantity/regex` provides a smaller bundle with the Regex parser, based on JS-quantities. It was the fastest option for those expressions in the parser benchmarks. [JS-quantities](https://github.com/gentooboontoo/js-quantities) · [Benchmark comparison](https://neutrium.github.io/quantity/documents/benchmarks.html#regex-nearley-and-pratt-parsers)
+
+To use Nearley for an entire class, pass a parser factory to `createQuantityClass()`. Arithmetic, conversions and clones retain that class and parser.
 
 ```ts
 import { createQuantityClass } from '@neutrium/quantity/factory';
-import { RegexParser } from '@neutrium/quantity/parsers/regex';
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
-const decimalAdapter = new DecimalScientificAdapter();
+import { NearleyParser } from '@neutrium/quantity/parsers/nearley';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 
-const Quantity = createQuantityClass({ numeric: decimalAdapter, parser: config => new RegexParser(config) });
-const result = new Quantity('1e3 m').add('2 m');
+const NearleyQuantity = createQuantityClass({
+    numeric: new DecimalScientificAdapter(),
+    parser: config => new NearleyParser(config),
+});
+new NearleyQuantity('(2 m/s)**2').scalar.toString(); // "4"
 ```
 
-You can specify the parser to use or provide your own parser conforming to the `Parser` type exported by `@neutrium/quantity/factory` by passing it as an optional third argument to the Quantity constructor:
+Custom parsers implement `Parser<T>` and return a `QuantityDefinition<T>`. Both types are exported by `@neutrium/quantity/factory`.
 
-	import { RegexParser } from '@neutrium/quantity/parsers.js';
-
-	const parser = new RegexParser();
-	let qty = new Quantity(1, 'm', parser);
-
-Nearley remains the default and supports parenthesized expression groups, scalar products and division (`m/2`, `(2 m/s)**2`), and Unicode notation (`m²`, `kg·m/s²`).
-Its `tryParse()` method returns structured errors with source locations. See the
-[parser guide](guides/parsers.md) for syntax, precedence, and caching details.
-Regex has a smaller dependency graph and is faster on the warmed simple-expression
-workloads in the [benchmarks](guides/benchmarks.md). Choose the entry point that
-supports your input syntax.
 
 ## Release Notes
 
-For changes to factory, parser and configuration APIs, see [Migrating to version 6](guides/migrating-v6.md).
+The version 7 migration guide covers the default parser and its nesting limit. The version 6 guide covers the factory and configuration APIs. [Migrating to version 7](https://neutrium.github.io/quantity/documents/migrating-v7.html) · [Migrating to version 6](https://neutrium.github.io/quantity/documents/migrating-v6.html)
 
 | Version | Notes |
 |:-------:|:------|
@@ -394,6 +375,7 @@ For changes to factory, parser and configuration APIs, see [Migrating to version
 | 4.0.0	  | Major refactor, conversion to ESM and introduction of Nearley.js based default parser |
 | 5.0.0   | Counted unit API, bounded allocation for large powers, immutable unit records, and collision-free dimensional signatures |
 | 6.0.0   | Utilities numeric adapters, Decimal and native-number backends, renamed parser classes, and nested numeric/cache configuration with optional caching |
+| 7.0.0   | Pratt is the default expression parser for Decimal and JavaScript numbers. Adds fractional unit exponents, quantity powers and roots. Numeric adapters move to Math 2.1.0 and caches use Utilities 5.0.0. |
 
 ## License
 

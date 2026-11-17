@@ -1,6 +1,8 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
+import { BigIntAdapter } from '@neutrium/math/adapters/bigint';
 const testNumeric = new DecimalScientificAdapter();
 const configuredNumeric = new DecimalScientificAdapter();
+const integers = new BigIntAdapter();
 import { describe, expect, it } from 'vitest';
 import { Decimal } from '@neutrium/decimal';
 import { NearleyParser, QuantityParseError } from '../../dist/parsers/NearleyParser.js';
@@ -48,21 +50,16 @@ describe('Nearley scalar arithmetic and typography', () => {
 		}
 	});
 
-	it('preserves high precision literals when multiplying by identity factors', () => {
-		Decimal.config = { precision: 5 };
-		const digits = '123456789012345678901';
-		expect(parser.parse(`${digits} 1/s`, testNumeric).scalar.toString()).toBe(digits);
-		expect(parser.parse(`1*${digits} m`, testNumeric).scalar.toString()).toBe(digits);
-		expect(parser.parse(`${digits}/1 m`, testNumeric).scalar.toString()).toBe(digits);
-	});
-
 	it('does not cache a failure as a successful expression', () => {
-		expect(parser.tryParse('0**-1/0 m', testNumeric).success).toBe(false);
-		expect(parser.parse('2**-1/2 m', testNumeric).scalar.toString()).toBe('0.25');
+		expect(parser.tryParse('2/0 m', integers).success).toBe(false);
+		expect(parser.parse('2/0 m', testNumeric).scalar.toString()).toBe('Infinity');
 	});
 
-	it.each(['m/0', '0/0', '2/(0*s)', 'm/(2/0)', '0*(m/0)'])('rejects division by zero in %s', input => {
-		const result = parser.tryParse(input, testNumeric);
+	it.each([
+		['m/0', 'Infinity'], ['0/0', 'NaN'], ['2/(0*s)', 'Infinity'], ['m/(2/0)', '0'], ['0*(m/0)', 'NaN'],
+	])('uses the selected adapter for zero division in %s', (input, decimalResult) => {
+		expect(parser.parse(input, testNumeric).scalar.toString()).toBe(decimalResult);
+		const result = parser.tryParse(input, integers);
 		expect(result.success).toBe(false);
 		expect(result.error).toBeInstanceOf(QuantityParseError);
 		expect(result.error.code).toBe('DIVISION_BY_ZERO');
@@ -74,20 +71,20 @@ describe('structured parser diagnostics', () => {
 		['kg/(m*s', 'UNEXPECTED_END', 7, 1, 8],
 		['m\n / unknown', 'UNKNOWN_UNIT', 5, 2, 4],
 		['  123 m/0', 'DIVISION_BY_ZERO', 7, 1, 8],
-		['m^2.0', 'UNEXPECTED_TOKEN', 2, 1, 3],
+		['m^*', 'UNEXPECTED_TOKEN', 2, 1, 3],
 		['m⁻² / nope', 'UNKNOWN_UNIT', 6, 1, 7],
 		['m^9007199254740992', 'INVALID_EXPONENT', 2, 1, 3],
 	])('locates %j in the original input', (input, code, offset, line, column) => {
-		const result = parser.tryParse(input, testNumeric);
+		const result = parser.tryParse(input, integers);
 		expect(result.success).toBe(false);
 		expect(result.error).toMatchObject({ code, input, offset, line, column });
 		expect(result.error.message).toContain('^');
-		expect(() => parser.parse(input, testNumeric)).toThrow(QuantityParseError);
+		expect(() => parser.parse(input, integers)).toThrow(QuantityParseError);
 	});
 
 	it('provides expected tokens and narrows success results', () => {
 		expect(parser.tryParse('(m', testNumeric).error.expected).toEqual([')']);
-		expect(parser.tryParse('m^2.0', testNumeric).error.expected).toContain('integer');
+		expect(parser.tryParse('m^*', testNumeric).error.expected).toContain('integer');
 		const result = parser.tryParse('m/2', testNumeric);
 		expect(result.success).toBe(true);
 		expect(result.value.scalar.toString()).toBe('0.5');
@@ -95,10 +92,8 @@ describe('structured parser diagnostics', () => {
 	});
 
 	it('relocates cached evaluation errors after a longer leading scalar', () => {
-		Decimal.config = { minE: -100 };
-		parser.parse('2/1e-30 m', testNumeric.withConfig({ minE: -100 }));
-		Decimal.config = { minE: -10 };
-		const failure = parser.tryParse('  1234/1e-30 m', testNumeric.withConfig({ minE: -10 }));
+		parser.parse('2/0 m', testNumeric);
+		const failure = parser.tryParse('  1234/0 m', integers);
 		expect(failure.error.code).toBe('DIVISION_BY_ZERO');
 		expect(failure.error.offset).toBe(6);
 	});

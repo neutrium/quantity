@@ -4,7 +4,7 @@ import { Quantity as RegexQuantity } from '@neutrium/quantity/regex';
 
 for (const Entry of [Quantity, RegexQuantity])
 {
-	describe(`precise operations: ${Entry === Quantity ? 'Nearley' : 'Regex'}`, () => {
+	describe(`precise operations: ${Entry === Quantity ? 'Pratt' : 'Regex'}`, () => {
 
 		it('preserves significant input digits in comparisons and handles huge powers', () => {
 			const Q = Entry.withConfig({ numeric: { precision: 6 } });

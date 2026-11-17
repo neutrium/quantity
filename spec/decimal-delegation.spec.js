@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
-import { DecimalArithmeticAdapter } from '@neutrium/utilities/decimal/arithmetic';
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalArithmeticAdapter } from '@neutrium/math/adapters/decimal/arithmetic';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 import { createQuantityClass } from '../dist/factory.js';
 import { NearleyParser } from '../dist/parsers/NearleyParser.js';
 

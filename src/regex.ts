@@ -1,11 +1,11 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 import type { Decimal } from '@neutrium/decimal';
 import { createQuantityClass } from './factory.js';
 import type { Quantity as GenericQuantity } from './QuantityCore.js';
 import { RegexParser } from './parsers/RegexParser.js';
 
 /**
- * Decimal scalars with Regex parsing, excluding Nearley and Moo from runtime bundles.
+ * Decimal scalars with a smaller Regex-only parser bundle.
  * Use `withConfig` for Quantity settings or `createQuantityClass` to select another backend/parser.
  * @example
  * ```ts
@@ -24,3 +24,5 @@ export type QuantityConfigInput = import('./QuantityConfig.js').QuantityConfigIn
 export type { QuantityConfig, QuantityCacheInput, QuantityCacheConfig } from './QuantityConfig.js';
 export type { CacheConfigInput, CacheConfig } from '@neutrium/utilities/cache';
 export type { ParserConfigInput, ParserConfig, ParserCacheConfigInput, ParserCacheStats } from './parsers/ParserConfig.js';
+
+export type { RationalExponent, UnitExponent } from './QuantityDefinition.js';

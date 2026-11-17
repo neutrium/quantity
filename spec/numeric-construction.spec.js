@@ -1,4 +1,5 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
+import { NumberAdapter } from '@neutrium/math/adapters/number';
 const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it, vi } from 'vitest';
 import { Decimal } from '@neutrium/decimal';
@@ -8,12 +9,14 @@ import { Quantity as NumberQuantity } from '@neutrium/quantity/number';
 import { createQuantityClass } from '@neutrium/quantity/factory';
 import { isQuantityDefinition } from '@neutrium/quantity/guards.js';
 import { NearleyParser } from '@neutrium/quantity/parsers/nearley';
+import { PrattParser } from '@neutrium/quantity/parsers/pratt';
 import { floatAdapter } from './helpers/numeric.js';
 
 describe('construction across numeric backends', () => {
 	it('copies native quantities to Decimal with units and destination configuration', () => {
 		const Target = Quantity.withConfig({ numeric: { precision: 3 }, cache: false });
-		const source = new NumberQuantity('12.345 km/h');
+		const Source = createQuantityClass({ numeric: new NumberAdapter(), parser: c => new PrattParser(c) });
+		const source = new Source('12.345 km/h');
 		const stringify = vi.spyOn(source.numeric, 'toString');
 		try {
 			const copy = new Target(source);
@@ -76,6 +79,21 @@ describe('construction across numeric backends', () => {
 		}
 	});
 
+	it.each([true, false])('translates absolute-zero boundaries during copies, cache=%s', cache => {
+		const Float = createQuantityClass({ numeric: floatAdapter, parser: c => new NearleyParser(c), config: { cache } });
+		for (const Target of [NumberQuantity.withConfig({ cache }), Quantity.withConfig({ cache })]) {
+			for (const [unit, minimum] of [['tempC', '-273.15'], ['tempF', '-459.67']]) {
+				const zero = new Float(minimum, unit);
+				expect(new Target(zero).same(new Target(minimum, unit))).toBe(true);
+				expect(new Float(new Target(zero)).same(zero)).toBe(true);
+				const warmer = new Float(zero.scalar + 1, unit);
+				expect(new Target(warmer).same(new Target(String(Number(minimum) + 1), unit))).toBe(true);
+			}
+			const signedZero = new Target(new Float(-0, 'tempK'));
+			expect(signedZero.numeric.toNumber(signedZero.scalar)).toBe(-0);
+		}
+	});
+
 	it('preserves absolute-temperature units and their arithmetic restrictions', () => {
 		for (const [Source, Target] of [[NumberQuantity, Quantity], [Quantity, NumberQuantity]]) {
 			const source = new Source('-273.15 tempC');
@@ -90,7 +108,7 @@ describe('construction across numeric backends', () => {
 
 for (const Entry of [Quantity, RegexQuantity])
 {
-	describe(`numeric construction: ${Entry === Quantity ? 'Nearley' : 'Regex'}`, () => {
+	describe(`numeric construction: ${Entry === Quantity ? 'Pratt' : 'Regex'}`, () => {
 		it('constructs dimensionless quantities from all supported numeric forms', () => {
 			for (const input of [2.5, '2.5', new Decimal('2.5'), new Number(2.5), new String('2.5'),
 				{ toString: () => '2.5' }, { toString: () => ' +2.5 ' }])

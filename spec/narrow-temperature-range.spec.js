@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createQuantityClass } from '../dist/factory.js';
-import { DecimalArithmeticAdapter } from '@neutrium/utilities/decimal/arithmetic';
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalArithmeticAdapter } from '@neutrium/math/adapters/decimal/arithmetic';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 import { NearleyParser } from '../dist/parsers/NearleyParser.js';
 import { RegexParser } from '../dist/parsers/RegexParser.js';
 

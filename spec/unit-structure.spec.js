@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Quantity } from '@neutrium/quantity';
 import { Quantity as RegexQuantity } from '@neutrium/quantity/regex';
 import { Quantity as NumberQuantity } from '@neutrium/quantity/number';
-import { cancelPowers, combinePowers, normalizePowers, scalePowers } from '../dist/operations/unit-powers.js';
+import { cancelPowers, combinePowers, normalizePowers, powerUnitSides } from '../dist/operations/unit-powers.js';
 
 describe('scaling normalized unit powers', () => {
 	it('preserves prefixes and order, owns changed records and freezes the result', () => {
@@ -10,7 +10,7 @@ describe('scaling normalized unit powers', () => {
 			{ unit: '<meter>', prefix: '<kilo>', exponent: 2 },
 			{ unit: '<second>', exponent: 1 }, { unit: '<meter>', exponent: 3 },
 		]);
-		const result = scalePowers(input, 3);
+		const [result] = powerUnitSides({ numerator: input, denominator: [] }, 3);
 		expect(result).toEqual([
 			{ unit: '<meter>', prefix: '<kilo>', exponent: 6 },
 			{ unit: '<second>', exponent: 3 }, { unit: '<meter>', exponent: 9 },
@@ -29,7 +29,7 @@ describe('scaling normalized unit powers', () => {
 			Object.freeze({ unit: '<meter>', exponent: 2 }),
 			Object.freeze({ unit: '<meter>', exponent: 3 }),
 		]);
-		expect(scalePowers(input, 2)).toEqual([{ unit: '<meter>', exponent: 10 }]);
+		expect(powerUnitSides({ numerator: input, denominator: [] }, -2)).toEqual([[], [{ unit: '<meter>', exponent: 10 }]]);
 		for (const term of [
 			{ unit: '<unknown>', exponent: 1 },
 			{ unit: '<meter>', prefix: '<second>', exponent: 1 },
@@ -37,25 +37,32 @@ describe('scaling normalized unit powers', () => {
 			{ unit: '<meter>', exponent: -1 },
 		])
 		{
-			expect(() => scalePowers(Object.freeze([Object.freeze(term)]), 2)).toThrow();
+			expect(() => powerUnitSides({ numerator: [], denominator: Object.freeze([Object.freeze(term)]) }, 2)).toThrow();
 		}
 	});
 
 	it('checks powered and summed counts before they can overflow or disappear', () => {
 		const max = Number.MAX_SAFE_INTEGER;
-		const input = normalizePowers([{ unit: '<meter>', exponent: max }]);
-		expect(scalePowers(input, 1)).toBe(input);
-		expect(scalePowers(input, 0)).toEqual([]);
-		expect(() => scalePowers(input, 2)).toThrow('safe integer');
-		expect(() => scalePowers([
+		const input = { numerator: normalizePowers([{ unit: '<meter>', exponent: max }]), denominator: [] };
+		expect(powerUnitSides(input, 1)[0]).toBe(input.numerator);
+		expect(powerUnitSides(input, 0)).toEqual([[], []]);
+		expect(() => powerUnitSides(input, 2)).toThrow('safe integer');
+		expect(() => powerUnitSides({ numerator: [
 			{ unit: '<meter>', exponent: (max - 1) / 2 }, { unit: '<meter>', exponent: 1 },
-		], 2)).toThrow('safe integer');
-		expect(() => scalePowers([{ unit: '<1>', exponent: max }], 2)).toThrow('safe integer');
+		], denominator: [] }, 2)).toThrow('safe integer');
+		expect(() => powerUnitSides({ numerator: [{ unit: '<1>', exponent: max }], denominator: [] }, 2)).toThrow('safe integer');
+	});
 
-		for (const multiplier of [-1, 0.5, Infinity, NaN, max + 1])
-		{
-			expect(() => scalePowers(input, multiplier)).toThrow();
-		}
+	it('reduces and detaches a caller-owned exponent before using it on both sides', () => {
+		const source = new NumberQuantity('16 m/s');
+		const exponent = { numerator: 2n, denominator: -4n };
+		const result = source.pow(exponent);
+		exponent.numerator = 0n;
+		expect(result.scalar).toBe(0.25);
+		expect(result.units()).toBe('s^(1/2)/m^(1/2)');
+		expect(Object.isFrozen(result.numerator[0].exponent)).toBe(true);
+		for (const invalid of [Infinity, NaN, Number.MAX_SAFE_INTEGER + 1, { numerator: 1n, denominator: 0n }])
+			expect(() => source.pow(invalid)).toThrow();
 	});
 
 	for (const [name, Base] of [['Decimal', Quantity], ['number', NumberQuantity]]) {

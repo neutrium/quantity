@@ -7,7 +7,7 @@ import * as operations from '../dist/operations/generic.js';
 
 for (const Entry of [Quantity, RegexQuantity])
 {
-	describe(`lazy immutable values: ${Entry === Quantity ? 'Nearley' : 'Regex'}`, () => {
+	describe(`lazy immutable values: ${Entry === Quantity ? 'Pratt' : 'Regex'}`, () => {
 		it('does not evaluate base factors during construction, copying, or same-unit arithmetic', () => {
 			const resolve = vi.spyOn(operations, 'base');
 			for (const input of ['1 m', '1 degF', '1 tempF', '1 ft12347'])

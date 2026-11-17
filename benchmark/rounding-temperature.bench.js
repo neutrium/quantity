@@ -4,11 +4,13 @@ import { Quantity } from '../dist/Quantity.js';
 import { Quantity as NumberQuantity } from '../dist/number.js';
 import { compare } from './helpers.js';
 
-for (const [name, Q] of [['Decimal', Quantity], ['double', NumberQuantity]])
+for (const [name, Entry] of [['Decimal', Quantity], ['double', NumberQuantity]]) for (const cache of [true, false])
 {
-	test(`temperature constants: ${name}`, async ({ bench }) => {
+	test(`temperature operations: ${name}, cache ${cache}`, async ({ bench }) => {
+		const Q = Entry.withConfig({ cache });
 		const source = new Q('20 tempC'), interval = new Q('1 degC');
 		const other = new Q('10 tempC'), fahrenheit = new Q('68 tempF'), otherFahrenheit = new Q('50 tempF');
+		const kelvin = new Q('293.15 tempK'), degreeKelvin = new Q('294 degK');
 		await compare(bench, [
 			{
 				name: 'construct temperature', run: () => new Q('20 tempC'),
@@ -29,6 +31,14 @@ for (const [name, Q] of [['Decimal', Quantity], ['double', NumberQuantity]])
 			{
 				name: 'subtract cross-scale temperatures', run: () => source.sub(otherFahrenheit),
 				validate: value => assert(Math.abs(value.numeric.toNumber(value.scalar) - 10) < 1e-12),
+			},
+			{
+				name: 'compare Celsius and Fahrenheit points', run: () => source.compareTo(otherFahrenheit),
+				validate: order => assert.equal(order, 1),
+			},
+			{
+				name: 'compare a Kelvin point and interval', run: () => kelvin.compareTo(degreeKelvin),
+				validate: order => assert.equal(order, -1),
 			},
 		]);
 	});

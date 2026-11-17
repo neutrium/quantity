@@ -1,4 +1,4 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const testNumeric = new DecimalScientificAdapter();
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
@@ -13,7 +13,7 @@ test('quantity construction', async ({ bench }) => {
 	const regex = new RegexParser();
 	const validate = value => assert(value.same(expected));
 	await compare(bench, [
-		{ name: 'expression: default Nearley', run: () => new Quantity('3.5 kg.m/s^2'), validate },
+		{ name: 'expression: default Pratt', run: () => new Quantity('3.5 kg.m/s^2'), validate },
 		{ name: 'expression: default Regex entry', run: () => new RegexQuantity('3.5 kg.m/s^2'), validate },
 		{ name: 'expression: reused Regex parser', run: () => new Quantity('3.5 kg.m/s^2', undefined, regex), validate },
 		{ name: 'separate scalar and units', run: () => new Quantity('3.5', 'kg.m/s^2'), validate },

@@ -7,7 +7,7 @@ for (const Entry of [Quantity, RegexQuantity])
 {
 	const forms = value => [value, String(value), new Decimal(value), { toString: () => String(value) },
 		new Entry(value), { scalar: new Decimal(value), numerator: [], denominator: [] }];
-	describe(`unitless scaling: ${Entry === Quantity ? 'Nearley' : 'Regex'}`, () => {
+	describe(`unitless scaling: ${Entry === Quantity ? 'Pratt' : 'Regex'}`, () => {
 		it('preserves scaled dimensionless units for every scalar operand form', () => {
 			const source = new Entry('50 cm/m');
 

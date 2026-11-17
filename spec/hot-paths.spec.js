@@ -1,13 +1,76 @@
 import { overrideAdapter } from './helpers/numeric.js';
 import { describe, expect, it, vi } from 'vitest';
 import { createQuantityClass } from '../dist/factory.js';
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
-import { DecimalArithmeticAdapter } from '@neutrium/utilities/decimal/arithmetic';
-import { NumberAdapter } from '@neutrium/utilities/number';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
+import { DecimalArithmeticAdapter } from '@neutrium/math/adapters/decimal/arithmetic';
+import { NumberAdapter } from '@neutrium/math/adapters/number';
 const decimalAdapter = new DecimalScientificAdapter();
 import { NearleyParser } from '../dist/parsers/NearleyParser.js';
 import { RegexParser } from '../dist/parsers/RegexParser.js';
 import { scale } from '../dist/operations/unit-scale.js';
+import { UnitTokenManager } from '../dist/UnitTokenManager.js';
+
+it.each([true, false])('reuses the resolved signature when constructing base units, cache=%s', cache => {
+	const Q = createQuantityClass({ numeric: new NumberAdapter(), parser: c => new RegexParser(c), config: { cache } });
+	class Force extends Q {
+		constructQuantity(...args) {
+			const lookup = vi.spyOn(UnitTokenManager.instance, 'getUnit');
+			try {
+				const result = super.constructQuantity(...args);
+				expect(lookup).not.toHaveBeenCalled();
+				return result;
+			} finally { lookup.mockRestore(); }
+		}
+	}
+	const force = new Force('2 N');
+	for (let i = 0; i < 2; i++) {
+		const base = force.toBase();
+		expect(base.scalar).toBe(2);
+		expect(base.units()).toBe('kg*m/s2');
+		expect(base.signature).toBe(force.signature);
+	}
+});
+
+it.each([true, false])('expands large derived dimensions once per new structure, cache=%s', cache => {
+	const Q = createQuantityClass({ numeric: new NumberAdapter(), parser: c => new RegexParser(c), config: { cache } });
+	const force = new Q(1, 'N3000000000000000'), time = new Q(1, 's2'), unit = new Q('1 N');
+	const lookup = vi.spyOn(UnitTokenManager.instance, 'getUnit');
+	try {
+		for (const [calculate, expansions] of [
+			[() => force.div(time), 1], [() => force.mul(time), 1],
+			// The power has the same units as the previously constructed force.
+			[() => unit.pow(3000000000000000), cache ? 0 : 1],
+		]) {
+			lookup.mockClear();
+			const result = calculate();
+			expect(result.scalar).toBe(1);
+			expect(lookup.mock.calls.filter(([token]) => token === '<newton>')).toHaveLength(expansions);
+		}
+	} finally { lookup.mockRestore(); }
+});
+
+it('revalidates large result dimensions if a construction hook changes a side', () => {
+	const Q = createQuantityClass({ numeric: new NumberAdapter(), parser: c => new RegexParser(c) });
+	class Rewritten extends Q {
+		constructQuantity(input, units, parser) {
+			input.numerator = [{ unit: '<newton>', exponent: Number.MAX_SAFE_INTEGER }];
+			return new Q(input, units, parser);
+		}
+	}
+	expect(() => new Rewritten(1, 'N3000000000000000').div(new Q('1 s2'))).toThrow(RangeError);
+});
+
+it('skips expanded-dimension checks for small fractional powers with large numerators', () => {
+	const Q = createQuantityClass({ numeric: new NumberAdapter(), parser: c => new NearleyParser(c) });
+	const input = '2 N^0.3333333333333333', signature = new Q(input).signature;
+	const lookup = vi.spyOn(UnitTokenManager.instance, 'getUnit');
+	try
+	{
+		expect(new Q(input).signature).toBe(signature);
+		expect(lookup).not.toHaveBeenCalledWith('<newton>');
+	}
+	finally { lookup.mockRestore(); }
+});
 
 for (const Adapter of [DecimalArithmeticAdapter, DecimalScientificAdapter])
 {
@@ -98,8 +161,7 @@ for (const Parser of [NearleyParser, RegexParser])
 			}
 			from.mockClear();
 			expect(new Q(36, 'km/h').scalar.toString()).toBe('36');
-			// One scalar for the units expression, one for the supplied value.
-			expect(from).toHaveBeenCalledTimes(2);
+			expect(from).toHaveBeenCalledExactlyOnceWith(36);
 		});
 		it('still adopts external scalars, definitions and quantity copies into the receiver context', () => {
 			const Wide = createQuantityClass({ numeric: decimalAdapter, parser: config => new Parser(config) });
@@ -112,6 +174,18 @@ for (const Parser of [NearleyParser, RegexParser])
 		});
 	});
 }
+
+it('reads the source scale once when converting an absolute reading to an interval without caches', () => {
+	const Q = createQuantityClass({ numeric: new NumberAdapter(), parser: c => new RegexParser(c), config: { cache: false } });
+	const source = new Q('20 tempR'), target = new Q('degK');
+	const lookup = vi.spyOn(UnitTokenManager.instance, 'getUnit');
+	try {
+		expect(source.to(target).scalar).toBeCloseTo(100 / 9, 14);
+		expect(lookup.mock.calls.filter(([unit]) => unit === '<temp-R>')).toHaveLength(1);
+	} finally {
+		lookup.mockRestore();
+	}
+});
 
 it('reuses catalog plans without retaining a scalar or another numeric context', () => {
 	const Q = createQuantityClass({ numeric: decimalAdapter, parser: config => new RegexParser(config) });
@@ -147,4 +221,19 @@ it('keeps reciprocal plans separate and never mutates cached factors with scalar
 	const first = scale(huge.scalar, huge, metres, decimalAdapter);
 	scale(decimalAdapter.from(3), huge, metres, decimalAdapter);
 	expect(scale(huge.scalar, huge, metres, decimalAdapter).eq(first)).toBe(true);
+});
+
+it('expands large derived dimensions once when copying or constructing from normalized records without caching', () => {
+	const Q = createQuantityClass({ numeric: new NumberAdapter(), parser: c => new RegexParser(c), config: { cache: false } });
+	const source = new Q(1, 'N3000000000000000');
+	const lookup = vi.spyOn(UnitTokenManager.instance, 'getUnit');
+	try {
+		for (const input of [source, { scalar: 1, numerator: source.numerator, denominator: source.denominator }]) {
+			lookup.mockClear();
+			expect(new Q(input).signature).toBe(source.signature);
+			expect(lookup.mock.calls.filter(([unit]) => unit === '<newton>')).toHaveLength(1);
+		}
+		const overflow = [{ unit: '<newton>', exponent: Number.MAX_SAFE_INTEGER }];
+		expect(() => new Q({ scalar: 1, numerator: overflow, denominator: overflow })).toThrow(RangeError);
+	} finally { lookup.mockRestore(); }
 });

@@ -22,6 +22,7 @@
 		"./guides/parsers.md",
 		"./guides/migrating-v5.md",
 		"./guides/migrating-v6.md",
+		"./guides/migrating-v7.md",
 		"./guides/benchmarks.md",
 		"./guides/numeric-backends.md"
 	],

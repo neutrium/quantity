@@ -47,7 +47,7 @@ For Quantity and definition inputs, `initValue` now holds a normalized snapshot 
 
 Parsing preserves numerator and denominator separately: `m/m` retains both sides. Multiplication, division, and powers cancel matching unit/prefix pairs. Distinct prefixes remain distinct until converted; `km/m` has a conversion factor of 1000. Resolving scaled or derived units with `toBase()` also cancels matching base terms. Quantities already in base units still return themselves.
 
-With the default Decimal backend, unit conversions and cross-unit arithmetic cancel catalog factors before evaluation and apply output precision and range limits only to the final result of each operation. Converted operands are not rounded separately. Cross-unit comparisons use unrounded values. Same-unit and scalar arithmetic use the selected utilities adapter directly. Integer powers use the selected backend; both Decimal tiers apply final-only rounding and range limits. The default is an isolated scientific Decimal adapter; global `Decimal.config` changes no longer affect existing Quantity classes. See [numeric backends](numeric-backends.md) for factory selection and breaking API changes.
+With the default Decimal backend, unit conversions and cross-unit arithmetic cancel catalog factors before evaluation and apply output precision and range limits only to the final result of each operation. Converted operands are not rounded separately. Cross-unit comparisons use unrounded values. Same-unit and scalar arithmetic use the selected math adapter directly. Integer powers use the selected backend; both Decimal tiers apply final-only rounding and range limits. The default is an isolated scientific Decimal adapter; global `Decimal.config` changes no longer affect existing Quantity classes. See [numeric backends](numeric-backends.md) for factory selection and breaking API changes.
 
 Conversion caches, unchanged-unit checks, and `same()` compare unit tokens, prefixes, exponents, and numerator/denominator placement, preserving term order. They do not use display aliases as identity: the historical `min`/`milliinch` formatting collision cannot make time and length compatible. Use `eq()` to compare equivalent physical values expressed with different unit records.
 
@@ -86,10 +86,10 @@ If you used scaled targets to calculate a ratio, replace `.to('2 m')` with `.div
 
 ## Unit expression formatting
 
-Nonempty `units()` expressions can be parsed by either bundled parser without changing their unit records. Compound denominators use tightly coupled dot multiplication: `kg/m/s` is formatted as `kg/m.s`, meaning `kg/(m*s)`. Reciprocals are formatted as `1/m` or `1/m.s`. Both parsers still accept repeated division as input. Numerator products still use `*`. Update snapshots or stored display strings that depend on repeated `/` separators.
+Nonempty `units()` expressions can be parsed by any of the three current parsers without changing their unit records. Compound denominators use tightly coupled dot multiplication: `kg/m/s` is formatted as `kg/m.s`, meaning `kg/(m*s)`. Reciprocals are formatted as `1/m` or `1/m.s`. All three accept repeated division as input. Numerator products still use `*`. Update snapshots or stored display strings that depend on repeated `/` separators.
 
-Both parsers now use the same precedence: powers first, tightly coupled dot multiplication second, then ordinary multiplication (`*` or whitespace) and division from left to right. Previously Regex treated products following a slash as part of the denominator. For example, `m/s*kg` and `m/s kg` previously meant
-`m/(s*kg)` in Regex; they now mean `(m/s)*kg` in both parsers. Use `m/s/kg` or `m/s.kg` if both units belong in the denominator.
+Nearley and Regex adopted the same precedence in version 5. Pratt also follows this order: powers first, tightly coupled dot multiplication second, then ordinary multiplication (`*` or whitespace) and division from left to right. Previously Regex treated products following a slash as part of the denominator. For example, `m/s*kg` and `m/s kg` previously meant
+`m/(s*kg)` in Regex; they now mean `(m/s)*kg` in all three current parsers. Use `m/s/kg` or `m/s.kg` if both units belong in the denominator.
 
 Dot multiplication now binds more tightly than division in Nearley as well: `kg/m.s` means `kg/(m*s)`, whereas `kg/m*s` means `(kg/m)*s`. Update Nearley inputs that used a dot after division to mean ordinary multiplication by replacing that dot with `*`. Formatting uses `*` for numerator products and tightly coupled `.` for denominator products, following these same precedence rules.
 
@@ -121,4 +121,4 @@ Scalar arithmetic still follows Decimal's precision and numeric range; counted u
 
 ## Continuing to version 6
 
-Version 6 introduces utilities numeric adapters, renamed parser classes, the `/factory` entry point, and nested numeric/cache configuration. Follow [Migrating to version 6](migrating-v6.md) after updating counted definitions.
+Version 6 introduces Utilities numeric adapters, renamed parser classes, the `/factory` entry point, and nested numeric/cache configuration. Follow [Migrating to version 6](migrating-v6.md) after updating counted definitions.

@@ -30,11 +30,11 @@ export const DEFAULT_PARSER_CONFIG: ParserConfig = Object.freeze({
 const resolved = new WeakSet<object>([DEFAULT_PARSER_CONFIG]);
 
 /** @internal Snapshot once; parser instances reuse already resolved class settings. */
-export function parserConfig(input?: ParserConfigInput, parent: ParserConfig = DEFAULT_PARSER_CONFIG): ParserConfig
+export function parserConfig(input?: ParserConfigInput): ParserConfig
 {
 	if (input === undefined)
 	{
-		return parent;
+		return DEFAULT_PARSER_CONFIG;
 	}
 
 	if (resolved.has(input))
@@ -43,7 +43,7 @@ export function parserConfig(input?: ParserConfigInput, parent: ParserConfig = D
 	}
 
 	assertKnownKeys(input as unknown, ['cache'], 'parser');
-	const result = Object.freeze({ cache: cacheConfig(input.cache, parent.cache, { name: 'parser cache', reuse: true }) });
+	const result = Object.freeze({ cache: cacheConfig(input.cache, DEFAULT_PARSER_CONFIG.cache, { name: 'parser cache', reuse: true }) });
 	resolved.add(result);
 
 	return result;

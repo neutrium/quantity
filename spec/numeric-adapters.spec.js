@@ -3,11 +3,12 @@ import { Decimal } from '@neutrium/decimal';
 import { Quantity as DecimalQuantity } from '../dist/Quantity.js';
 import { Quantity as NumberQuantity } from '../dist/number.js';
 import { createQuantityClass, isQuantity, Quantity as SharedQuantity } from '../dist/factory.js';
-import { NumberAdapter } from '@neutrium/utilities/number';
+import { NumberAdapter } from '@neutrium/math/adapters/number';
 const numberAdapter = new NumberAdapter();
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const decimalAdapter = new DecimalScientificAdapter();
 import { NearleyParser } from '../dist/parsers/NearleyParser.js';
+import { quantityExponent } from '../dist/numeric/support.js';
 import { RegexParser } from '../dist/parsers/RegexParser.js';
 
 class Box
@@ -15,25 +16,36 @@ class Box
 	constructor(value) { this.value = value; Object.freeze(this); }
 }
 
-const unbox = value => value instanceof Box ? value.value : numberAdapter.from(value);
-const boxedAdapter = Object.freeze({
-	id: 'boxed', tier: 'arithmetic', config: Object.freeze({}),
-	isValue: value => value instanceof Box,
-	from: value => value instanceof Box ? value : new Box(unbox(value)),
-	add: (a, b) => new Box(a.value + b.value),
-	sub: (a, b) => new Box(a.value - b.value),
-	mul: (a, b) => new Box(a.value * b.value),
-	div: (a, b) => new Box(a.value / b.value),
-	neg: a => new Box(-a.value),
-	rem: (a,b) => new Box(a.value % b.value),
-	...Object.fromEntries(['abs', 'floor', 'ceil', 'trunc', 'round'].map(op => [op, a => new Box(numberAdapter[op](a.value))])),
-	isNaN: a => Number.isNaN(a.value), isInteger: a => Number.isInteger(a.value),
-	compare: (a, b) => numberAdapter.compare(a.value, b.value),
-	isFinite: a => Number.isFinite(a.value),
-	powInteger: (a, exponent) => new Box(numberAdapter.powInteger(a.value, exponent)),
-	toBytes: () => Infinity,
-	toNumber: a => a.value,
-	toString: a => String(a.value),
+function scalarAdapter(id, isValue, encode, decode)
+{
+	return {
+		id, tier: 'arithmetic', isValue,
+		from: value => isValue(value) ? value : encode(numberAdapter.from(value)),
+		...Object.fromEntries(['add', 'sub', 'mul', 'div', 'rem'].map(method =>
+			[method, (a, b) => encode(numberAdapter[method](decode(a), decode(b)))])),
+		...Object.fromEntries(['neg', 'abs', 'floor', 'ceil', 'trunc', 'round'].map(method =>
+			[method, a => encode(numberAdapter[method](decode(a)))])),
+		compare: (a, b) => numberAdapter.compare(decode(a), decode(b)),
+		isFinite: a => Number.isFinite(decode(a)),
+		isInteger: a => Number.isInteger(decode(a)),
+		isNaN: a => Number.isNaN(decode(a)),
+		powInteger: (a, exponent) => encode(numberAdapter.powInteger(decode(a), exponent)),
+		toBytes: () => Infinity, toNumber: decode, toString: a => numberAdapter.toString(decode(a)),
+	};
+}
+const boxedAdapter = Object.freeze(scalarAdapter('boxed', value => value instanceof Box, value => new Box(value), box => box.value));
+
+it('uses adapter-native strings as scalar inputs and exponents', () => {
+	const numeric = scalarAdapter('tagged', value => typeof value === 'string' && value.startsWith('@'),
+		value => '@' + numberAdapter.toString(value), text => numberAdapter.from(text.slice(1)));
+	const Q = createQuantityClass({ numeric, parser: config => new NearleyParser(config) });
+	const two = numeric.from(2);
+	expect(new Q(two).isUnitless()).toBe(true);
+	expect(new Q(two).add(two).scalar).toBe('@4');
+	const length = new Q(two, 'm');
+	expect(length.pow(two).same(new Q('4 m2'))).toBe(true);
+	expect(length.pow(' 2 ').same(length.pow(two))).toBe(true);
+	expect(quantityExponent(numeric, numeric.from(0.5))).toEqual({ numerator: 1n, denominator: 2n });
 });
 
 for (const [name, numeric, value] of [
@@ -80,7 +92,7 @@ for (const [name, numeric, value] of [
 				expect(() => new Q('20 tempC').mul('2 m')).toThrow();
 			});
 			it('validates units and powers independently of backend precision', () => {
-				for (const exponent of ['0.5', '1e-1000', '1.00000000000000000001', Number.MAX_SAFE_INTEGER + 1]) {
+				for (const exponent of ['NaN', 'Infinity', '1e-10000', Number.MAX_SAFE_INTEGER + 1]) {
 					expect(() => new Q('1 m').pow(exponent)).toThrow();
 				}
 				expect(() => new Q('1 m').add('1 s')).toThrow();
@@ -104,9 +116,11 @@ for (const [name, numeric, value] of [
 }
 
 describe('numeric backend boundaries', () => {
-	it('keeps Decimal + Nearley as the default', () => {
+	it('uses Decimal and native-number scalars in the two Pratt presets', () => {
 		expect(new DecimalQuantity('1 m')).toBeInstanceOf(SharedQuantity);
-		expect(new NumberQuantity('1 m')).toBeInstanceOf(SharedQuantity);
+		const native = new NumberQuantity('1 m');
+		expect(native).toBeInstanceOf(SharedQuantity);
+		expect(Object.isFrozen(native.numeric)).toBe(true);
 		expect(new DecimalQuantity('(2 m)/(4 s)').scalar).toBeInstanceOf(Decimal);
 		expect(new DecimalQuantity('0.1').add('0.2').scalar.toString()).toBe('0.3');
 		expect(new NumberQuantity('0.1').add('0.2').scalar).toBe(0.1 + 0.2);
@@ -125,7 +139,7 @@ describe('numeric backend boundaries', () => {
 		expect(parser.parse('(2 m)/(4 s)', numberAdapter).scalar).toBe(0.5);
 		expect(parser.parse('(2 m)/(4 s)', boxedAdapter).scalar).toBeInstanceOf(Box);
 		expect(parser.parse('(2 m)/(4 s)', decimalAdapter).scalar.toString()).toBe('0.5');
-		expect(() => parser.parse('m/0', numberAdapter)).toThrow();
+		expect(parser.parse('m/0', numberAdapter).scalar).toBe(Infinity);
 	});
 	it('supports isolated Decimal configuration through the adapter factory', () => {
 		const Q = createQuantityClass({ numeric: new DecimalScientificAdapter({ precision: 8 }), parser: c => new NearleyParser(c) });

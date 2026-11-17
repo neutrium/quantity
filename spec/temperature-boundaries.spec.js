@@ -1,12 +1,41 @@
 import { describe, expect, it } from 'vitest';
 import { createQuantityClass } from '../dist/factory.js';
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const decimalAdapter = new DecimalScientificAdapter();
-import { NumberAdapter } from '@neutrium/utilities/number';
+import { NumberAdapter } from '@neutrium/math/adapters/number';
 const numberAdapter = new NumberAdapter();
 import { floatAdapter } from './helpers/numeric.js';
 import { NearleyParser } from '../dist/parsers/NearleyParser.js';
+import { PrattParser } from '../dist/parsers/PrattParser.js';
 import { RegexParser } from '../dist/parsers/RegexParser.js';
+
+// Independent readings for 20 °C, 10 °C and the interval between them.
+const reference = [
+	['C', '20', '10', '10'], ['F', '68', '50', '18'],
+	['K', '293.15', '283.15', '10'], ['R', '527.67', '509.67', '18'],
+];
+
+for (const numeric of [decimalAdapter, numberAdapter, floatAdapter]) for (const Parser of [NearleyParser, PrattParser, RegexParser])
+{
+	it.each([true, false])(`preserves point and interval arithmetic across every scale pair: ${numeric.id}, ${Parser.name}, cache=%s`, cache => {
+		const Q = createQuantityClass({ numeric, parser: c => new Parser(c), config: { cache } });
+		const check = (quantity, units, value) => {
+			expect(quantity.units()).toBe(units);
+			if (numeric === decimalAdapter) expect(quantity.scalar.eq(value)).toBe(true);
+			else expect(numeric.toNumber(quantity.scalar)).toBeCloseTo(Number(value), numeric === floatAdapter ? 3 : 10);
+		};
+		for (const [a, warm, cool, change] of reference) for (const [b, warmB, coolB, changeB] of reference) {
+			const point = new Q(warm, 'temp' + a), other = new Q(coolB, 'temp' + b), delta = new Q(changeB, 'deg' + b);
+			check(point.to('temp' + b), 'temp' + b, warmB);
+			check(point.sub(other), 'deg' + a, change);
+			check(point.sub(delta), 'temp' + a, cool);
+			check(new Q(cool, 'temp' + a).add(delta), 'temp' + a, warm);
+			check(delta.add(new Q(cool, 'temp' + a)), 'temp' + a, warm);
+			expect(point.compareTo(other)).toBe(1);
+			expect(other.compareTo(point)).toBe(-1);
+		}
+	});
+}
 
 for (const numeric of [decimalAdapter, numberAdapter, floatAdapter])
 {
@@ -26,6 +55,11 @@ for (const numeric of [decimalAdapter, numberAdapter, floatAdapter])
 				expect(() => new Q('0 tempK').add('-1 degK')).toThrow('absolute zero');
 				expect(() => new Q('-0.01/degK').to('tempK')).toThrow('absolute zero');
 				expect(numeric.toNumber(new Q('0.01/degK').to('tempC').scalar)).toBeCloseTo(-173.15, 4);
+			});
+			it('preserves signed zero when scaling an absolute reading', () => {
+				expect(numeric.toNumber(new Q('20 tempK').div(-Infinity).scalar)).toBe(-0);
+				expect(numeric.toNumber(new Q('-3 tempC').mul(0).scalar)).toBe(-0);
+				expect(numeric.toNumber(new Q('-0 tempC').div(2).scalar)).toBe(-0);
 			});
 		});
 	}

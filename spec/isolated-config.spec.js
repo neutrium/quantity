@@ -1,4 +1,4 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it } from 'vitest';
 import { Decimal } from '@neutrium/decimal';
@@ -10,7 +10,7 @@ import { RegexParser } from '@neutrium/quantity/parsers/regex';
 
 for (const Entry of [Quantity, RegexQuantity])
 {
-	describe(`isolated config: ${Entry === Quantity ? 'Nearley' : 'Regex'}`, () => {
+	describe(`isolated config: ${Entry === Quantity ? 'Pratt' : 'Regex'}`, () => {
 		it('snapshots settings without mutating the shared Decimal or caller object', () => {
 			const options = { precision: 6, rounding: 'down' };
 			const Configured = Entry.withConfig({ numeric: options });
@@ -101,7 +101,7 @@ it('passes context to custom parsers and preserves their class', () => {
 	expect(quantity.div(3).scalar.toString()).toBe('0.3333333');
 });
 
-it('evaluates Nearley scalar expressions in the isolated context on cache misses and hits', () => {
+it('evaluates Pratt scalar expressions in the isolated context on cache misses and hits', () => {
 	const Low = Quantity.withConfig({ numeric: { precision: 6, rounding: 'down' } });
 	const High = Quantity.withConfig({ numeric: { precision: 30, rounding: 'up' } });
 	Decimal.config = { precision: 2, maxE: 2, minE: -2 };

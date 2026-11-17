@@ -1,15 +1,24 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it } from 'vitest';
 import { Quantity } from '@neutrium/quantity';
+import { Quantity as NumberQuantity } from '@neutrium/quantity/number';
 import { Quantity as RegexQuantity } from '@neutrium/quantity/regex';
 import { createQuantityClass } from '@neutrium/quantity/factory';
+import { NearleyParser } from '@neutrium/quantity/parsers/nearley';
 import { RegexParser } from '@neutrium/quantity/parsers/regex';
 import { isQuantity } from '@neutrium/quantity/guards.js';
 
 describe('parser selection', () => {
-	it('keeps Nearley as the default and exposes a regex-only entry', () => {
-		expect(new Quantity('2 (m/s)^2').units()).toBe('m2/s2');
+	it.each([['Decimal', Quantity], ['number', NumberQuantity]])('uses Pratt by default and accepts an explicit Nearley parser for %s', (_, Q) => {
+		const atLimit = '('.repeat(255) + 'm' + ')'.repeat(255);
+		const beyondLimit = '(' + atLimit + ')';
+		expect(new Q(atLimit).units()).toBe('m');
+		expect(() => new Q(beyondLimit)).toThrow(expect.objectContaining({ code: 'LIMIT_EXCEEDED' }));
+		expect(new Q(beyondLimit, undefined, new NearleyParser()).units()).toBe('m');
+	});
+
+	it('exposes a regex-only entry', () => {
 		expect(() => new RegexQuantity('2 (m/s)^2')).toThrow();
 		expect(new RegexQuantity('1e3 m').scalar.toString()).toBe('1000');
 	});
@@ -29,7 +38,6 @@ describe('parser selection', () => {
 		expect(factories).toBe(1);
 		for (const result of results)
 		{
-			expect(result).toBeInstanceOf(Custom);
 			expect(result).toBeInstanceOf(Custom);
 			expect(isQuantity(result)).toBe(true);
 		}

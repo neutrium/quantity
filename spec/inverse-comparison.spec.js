@@ -1,4 +1,4 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it, vi } from 'vitest';
 import { Quantity } from '../dist/Quantity.js';
@@ -8,7 +8,7 @@ import { RegexParser } from '../dist/parsers/RegexParser.js';
 
 for (const Constructor of [Quantity, RegexQuantity])
 {
-	describe(`inverse dimensions with ${Constructor === Quantity ? 'Nearley' : 'Regex'}`, () => {
+	describe(`inverse dimensions with ${Constructor === Quantity ? 'Pratt' : 'Regex'}`, () => {
 		it('ignores scalars, including zero and non-finite values', () => {
 			const inverse = new Quantity('0 m^-1');
 			for (const scalar of [0, -2, 3, NaN, Infinity]) {
@@ -58,8 +58,7 @@ for (const Constructor of [Quantity, RegexQuantity])
 			expect(source.isInverse(source)).toBe(false);
 			expect(constructions).toBe(0);
 			expect(source.isInverse('1/m')).toBe(true);
-			expect(constructions).toBe(1); // Only the supplied string operand.
-			constructions = 0;
+			expect(constructions).toBe(0);
 			const result = source.to(target);
 			expect(result).toBeInstanceOf(Counted);
 			expect(result.scalar.toString()).toBe('0.005');
@@ -78,6 +77,6 @@ it('parses string operands once using the configured parser', () => {
 	expect(source.isInverse(target)).toBe(true);
 	expect(parse).not.toHaveBeenCalled();
 	expect(source.isInverse('metres^-1')).toBe(true);
-	expect(parse).toHaveBeenCalledExactlyOnceWith('metres^-1', source.numeric, source.cacheScope);
+	expect(parse).toHaveBeenCalledExactlyOnceWith('metres^-1', source.numeric, source.cacheScope, source.numeric.from(1));
 	expect(() => source.isInverse('not_a_unit')).toThrow();
 });

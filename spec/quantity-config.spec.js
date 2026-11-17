@@ -3,11 +3,11 @@ import { Quantity } from '../dist/Quantity.js';
 import { createQuantityClass } from '../dist/factory.js';
 import { NearleyParser } from '../dist/parsers/NearleyParser.js';
 import { RegexParser } from '../dist/parsers/RegexParser.js';
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const decimalAdapter = new DecimalScientificAdapter();
-import { NumberAdapter } from '@neutrium/utilities/number';
+import { NumberAdapter } from '@neutrium/math/adapters/number';
 const numberAdapter = new NumberAdapter();
-import { DecimalArithmeticAdapter } from '@neutrium/utilities/decimal/arithmetic';
+import { DecimalArithmeticAdapter } from '@neutrium/math/adapters/decimal/arithmetic';
 import { BudgetCache } from '@neutrium/utilities/cache';
 import { CacheScope } from '../dist/utils/CacheScope.js';
 

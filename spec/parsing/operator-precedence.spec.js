@@ -1,4 +1,4 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it } from 'vitest';
 import { Quantity } from '../../dist/Quantity.js';
@@ -74,7 +74,7 @@ describe('shared multiplication and division precedence', () => {
 		}
 	});
 
-	it('respects explicit powered groups in Nearley', () => {
+	it('respects explicit powered groups in Pratt', () => {
 		expect(new Quantity('kg/m.s').eq('kg/(m*s)^1')).toBe(true);
 		expect(new Quantity('kg/(m.s)^-2').same(new Quantity('kg*m2*s2'))).toBe(true);
 		expect(new Quantity('kg/(m/s)^1.ampere').same(new Quantity('kg*s/m/ampere'))).toBe(true);

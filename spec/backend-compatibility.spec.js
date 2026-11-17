@@ -2,8 +2,21 @@ import { expect, it, vi } from 'vitest';
 import { createQuantityClass } from '../dist/factory.js';
 import { NearleyParser } from '../dist/parsers/NearleyParser.js';
 import { RegexParser } from '../dist/parsers/RegexParser.js';
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { parseRationalTerm } from '@neutrium/math/numeric/rational';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
+import { Quantity as NumberQuantity } from '@neutrium/quantity/number';
 import { Quantity } from '../dist/Quantity.js';
+import { QuantizedArithmetic, QuantizedDecimal } from './helpers/temperature-adapters.js';
+
+it.each([true, false])('requires a Quantity operand for same(), cache=%s', cache => {
+	const Q = Quantity.withConfig({ cache });
+	const length = new Q('2 m');
+	const definition = { scalar: length.scalar, numerator: [{ unit: '<meter>', exponent: 1 }], denominator: [] };
+	expect(() => length.same(definition)).toThrow(TypeError);
+	definition.numerator[0].unit = '<second>';
+	expect(() => length.same(definition)).toThrow(TypeError);
+	expect(length.same(new Q(definition))).toBe(false);
+});
 
 class Scalar
 {
@@ -45,6 +58,36 @@ class FixedAdapter
 }
 const configure = numeric => createQuantityClass({ numeric, parser: c => new NearleyParser(c) });
 
+it('recognizes Quantity operands before a structural scalar adapter can claim them', () => {
+	class StructuralFixed extends FixedAdapter {
+		isValue(v) { return typeof v?.coefficient === 'number' && v.scale === this.scale; }
+		from(v) { return this.isValue(v) ? this.make(v.coefficient) : super.from(v); }
+	}
+	class Reading extends NumberQuantity {
+		get coefficient() { return this.scalar; }
+		get scale() { return 1; }
+	}
+	const numeric = new StructuralFixed(1), Q = configure(numeric);
+	const length = new Q('2 m'), time = new Reading('2 s');
+	expect(numeric.isValue(time)).toBe(true);
+	for (const op of ['mul', 'div', 'compareTo', 'eq']) {
+		expect(() => length[op](time), op).toThrow('Cannot mix numeric backends');
+	}
+	class FixedReading extends Q {
+		get coefficient() { return this.scalar.coefficient; }
+		get scale() { return 1; }
+	}
+	const duration = new FixedReading('2 s');
+	expect(numeric.isValue(duration)).toBe(true);
+	expect(length.mul(duration).isCompatible('m*s')).toBe(true);
+	expect(length.div(duration).isCompatible('m/s')).toBe(true);
+	expect(() => length.eq(duration)).toThrow(/incompatible/i);
+	const scalar = { coefficient: 2, scale: 1 };
+	expect(length.eq(scalar)).toBe(true);
+	expect(length.mul(scalar).scalar.coefficient).toBe(4);
+	expect(length.div(scalar).units()).toBe('m');
+});
+
 // Both adapters recognize the same scalars and share from/isValue. Only one
 // exposes the optional rational interface; the other is a valid arithmetic adapter.
 class ArithmeticOnlyDecimal extends DecimalScientificAdapter
@@ -81,22 +124,8 @@ for (const Parser of [NearleyParser, RegexParser]) for (const cache of [true, fa
 	});
 
 	it(`preserves the source's represented boundary: ${Parser.name}, cache ${cache}`, () => {
-		class QuantizedDecimal extends DecimalScientificAdapter
-		{
-			from(value)
-			{
-				return super.add(super.from(value), super.from(0));
-			}
-		}
-
-		class BasicQuantizedDecimal extends QuantizedDecimal
-		{
-			toRationalTerm = undefined;
-			fromRationalSum = undefined;
-			compareRationalSum = undefined;
-		}
 		const Exact = createQuantityClass({ numeric: new QuantizedDecimal({ precision: 12 }), parser: c => new Parser(c), config: { cache } });
-		const Basic = createQuantityClass({ numeric: new BasicQuantizedDecimal({ precision: 4 }), parser: c => new Parser(c), config: { cache } });
+		const Basic = createQuantityClass({ numeric: new QuantizedArithmetic({ precision: 4 }), parser: c => new Parser(c), config: { cache } });
 		const zero = new Basic('-273.15 tempC');
 		expect(zero.scalar.eq('-273.2')).toBe(true);
 		const reference = new Exact('0 tempK');
@@ -111,17 +140,12 @@ for (const Parser of [NearleyParser, RegexParser]) for (const cache of [true, fa
 			expect(new Exact('-273.15 tempC').compareTo(zero)).toBe(0);
 			expect(new Exact('20 tempC').compareTo(new Basic('20 tempC'))).toBe(-1);
 		}
-		const Narrow = createQuantityClass({ numeric: new BasicQuantizedDecimal({ maxE: 1 }), parser: c => new Parser(c), config: { cache } });
+		const Narrow = createQuantityClass({ numeric: new QuantizedArithmetic({ maxE: 1 }), parser: c => new Parser(c), config: { cache } });
 		// The source cannot represent its boundary; retain the exact catalog offset.
 		expect(new Exact('293.15 tempK').eq(new Narrow('20 tempC'))).toBe(true);
 	});
 
 	it(`compares same-scale temperatures using both represented boundaries: ${Parser.name}, cache ${cache}`, () => {
-		class QuantizedDecimal extends DecimalScientificAdapter
-		{
-			from(value) { return super.add(super.from(value), super.from(0)); }
-		}
-
 		const configure = precision => createQuantityClass({ numeric: new QuantizedDecimal({ precision }),
 			parser: c => new Parser(c), config: { cache } });
 		const Exact = configure(12), Rounded = configure(4);
@@ -148,6 +172,25 @@ for (const Parser of [NearleyParser, RegexParser]) for (const cache of [true, fa
 		expect(new Exact(NaN, 'tempC').compareTo(new Rounded(20, 'tempC'))).toBeUndefined();
 	});
 }
+
+it.each([true, false])('translates opaque temperature readings before applying the destination range, cache %s', cache => {
+	class TenthsAdapter extends FixedAdapter
+	{
+		from(value) { return this.make(Math.round(super.from(value).coefficient)); }
+	}
+	const Exact = configure(new FixedAdapter(1)), Tenths = configure(new TenthsAdapter(10));
+	const Narrow = Quantity.withConfig({ numeric: { maxE: 1 }, cache });
+	for (const [unit, adjusted] of [['tempC', '19.95'], ['tempF', '20.03']])
+	{
+		for (let copy = 0; copy < 2; copy++)
+		{
+			expect(new Narrow(new Exact(20, unit)).scalar.toString()).toBe('20');
+			expect(new Narrow(new Tenths(20, unit)).scalar.toString()).toBe(adjusted);
+		}
+	}
+	// The source reading itself exceeds the destination range before translation.
+	expect(new Narrow(new Tenths(100, 'tempC')).scalar.toString()).toBe('99.95');
+});
 
 it('compares same-adapter temperature readings without extracting rational terms', () => {
 	const numeric = new DecimalScientificAdapter(), Q = configure(numeric);
@@ -211,11 +254,15 @@ it('rejects incompatible encoded scalars despite shared adapter methods, in both
 	expect(a.isValue).toBe(b.isValue);
 	const A = configure(a), B = configure(b);
 	const left = new A('1 m'), right = new B('1 m');
-	for (const [receiver, other, Owner] of [[left, right, A], [right, left, B]]) {
+	for (const [receiver, other, Owner] of [[left, right, A], [right, left, B]])
+	{
 		expect(receiver.numeric.isValue(other.scalar)).toBe(false);
-		for (const method of ['add', 'sub', 'mul', 'div', 'compareTo', 'eq', 'same']) {
+
+		for (const method of ['add', 'sub', 'mul', 'div', 'compareTo', 'eq', 'same'])
+		{
 			expect(() => receiver[method](other), method).toThrow('Cannot mix numeric backends');
 		}
+
 		const copy = new Owner(other);
 		expect(copy.numeric.isValue(copy.scalar)).toBe(true);
 		expect(copy.numeric.toNumber(copy.scalar)).toBe(1);
@@ -255,4 +302,59 @@ it('allows compatible instances and explicit scalar conversion without changing 
 	expect(left.same(new A(right))).toBe(true);
 	expect(a.toNumber(left.add(new A(a.from(incompatible.scalar), 'm')).scalar)).toBe(2);
 	expect(left.to(incompatible)).toBe(left); // Quantity targets supply units only.
+});
+
+it('validates the backend of operands returned by a subclass construction hook', () => {
+	class Routed extends NumberQuantity {
+		constructQuantity(input, units, parser) { return new Quantity(input, units, parser); }
+	}
+	const length = new Routed('2 m'), other = new Quantity('1 m');
+	for (const method of ['add', 'sub', 'mul', 'div', 'compareTo']) {
+		for (const input of ['1 m', other])
+			expect(() => length[method](input), method).toThrow('Cannot mix numeric backends');
+	}
+	const definition = { scalar: other.scalar, numerator: other.numerator, denominator: other.denominator };
+	expect(() => length.add(definition)).toThrow('Cannot mix numeric backends');
+});
+
+it.each([[true, false], [false, false], [true, true], [false, true]])('uses locally owned fractional temperature boundaries with shared integers, cache=%s, rational extraction=%s', (cache, extract) => {
+	class OwnedFractions extends FixedAdapter {
+		owned = new WeakSet();
+		constructor(roundInputs) { super(1); this.roundInputs = roundInputs; }
+		make(v) {
+			const value = super.make(v);
+			this.owned.add(value);
+			return value;
+		}
+		isValue(v) { return super.isValue(v) && (Number.isInteger(v.coefficient) || this.owned.has(v)); }
+		from(v) {
+			const value = super.from(v);
+			return this.roundInputs ? this.make(Math.round(value.coefficient * 10) / 10) : value;
+		}
+		toNumber(v) {
+			if (!this.isValue(v)) throw new Error('foreign scalar');
+			return super.toNumber(v);
+		}
+		compare(a, b) { return Math.sign(this.toNumber(a) - this.toNumber(b)); }
+		sub(a, b) { return this.make(this.toNumber(a) - this.toNumber(b)); }
+		add(a, b) { return this.make(this.toNumber(a) + this.toNumber(b)); }
+	}
+	const point = round => {
+		const adapter = new OwnedFractions(round);
+		if (extract) adapter.toRationalTerm = value => parseRationalTerm(adapter.toString(value));
+		return configure(adapter).withConfig({ cache });
+	};
+	const A = point(false), B = point(false), C = point(true);
+	const a = new A(20, 'tempC'), b = new B(20, 'tempC'), c = new C(20, 'tempC');
+	for (const [left, right, difference] of [[a, b, 0], [a, c, 0.05], [c, a, -0.05]]) {
+		expect(left.compareTo(right)).toBe(Math.sign(difference));
+		expect(left.numeric.toNumber(left.sub(right).scalar)).toBeCloseTo(difference, 12);
+	}
+	expect(a.eq(new B(68, 'tempF'))).toBe(true);
+	expect(a.numeric.toNumber(a.sub(new B(32, 'tempF')).scalar)).toBeCloseTo(20);
+	const shifted = new A(2, 'degC').add(c), scaled = new A(2).mul(c);
+	expect(a.numeric.toNumber(shifted.scalar)).toBeCloseTo(21.95);
+	expect(a.numeric.toNumber(scaled.scalar)).toBeCloseTo(39.95);
+	expect(a.numeric.toNumber(new A(-0).mul(b).scalar)).toBe(-0);
+	expect(() => new A(-300, 'degC').add(c)).toThrow('absolute zero');
 });

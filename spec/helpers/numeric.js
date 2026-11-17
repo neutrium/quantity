@@ -1,4 +1,4 @@
-import { NumberAdapter } from '@neutrium/utilities/number';
+import { NumberAdapter } from '@neutrium/math/adapters/number';
 
 // A consumer-supplied binary32 policy, used to verify that Quantity preserves
 // custom native arithmetic without depending on a built-in float adapter.

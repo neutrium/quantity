@@ -25,7 +25,7 @@ The default preset stores a Decimal scalar. Use `quantity.numeric.toString(quant
 | Existing quantity | `new Quantity(length)` | Converts the scalar to the destination backend and preserves the units. |
 | Definition | `new Quantity({ scalar: length.scalar, numerator: length.numerator, denominator: length.denominator })` | Requires a destination-native scalar; normalizes and freezes the unit records. |
 
-Numbers, numeric strings, Decimal instances, and objects whose `toString()` returns a numeric literal create dimensionless quantities when units are omitted or empty. For example, `new Quantity(2)`, `new Quantity('2')`, and `new Quantity(new Decimal(2), '')` all represent the same value. Non-native numeric objects are read once and saved as a backend scalar; their text must be a scalar, not a unit expression. Native backend scalars are accepted directly. The destination's numeric configuration applies during construction.
+Numbers, bigints, numeric strings, Decimal instances, and objects whose `toString()` returns a numeric literal create dimensionless quantities when units are omitted or empty. For example, `new Quantity(2)`, `new Quantity('2')`, and `new Quantity(new Decimal(2), '')` all represent the same value. Non-native numeric objects are read once and saved as a backend scalar; their text must be a scalar, not a unit expression. When a custom adapter recognizes a string as a native scalar, construction and `pow()` pass it to the adapter. Other strings retain their usual quantity or exponent syntax. The destination's numeric configuration applies during construction.
 
 ```ts
 import { Quantity as NumberQuantity } from '@neutrium/quantity/number';
@@ -37,6 +37,8 @@ decimal.scalar.toString(); // "1.25"
 ```
 
 Use explicit construction to switch backends. Arithmetic and comparisons reject incompatible backend quantities; copying cannot recover precision already lost in the source.
+
+TypeScript helpers can accept `QuantityInput<T>` for construction or `QuantityOperand<T>` for arithmetic. Both types are exported from `@neutrium/quantity/factory`. To add a Decimal quantity to a number quantity, convert the operand first with `native.add(new NumberQuantity(decimal))`.
 
 Quantity methods are shared on the prototype and require their instance as `this`. Arithmetic, comparison, and temperature methods are no longer automatically bound. When passing a method as a callback, wrap it or explicitly bind it:
 
@@ -50,7 +52,7 @@ equalsLength('200 cm'); // true
 
 ## Write unit expressions
 
-The default parser accepts multiplication (`*`, `.`, or spaces), division (`/`), integer powers (`^`), and parenthesized groups:
+The default parser accepts multiplication (`*`, `.`, or spaces), division (`/`), integer and fractional powers (`^`), and parenthesized groups:
 
 ```ts
 new Quantity('2 (kg*m/s^2)').to('N').scalar.toString(); // "2"
@@ -61,9 +63,9 @@ new Quantity('2/(m*s)').units(); // "1/m.s"
 
 Scalars may precede division directly, including scientific notation such as `1e3/s`.
 
-Both parsers apply powers first, then tightly coupled dot multiplication (`.`), then ordinary multiplication (`*` or whitespace) and division from left to right. `kg/m.s` means `kg/(m*s)`, whereas `kg/m*s` and `kg/m s` mean `(kg/m)*s`. Spaces around a dot do not change its precedence. `kg/m/s` also means `kg/(m*s)`.
+Nearley, Pratt, and Regex apply powers first, then tightly coupled dot multiplication (`.`), then ordinary multiplication (`*` or whitespace) and division from left to right. `kg/m.s` means `kg/(m*s)`, whereas `kg/m*s` and `kg/m s` mean `(kg/m)*s`. Spaces around a dot do not change its precedence. `kg/m/s` also means `kg/(m*s)`.
 
-The normalized output is not a copy of the input spelling. It selects unambiguous aliases, uses `*` for numerator products, and uses compact powers. Denominator terms are joined with tightly coupled dots: `kg/m/s` is displayed as `kg/m.s`, meaning kilograms divided by the product of metres and seconds. Both bundled parsers accept nonempty formatted unit expressions, including `1/m` and `1/m.s`. Unitless output is empty; parse `"1"` to represent unity explicitly.
+The normalized output is not a copy of the input spelling. It selects unambiguous aliases, uses `*` for numerator products, and uses compact integer powers and reduced fractions such as `m^(1/2)`. Denominator terms are joined with tightly coupled dots: `kg/m/s` is displayed as `kg/m.s`, meaning kilograms divided by the product of metres and seconds. All three bundled parsers accept nonempty formatted unit expressions, including `1/m` and `1/m.s`. Unitless output is empty; parse `"1"` to represent unity explicitly.
 
 ## Convert units
 
@@ -80,6 +82,16 @@ new Quantity('250 cm').toBase().scalar.toString(); // "2.5"
 Compatible dimensions convert directly. Reciprocal dimensions also work: `new Quantity('2 m').to('m^-1')` has scalar `0.5`. Unrelated dimensions such as length and time throw as does reciprocal conversion of zero.
 
 Conversions can return the original instance or a cached result. Equivalent target strings such as `cm`, `centimetre`, and `2 cm` share a result. String lookups and normalized conversion results each default to at most 1,024 entries per source, with least-recently-used eviction and configurable byte budgets.
+
+### Mach number
+
+The unit catalog uses a fixed reference speed of sound for `mach`, so `new Quantity('1 mach').to('m/s')` always gives `295.0464 m/s`. For a speed at a particular Mach number in known conditions, multiply the local speed of sound by the dimensionless Mach number. For example, if the local speed of sound is 343 m/s, Mach 2 gives 686 m/s.
+
+```ts
+const localSpeedOfSound = new Quantity('343 m/s');
+const speed = localSpeedOfSound.mul(2);
+speed.scalar.toString(); // "686"
+```
 
 ## Subclasses with constructor state
 
@@ -124,7 +136,7 @@ if (result instanceof LabelledQuantity)
 }
 ```
 
-Use `this.constructor` inside the hook so results retain the current configured class; hard-coding `LabelledQuantity` would lose settings from `withConfig()`. Forward the supplied parser, including per-instance overrides, and preserve the input and units arguments. The hook constructs temporary operands and conversion targets as well as final results, so its input must support all `QuantityInput<Decimal>` forms. Subclass code decides how to copy or share its own state.
+Use `this.constructor` inside the hook so results retain the current configured class; hard-coding `LabelledQuantity` would lose settings from `withConfig()`. Forward the supplied parser, including per-instance overrides, and preserve the input and units arguments. The hook constructs temporary operands and final results, so its input must support all `QuantityInput<Decimal>` forms. String conversion targets are parsed directly with the instance’s parser. Subclass code decides how to copy or share its own state.
 
 This contract applies to the default, Regex and `createQuantityClass()` entry points. `withConfig()` preserves your constructor's TypeScript signature but does not infer additional arguments. Inherited arithmetic and conversion methods continue to declare `Quantity` results; use a type guard to access subclass members.
 
@@ -182,24 +194,23 @@ The factory accepts the same configuration shape:
 
 ```ts
 import { createQuantityClass } from '@neutrium/quantity/factory';
-import { NumberAdapter } from '@neutrium/utilities/number';
-const numberAdapter = new NumberAdapter();
-import { NearleyParser } from '@neutrium/quantity/parsers/nearley';
+import { NumberAdapter } from '@neutrium/math/adapters/number';
+import { PrattParser } from '@neutrium/quantity/parsers/pratt';
 
 const NativeQuantity = createQuantityClass({
-    numeric: numberAdapter,
-    parser: config => new NearleyParser(config),
+    numeric: new NumberAdapter(),
+    parser: config => new PrattParser(config),
     config: { cache: false },
 });
 ```
 
-All presets use isolated utilities adapters. Changing global `Decimal.config` does not change an existing Quantity class or its cached values. Configure an adapter before passing it to the factory, or use `withConfig()` for adapters that support it.
+All presets use isolated math adapters. Changing global `Decimal.config` does not change an existing Quantity class or its cached values. Configure an adapter before passing it to the factory, or use `withConfig()` for adapters that support it.
 
 Scalar arithmetic follows the selected adapter's precision, rounding and range semantics. The default Decimal backend retains rational intermediates for conversions, cross-unit arithmetic and temperature calculations, and applies output rounding only to the final result of each operation. Decimal cross-unit comparisons evaluate unrounded values. Float, double and custom backends use their adapters throughout instead: scalars stay in their native representation, and intermediate rounding and range limits apply. Shared dimensional and temperature checks remain in place. See [numeric backends](numeric-backends.md) for the calculation guarantees and custom adapter contract.
 
 For example, at precision 6, `new Q('1 m').sub('100.0001 cm')` retains `-0.000001 m`. With `maxE: 20`, `new Q('1e20 m').div('1e20 km')` returns `0.001` instead of losing the divisor to intermediate overflow. Each method call still returns a scalar rounded to the receiver's settings; subsequent calls operate on that returned value.
 
-Exponents are independent of the quantity's Decimal range limits. `pow()` validates the original exponent as a safe integer, so a tiny fractional exponent cannot underflow into zero. Nearley likewise preserves exponent literals while evaluating powers; result scalars still use the configured precision, rounding, and range. Both supported Decimal tiers apply output rounding and range limits to the final integer-power result.
+Exponents are independent of the quantity's Decimal range limits. `pow()` reads the original exponent as an exact rational, so a tiny fractional unit exponent cannot underflow into zero. Nearley and Pratt likewise preserve exponent literals while evaluating powers; result scalars still use the configured precision, rounding, and range. Both supported Decimal tiers apply output rounding and range limits to the final integer-power result.
 
 Decimal cross-unit comparisons evaluate unrounded physical values; native and custom comparisons use backend-rounded values. A rounded conversion is a new value and may not compare exactly equal to its source. Compare values in the same units or apply an application-specific tolerance when rounding matters.
 
@@ -274,6 +285,25 @@ function convert(input: string, targetUnits: string): string
 
 - {@link factory.Quantity.inverse | Quantity.inverse} rejects zero explicitly.
 - {@link factory.Quantity.div | Quantity.div} delegates scalar division to the selected adapter; check zero divisors if your application must reject them.
-- {@link factory.Quantity.pow | Quantity.pow} supports integer exponents. Exponent zero returns the dimensionless identity (`1` with no units).
+- {@link factory.Quantity.pow | Quantity.pow} supports integer and rational exponents. Exponent zero returns the dimensionless identity (`1` with no units). Both Decimal tiers and JavaScript doubles support fractional powers, `sqrt()`, and `cbrt()`. A custom adapter must provide rational extraction and construction or scientific operations.
 - {@link factory.Quantity.clone | Quantity.clone} creates a new instance but shares scalar and unit arrays; it preserves the configured parser and does not retain the source quantity. For Quantity or definition inputs, `initValue` is a normalized snapshot containing only `scalar`, `numerator`, and `denominator`. String, number, and native backend scalar inputs remain unchanged; other numeric objects are saved as parsed backend scalars.
 - Quantities expose read-only values. Assigning to `scalar`, `signature`, `baseScalar`, `numerator`, `denominator`, or `initValue` is unsupported in TypeScript and rejected in strict-mode JavaScript. Create a new quantity to change its value or units.
+
+## Fractional powers and roots
+
+```ts
+const result = new Quantity('2 m').mul('2 kg^2').sqrt().div('3 s');
+result.scalar.toString(); // "0.66666666666666666667"
+result.units();           // "m^(1/2)*kg/s"
+
+new Quantity('4 m^2').sqrt().units(); // "m"
+new Quantity('-8 m^3').cbrt().scalar.toString(); // "-2"
+new Quantity('m').pow('1/3').mul(new Quantity('m').pow('2/3')).units(); // "m"
+new Quantity('cm^0.5').to('m^0.5').scalar.toString(); // "0.1"
+```
+
+Pass `'1/3'` or `{ numerator: 1n, denominator: 3n }` for an exact third. JavaScript `1/3` is already rounded before `pow()` receives it. Decimal strings such as `'0.1'` retain their exact decimal value; numeric inputs use their JavaScript decimal spelling. Exponents supplied as backend values use exact rational extraction when available.
+
+Unit records store positive integer exponents as numbers and fractional exponents as frozen, reduced BigInt fractions. Negative unit powers remain in the denominator array. Code reading `UnitPower.exponent` must narrow its `number | RationalExponent` type. JSON serialization of fractional definitions requires a BigInt-aware representation; `units()` returns portable text accepted by all three bundled parsers.
+
+Exponent magnitudes and intermediate unit sums remain bounded by `Number.MAX_SAFE_INTEGER`. Explicit decimal expansion is limited to 4096 places. Fractional scalars use the chosen backend's precision and range; Decimal retains exact values or directed bounds until final rounding. Even roots of negative quantities are rejected; odd-denominator rational powers give real results. Absolute temperatures retain their power restrictions; temperature intervals may have fractional dimensions.

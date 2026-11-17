@@ -1,15 +1,17 @@
+import { isTemperature } from './temperature-units.js';
 import { validateTemperatureSum, subtractTemperatures, changeTemperature, scaleTemperature } from './temperature.js';
 import { acceptsNumericOperand } from '../numeric/backend.js';
-import { Quantity, type QuantityInput } from '../QuantityCore.js';
+import { Quantity, type QuantityOperand } from '../QuantityCore.js';
 import { throwIncompatibleUnits } from './errors.js';
 import { scaledSum, scaledProduct } from './unit-scale.js';
 import { sameUnits } from './unit-identity.js';
-import { integerExponent } from '../numeric/support.js';
-import { cancelPowers, combinePowers, scalePowers, UNITY } from './unit-powers.js';
+import { integerAsNumber, rationalPower } from '../numeric/support.js';
+import type { UnitExponent } from '../QuantityDefinition.js';
+import { arithmeticResultUnits, cancelPowers, combinePowers, powerUnitSides, UNITY } from './unit-powers.js';
 import { TEMPERATURE_SIGNATURE } from './unit-signatures.js';
 
 /** Validate backend, dimensions and temperature rules before converting or adding scalars. */
-function sum<T, C extends object>(a: Quantity<T, C>, input: QuantityInput<T>, subtract: boolean): Quantity<T, C>
+function sum<T, C extends object>(a: Quantity<T, C>, input: QuantityOperand<T>, subtract: boolean): Quantity<T, C>
 {
 	const b = operand(a, input);
 
@@ -18,7 +20,7 @@ function sum<T, C extends object>(a: Quantity<T, C>, input: QuantityInput<T>, su
 		throwIncompatibleUnits();
 	}
 
-	const aTemperature = a.isTemperature(), bTemperature = b.isTemperature();
+	const aTemperature = isTemperature(a), bTemperature = isTemperature(b);
 	validateTemperatureSum(aTemperature, bTemperature, subtract);
 	const n = a.numeric;
 
@@ -40,39 +42,35 @@ function sum<T, C extends object>(a: Quantity<T, C>, input: QuantityInput<T>, su
 }
 
 /** Add a compatible operand after validation and conversion to the receiver’s units. */
-export function add<T, C extends object>(a: Quantity<T, C>, input: QuantityInput<T>): Quantity<T, C>
+export function add<T, C extends object>(a: Quantity<T, C>, input: QuantityOperand<T>): Quantity<T, C>
 {
 	return sum(a, input, false);
 }
 
 /** Subtract a compatible operand after validation and conversion to the receiver’s units. */
-export function sub<T, C extends object>(a: Quantity<T, C>, input: QuantityInput<T>): Quantity<T, C>
+export function sub<T, C extends object>(a: Quantity<T, C>, input: QuantityOperand<T>): Quantity<T, C>
 {
 	return sum(a, input, true);
 }
 
-export function operand<T>(a: Quantity<T>, b: QuantityInput<T>): Quantity<T>
+export function operand<T>(a: Quantity<T>, b: QuantityOperand<T>): Quantity<T>
 {
-	if (b instanceof Quantity)
+	const other = b instanceof Quantity ? b : a.createQuantity(b);
+	if (!acceptsNumericOperand(a.numeric, other.numeric, other.scalar))
 	{
-		if (!acceptsNumericOperand(a.numeric, b.numeric, b.scalar))
-		{
-			throw new TypeError('Cannot mix numeric backends');
-		}
-
-		return b as Quantity<T>;
+		throw new TypeError('Cannot mix numeric backends');
 	}
-	return a.createQuantity(b);
+	return other as Quantity<T>;
 }
 
-function product<T, C extends object>(a: Quantity<T, C>, input: QuantityInput<T>, divide: boolean): Quantity<T, C>
+function product<T, C extends object>(a: Quantity<T, C>, input: QuantityOperand<T>, divide: boolean): Quantity<T, C>
 {
 	const n = a.numeric;
 
-	if (typeof input === 'number' || n.isValue(input))
+	if (typeof input === 'number' || typeof input === 'bigint' || (!(input instanceof Quantity) && n.isValue(input)))
 	{
 		const b = n.from(input);
-		if (a.isTemperature())
+		if (isTemperature(a))
 		{
 			return scaleTemperature(a, b, divide, a);
 		}
@@ -82,82 +80,82 @@ function product<T, C extends object>(a: Quantity<T, C>, input: QuantityInput<T>
 
 	const b = operand(a, input);
 
-	if (b.isUnitless())
+	if (isTemperature(a) || isTemperature(b))
 	{
-		if (a.isTemperature())
+		if (!b.numerator.length && !b.denominator.length)
 		{
 			return scaleTemperature(a, b.scalar, divide, a);
 		}
 
+		if (!divide && !a.numerator.length && !a.denominator.length)
+		{
+			return scaleTemperature(b, a.scalar, false, a);
+		}
+
+		throw new Error(divide ? 'Cannot divide with temperatures' : 'Cannot multiply by temperatures');
+	}
+	if (b.isUnitless())
+	{
 		return a.createResult(divide ? n.div(a.scalar, b.scalar) : n.mul(a.scalar, b.scalar), a);
 	}
 	const aUnitless = a.isUnitless();
 
 	if (!divide && aUnitless)
 	{
-		if (b.isTemperature())
-		{
-			return scaleTemperature(b, a.scalar, false, a);
-		}
-
 		return a.createResult(n.mul(a.scalar, b.scalar), b);
-	}
-
-	if (a.isTemperature() || b.isTemperature())
-	{
-		throw new Error(divide ? 'Cannot divide with temperatures' : 'Cannot multiply by temperatures');
 	}
 
 	const aligned = !aUnitless && a.isCompatible(b) && a.signature !== TEMPERATURE_SIGNATURE;
 	const rightUnits = aligned ? a : b;
 	const [numerator, denominator] = combinePowers(a, rightUnits, divide);
+	const units = arithmeticResultUnits(numerator, denominator, a.cacheScope);
 	const scalar = aligned && !sameUnits(a, b, a.cacheScope) ? scaledProduct(a, b, divide, n, a.cacheScope)
 		: divide ? n.div(a.scalar, b.scalar) : n.mul(a.scalar, b.scalar);
 
-	return a.createResult(scalar, { numerator, denominator });
+	return a.createResult(scalar, units);
 }
 
 /** Multiply quantities using the selected numeric backend. */
-export function mul<T, C extends object>(a: Quantity<T, C>, input: QuantityInput<T>): Quantity<T, C>
+export function mul<T, C extends object>(a: Quantity<T, C>, input: QuantityOperand<T>): Quantity<T, C>
 {
 	return product(a, input, false);
 }
 
 /** Divide quantities using the selected numeric backend. */
-export function div<T, C extends object>(a: Quantity<T, C>, input: QuantityInput<T>): Quantity<T, C>
+export function div<T, C extends object>(a: Quantity<T, C>, input: QuantityOperand<T>): Quantity<T, C>
 {
 	return product(a, input, true);
 }
 
-export function pow<T, C extends object>(a: Quantity<T, C>, value: string | number | T): Quantity<T, C>
+export function pow<T, C extends object>(a: Quantity<T, C>, power: UnitExponent): Quantity<T, C>
 {
-	const power = integerExponent(a.numeric, value);
-
 	if (!power)
 	{
 		return a.createResult(a.numeric.from(1), { numerator: UNITY, denominator: UNITY });
 	}
 
-	if (power === 1 && a.isTemperature())
+	if (isTemperature(a))
 	{
-		return a.createResult(a.scalar, a);
+		if (power === 1) return a.createResult(a.scalar, a);
+		throw new Error('Cannot raise absolute temperatures to powers');
 	}
 
-	const [numerator, denominator] = cancelPowers(
-		scalePowers(power < 0 ? a.denominator : a.numerator, Math.abs(power)),
-		scalePowers(power < 0 ? a.numerator : a.denominator, Math.abs(power)));
+	const [top, bottom] = powerUnitSides(a, power);
+	const [numerator, denominator] = cancelPowers(top, bottom);
 
-	return a.createResult(a.numeric.powInteger(a.scalar, power), { numerator, denominator });
+	const units = arithmeticResultUnits(numerator, denominator, a.cacheScope);
+
+	return a.createResult(rationalPower(a.numeric, a.scalar, power), units);
 }
 
 export function inverse<T, C extends object>(a: Quantity<T, C>): Quantity<T, C>
 {
-	if (a.isTemperature())
+	if (isTemperature(a))
 	{
 		throw new Error('Cannot divide with temperatures');
 	}
 
-	if (a.numeric.compare(a.scalar, a.numeric.from(0)) === 0)
+	if (integerAsNumber(a.numeric, a.scalar) === 0)
 	{
 		throw new Error('Divide by zero');
 	}

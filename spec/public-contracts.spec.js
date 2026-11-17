@@ -1,4 +1,4 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it, vi } from 'vitest';
 import { Decimal } from '@neutrium/decimal';
@@ -37,6 +37,23 @@ describe('quantity definition validation', () => {
 		expect(isQuantityDefinition(definition([{ ...metre, exponent: Number.MAX_SAFE_INTEGER }, metre]), testNumeric)).toBe(false);
 	});
 
+	it('checks expanded base counts on each side before cancellation', () => {
+		// Each newton contributes two seconds to the opposite side.
+		const limit = 2 ** 52;
+		const valid = [{ unit: '<newton>', exponent: limit - 1 }];
+		const overflow = [{ unit: '<newton>', exponent: limit }];
+		for (const input of [definition(valid), definition([], valid)])
+		{
+			expect(isQuantityDefinition(input, testNumeric)).toBe(true);
+			expect(() => new Quantity(input)).not.toThrow();
+		}
+		for (const input of [definition(overflow), definition([], overflow), definition(overflow, overflow)])
+		{
+			expect(isQuantityDefinition(input, testNumeric)).toBe(false);
+			expect(() => new Quantity(input)).toThrow(RangeError);
+		}
+	});
+
 	it('accepts valid mutable and frozen definitions without changing their ownership', () => {
 		const input = definition([metre, { ...metre }]);
 		const before = structuredClone(input.numerator);
@@ -71,7 +88,7 @@ describe('quantity definition validation', () => {
 
 for (const Constructor of [Quantity, RegexQuantity])
 {
-	describe(`comparison contracts with ${Constructor === Quantity ? 'Nearley' : 'Regex'}`, () => {
+	describe(`comparison contracts with ${Constructor === Quantity ? 'Pratt' : 'Regex'}`, () => {
 		it('rejects unsupported operands with an explicit error', () => {
 			const quantity = new Constructor('2');
 			for (const method of ['eq', 'lt', 'lte', 'gt', 'gte', 'compareTo'])

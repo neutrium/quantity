@@ -1,10 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import { createQuantityClass } from '../dist/factory.js';
 import { RegexParser } from '../dist/parsers/RegexParser.js';
-import { DecimalArithmeticAdapter } from '@neutrium/utilities/decimal/arithmetic';
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalArithmeticAdapter } from '@neutrium/math/adapters/decimal/arithmetic';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 
 describe('exact cross-unit comparison', () => {
+	it('uses only the sign of an adapter comparison when ordering scaled quantities', () => {
+		class MagnitudeCompare extends DecimalScientificAdapter
+		{
+			compare(a, b)
+			{
+				return super.compare(a, b) * (a.abs().lt(2) ? 1 : 2);
+			}
+		}
+		const Q = createQuantityClass({ numeric: new MagnitudeCompare(), parser: c => new RegexParser(c) });
+		expect(new Q('1 m').gt('50 cm')).toBe(true);
+		expect(new Q('50 cm').lt('1 m')).toBe(true);
+		expect(new Q('-1 m').lt('-50 cm')).toBe(true);
+		expect(new Q('1 m').eq('100 cm')).toBe(true);
+	});
+
 	for (const Adapter of [DecimalArithmeticAdapter, DecimalScientificAdapter])
 	{
 		it.each([true, false])(`compares unrounded values outside the result range with ${Adapter.name}, cache=%s`, cache => {

@@ -1,4 +1,4 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it } from 'vitest';
 import { Quantity } from '@neutrium/quantity';
@@ -8,7 +8,7 @@ import { RegexParser } from '@neutrium/quantity/parsers/regex';
 
 const CustomQuantity = createQuantityClass({ numeric: testNumeric, parser: config => new RegexParser(config) });
 
-for (const [name, Entry] of [['Nearley', Quantity], ['Regex', RegexQuantity], ['custom factory', CustomQuantity]])
+for (const [name, Entry] of [['Pratt', Quantity], ['Regex', RegexQuantity], ['custom factory', CustomQuantity]])
 {
 	describe(`subclass construction: ${name}`, () => {
 		class Labelled extends Entry

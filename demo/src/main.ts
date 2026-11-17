@@ -41,7 +41,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 			</section>
 		</div>
 		<section class="reference-grid" aria-label="Unit syntax quick reference">
-			<article><h2>Build an expression</h2><p>Combine units with <code>*</code>, <code>/</code>, and integer powers. Group with parentheses: <code>kg/(m*s)</code>. Dot multiplication binds more tightly: <code>kg/m.s</code> means <code>kg/(m*s)</code>.</p></article>
+			<article><h2>Build an expression</h2><p>Combine units with <code>*</code>, <code>/</code>, and fractional powers such as <code>m^0.5</code>. Group with parentheses: <code>kg/(m*s)</code>. Dot multiplication binds more tightly: <code>kg/m.s</code> means <code>kg/(m*s)</code>.</p></article>
 			<article><h2>Temperature or interval?</h2><p><code>20 tempC</code> is an absolute temperature. <code>20 degC</code> is a change in temperature. Add an interval to a temperature to shift it.</p></article>
 			<article><h2>Keep dimensions consistent</h2><p>Add or compare compatible measurements, such as metres and feet. Multiplication and division create new unit expressions.</p></article>
 		</section>
@@ -70,11 +70,12 @@ function update()
 	}
 
 	const op = operation.value as Operation;
+	const targetUnits = op === 'to' || op === 'isCompatible';
 	const unary = op === 'toBase' || op === 'inverse';
 	element('operand-field').hidden = unary;
 	operand.disabled = unary;
-	element('operand-label').textContent = op === 'to' ? 'Target units' : op === 'pow' ? 'Integer power' : 'Second quantity';
-	element('operand-help').textContent = op === 'to' ? 'Target units, such as ft or tempF. Any target scalar is ignored.' : op === 'pow' ? 'A safe integer power, up to ±9007199254740991.' : 'Include units, or use a scalar such as 2 to multiply or divide.';
+	element('operand-label').textContent = targetUnits ? 'Target units' : op === 'pow' ? 'Power' : 'Second quantity';
+	element('operand-help').textContent = targetUnits ? 'Target units, such as ft or tempF. Any target scalar is ignored.' : op === 'pow' ? 'An integer, decimal, or fraction, such as 2, 0.5, or 1/3.' : 'Include units, or use a scalar such as 2 to multiply or divide.';
 
 	try
 	{

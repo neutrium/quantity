@@ -1,14 +1,20 @@
 import type { Decimal } from "@neutrium/decimal";
 
-/** One distinct unit, optionally prefixed, raised to a positive integer power. */
+/** Exact fractional power. Normalized values are reduced and have a positive denominator. */
+export type RationalExponent = import('@neutrium/math/numeric/fractions').RationalFraction;
+
+/** Safe integers use numbers; fractions use exact, immutable rational records. */
+export type UnitExponent = number | RationalExponent;
+
+/** One distinct unit, optionally prefixed, raised to a positive rational power. */
 export interface UnitPower
 {
 	/** Internal unit identifier, such as `<meter>`. */
 	readonly unit: string;
 	/** Internal prefix identifier, such as `<kilo>`. Omit for unprefixed units. */
 	readonly prefix?: string;
-	/** Positive safe integer; repeated units are represented by increasing this count. */
-	readonly exponent: number;
+	/** Positive safe integer or exact fraction; negative powers belong in the denominator. */
+	readonly exponent: UnitExponent;
 }
 
 /**

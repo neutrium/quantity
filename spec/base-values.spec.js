@@ -3,7 +3,7 @@ import { Quantity } from '../dist/Quantity.js';
 import { Quantity as RegexQuantity } from '../dist/regex.js';
 
 for (const Constructor of [Quantity, RegexQuantity]) {
-	describe(`base values with ${Constructor === Quantity ? 'Nearley' : 'Regex'}`, () => {
+	describe(`base values with ${Constructor === Quantity ? 'Pratt' : 'Regex'}`, () => {
 		it('constructs only the requested quantity with cold and warm unit metadata', () => {
 			let constructions = 0;
 			class Counted extends Constructor {

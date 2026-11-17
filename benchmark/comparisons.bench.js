@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
-import { NumberAdapter } from '@neutrium/utilities/number';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
+import { BigIntAdapter } from '@neutrium/math/adapters/bigint';
+import { NumberAdapter } from '@neutrium/math/adapters/number';
 import { createQuantityClass } from '../dist/factory.js';
 import { RegexParser } from '../dist/parsers/RegexParser.js';
 import { compare } from './helpers.js';
 
-for (const numeric of [new DecimalScientificAdapter(), new NumberAdapter()])
+for (const numeric of [new DecimalScientificAdapter(), new NumberAdapter(), new BigIntAdapter()])
 {
 	for (const cache of [true, false])
 	{
@@ -14,7 +15,7 @@ for (const numeric of [new DecimalScientificAdapter(), new NumberAdapter()])
 			const Q = createQuantityClass({ numeric, parser: c => new RegexParser(c), config: { cache } });
 			const inputs = [
 				['decimal scale, equal', '1 m', '100 cm', 0],
-				['fractional scale, unequal', '1 ft', '12.01 in', -1],
+				['fractional scale, unequal', '1 ft', numeric instanceof BigIntAdapter ? '13 in' : '12.01 in', -1],
 				['compound units, equal', '36 km/h', '10 m/s', 0],
 				['negative values, equal', '-12 in', '-1 ft', 0],
 				['same-unit control', '1 m', '2 m', -1],

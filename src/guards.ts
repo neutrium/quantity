@@ -1,7 +1,7 @@
-import type { ArithmeticAdapter } from '@neutrium/utilities/numeric/arithmetic';
+import type { ArithmeticAdapter } from '@neutrium/math/numeric/arithmetic';
 import { Quantity } from './QuantityCore.js'
 import type { QuantityDefinition } from './QuantityDefinition.js';
-import { normalizePowers } from './operations/unit-powers.js';
+import { completeUnitStructure } from './operations/unit-powers.js';
 
 /**
  * Validate a definition using its intended numeric backend.
@@ -30,17 +30,8 @@ export function isQuantityDefinition<T>(value: unknown, numeric: ArithmeticAdapt
 			return false;
 		}
 
-		const validSide = (side: unknown): boolean => {
-			if (!Array.isArray(side))
-			{
-				return false;
-			}
-
-			// The constructor and guard share token, category and count validation.
-			normalizePowers(side);
-			return true;
-		};
-		return validSide(value.numerator) && validSide(value.denominator);
+		completeUnitStructure(value.numerator, value.denominator);
+		return true;
 	}
 	catch
 	{

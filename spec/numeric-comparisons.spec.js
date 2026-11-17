@@ -1,4 +1,4 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it } from 'vitest';
 import { Decimal } from '@neutrium/decimal';
@@ -18,7 +18,7 @@ function check(quantity, operand, expected)
 
 for (const Constructor of [Quantity, RegexQuantity])
 	{
-	describe(`direct numeric comparisons with ${Constructor === Quantity ? 'Nearley' : 'Regex'}`, () => {
+	describe(`direct numeric comparisons with ${Constructor === Quantity ? 'Pratt' : 'Regex'}`, () => {
 		it('interprets numbers and Decimals in the current units', () => {
 			for (const input of ['10 m', '10 cm', '10 km/s', '10', '10 tempC', '10 degF', '10 m^-1']) {
 				const quantity = new Constructor(input);

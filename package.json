@@ -1,6 +1,7 @@
 {
 	"name": "@neutrium/quantity",
-	"version": "6.0.0",
+	"version": "7.0.0",
+	"packageManager": "pnpm@11.5.0",
 	"type": "module",
 	"exports": {
 		".": {
@@ -22,6 +23,10 @@
 		"./parsers/nearley": {
 			"types": "./dist/parsers/NearleyParser.d.ts",
 			"import": "./dist/parsers/NearleyParser.js"
+		},
+		"./parsers/pratt": {
+			"types": "./dist/parsers/PrattParser.d.ts",
+			"import": "./dist/parsers/PrattParser.js"
 		},
 		"./parsers/regex": {
 			"types": "./dist/parsers/RegexParser.d.ts",
@@ -58,7 +63,8 @@
 	"homepage": "https://neutrium.github.io/quantity/",
 	"dependencies": {
 		"@neutrium/decimal": "^2.3.0",
-		"@neutrium/utilities": "^4.0.0",
+		"@neutrium/math": "2.1.0",
+		"@neutrium/utilities": "5.0.0",
 		"moo": "^0.5.3",
 		"nearley": "^2.20.1"
 	},
@@ -66,26 +72,27 @@
 		"clean": "rm -rf dist src/parsers/qty-grammar.ts",
 		"tsc": "tsc",
 		"nearley": "nearleyc ./src/parsers/qty-grammar.ne -o ./src/parsers/qty-grammar.ts",
-		"build": "npm run clean && npm run nearley && npm run tsc",
-		"docs": "npm run nearley && npm run docs:built",
+		"build": "pnpm run clean && pnpm run nearley && pnpm run tsc",
+		"docs": "pnpm run nearley && pnpm run docs:built",
 		"docs:built": "typedoc",
-		"docs:dev": "npm run site && vite preview --config tools/docs.vite.config.mjs",
-		"test": "npm run build && npm run test:built",
+		"docs:dev": "pnpm run site && vite preview --config tools/docs.vite.config.mjs",
+		"test": "pnpm run build && pnpm run test:built",
 		"test:built": "vitest run",
 		"test:package": "node tools/test-package.mjs",
 		"test:package:built": "node tools/test-package.mjs --skip-build",
-		"verify": "npm run build && npm run verify:built",
-		"verify:built": "npm run test:built && npm run test:package:built && npm run test:bundles:built",
+		"verify": "pnpm run build && pnpm run verify:built",
+		"verify:built": "pnpm run test:built && pnpm run test:package:built && pnpm run test:bundles:built",
 		"prepack": "node tools/prepack.mjs",
-		"prepublishOnly": "npm run verify",
-		"benchmark": "npm run build && vitest bench --run --config vitest.benchmark.config.js",
-		"demo": "npm run demo:dev",
-		"demo:dev": "npm run build && vite --config demo/vite.config.mjs --host 127.0.0.1",
+		"prepublishOnly": "pnpm run verify",
+		"benchmark": "pnpm run build && vitest bench --run --config vitest.benchmark.config.js",
+		"benchmark:parsers": "pnpm run build && node tools/benchmark-parsers.mjs",
+		"demo": "pnpm run demo:dev",
+		"demo:dev": "pnpm run build && vite --config demo/vite.config.mjs --host 127.0.0.1",
 		"demo:check": "tsc -p demo/tsconfig.json",
-		"demo:bundle": "npm run demo:check && vite build --config demo/vite.config.mjs",
-		"demo:build": "npm run build && npm run demo:bundle",
-		"site": "npm run build && npm run site:built",
-		"site:built": "npm run docs:built && npm run demo:bundle",
+		"demo:bundle": "pnpm run demo:check && vite build --config demo/vite.config.mjs",
+		"demo:build": "pnpm run build && pnpm run demo:bundle",
+		"site": "pnpm run build && pnpm run site:built",
+		"site:built": "pnpm run docs:built && pnpm run demo:bundle",
 		"test:bundles:built": "node tools/test-bundles.mjs"
 	},
 	"devDependencies": {

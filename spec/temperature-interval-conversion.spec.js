@@ -6,7 +6,7 @@ import { Quantity as QuantityCore } from '../dist/Quantity.js';
 
 for (const Constructor of [Quantity, RegexQuantity])
 {
-	describe(`temperature interval conversions with ${Constructor === Quantity ? 'Nearley' : 'Regex'}`, () => {
+	describe(`temperature interval conversions with ${Constructor === Quantity ? 'Pratt' : 'Regex'}`, () => {
 		it.each([
 			['20 tempC', 'mdegC', '20000'],
 			['20 tempC', 'mdegF', '36000'],

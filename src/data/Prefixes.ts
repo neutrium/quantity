@@ -8,7 +8,7 @@ export const PREFIXES: Record<string, CatalogEntry> = {
 	"<pebi>": [["Pi", "Pebi", "pebi"], (2n ** 50n)],
 	"<exbi>": [["Ei", "Exbi", "exbi"], (2n ** 60n)],
 	"<zebi>": [["Zi", "Zebi", "zebi"], (2n ** 70n)],
-	"<yebi>": [["Yi", "Yebi", "yebi"], (2n ** 80n)],
+	"<yebi>": [["Yi", "Yobi", "yobi", "Yebi", "yebi"], (2n ** 80n)],
 	"<robi>": [["Ri", "robi"], (2n ** 90n)],
 	"<quebi>": [["Qi", "quebi"], (2n ** 100n)],
 	"<googol>": [["googol"], 1e100],

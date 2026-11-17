@@ -1,11 +1,11 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 import type { Decimal } from '@neutrium/decimal';
 import { createQuantityClass } from './factory.js';
 import type { Quantity as GenericQuantity } from './QuantityCore.js';
-import { NearleyParser } from './parsers/NearleyParser.js';
+import { PrattParser } from './parsers/PrattParser.js';
 
 /**
- * Default preset: Decimal scalars and the Nearley expression parser.
+ * Decimal scalars with the default Pratt expression parser.
  * Use `withConfig` for Quantity settings or `createQuantityClass` to select another backend/parser.
  * @example
  * ```ts
@@ -15,7 +15,7 @@ import { NearleyParser } from './parsers/NearleyParser.js';
  */
 export const Quantity = createQuantityClass({
 	numeric: Object.freeze(new DecimalScientificAdapter()),
-	parser: config => new NearleyParser(config),
+	parser: config => new PrattParser(config),
 });
 /** A quantity with the selected scalar representation. */
 export type Quantity<T = Decimal, Numeric extends object = T extends Decimal ? import('@neutrium/decimal').DecimalConfig : object> = GenericQuantity<T, Numeric>;
@@ -24,3 +24,5 @@ export type QuantityConfigInput = import('./QuantityConfig.js').QuantityConfigIn
 export type { QuantityConfig, QuantityCacheInput, QuantityCacheConfig } from './QuantityConfig.js';
 export type { CacheConfigInput, CacheConfig } from '@neutrium/utilities/cache';
 export type { ParserConfigInput, ParserConfig, ParserCacheConfigInput, ParserCacheStats } from './parsers/ParserConfig.js';
+
+export type { RationalExponent, UnitExponent } from './QuantityDefinition.js';

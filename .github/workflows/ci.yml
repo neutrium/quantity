@@ -24,17 +24,18 @@ jobs:
         node-version: [24.0.0, 24.x, 26.x]
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version }}
-          cache: npm
-      - run: npm ci
-      - run: npm run verify
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run verify
         env:
           QUANTITY_PACKAGE_ARTIFACT: ${{ runner.temp }}/quantity-package.tgz
       - name: Build documentation and demo from verified output
         if: matrix.node-version == '24.x'
-        run: npm run site:built
+        run: pnpm run site:built
       - name: Retain verified package
         if: matrix.node-version == '24.x'
         uses: actions/upload-artifact@v4

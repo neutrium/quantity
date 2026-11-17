@@ -1,15 +1,28 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const testNumeric = new DecimalScientificAdapter();
-import { describe, expect, it } from 'vitest';
+import { WeakCacheRegistry } from '@neutrium/utilities/cache';
+import { describe, expect, it, vi } from 'vitest';
 import { Decimal } from '@neutrium/decimal';
 import { Quantity } from '@neutrium/quantity';
 import { Quantity as RegexQuantity } from '@neutrium/quantity/regex';
 import { createQuantityClass } from '@neutrium/quantity/factory';
-import { NearleyParser, RegexParser } from '@neutrium/quantity/parsers.js';
+import { NearleyParser, RegexParser, PrattParser } from '@neutrium/quantity/parsers.js';
 
-for (const Parser of [NearleyParser, RegexParser])
+for (const Parser of [NearleyParser, RegexParser, PrattParser])
 {
 	describe(`memory budgets: ${Parser.name}`, () => {
+		it('inspects and clears an unused parser without creating its cache', () => {
+			const parser = new Parser({});
+			const get = vi.spyOn(WeakCacheRegistry.prototype, 'get');
+			try {
+				expect(parser.cacheStats.entries).toBe(0);
+				parser.clearCache();
+				expect(get).not.toHaveBeenCalled();
+			} finally {
+				get.mockRestore();
+			}
+		});
+
 		it('evicts by byte weight in least-recently-used order before the entry limit', () => {
 			const probe = new Parser({});
 			probe.parse('m2', testNumeric);
@@ -95,7 +108,7 @@ it('accounts for Nearley scalar instructions as well as input length', () => {
 
 for (const Entry of [Quantity, RegexQuantity])
 {
-	describe(`combined configuration: ${Entry === Quantity ? 'Nearley' : 'Regex'}`, () => {
+	describe(`combined configuration: ${Entry === Quantity ? 'Pratt' : 'Regex'}`, () => {
 		it('shares one bounded cache across a configured class and derived results', () => {
 			const Q = Entry.withConfig({ numeric: { precision: 6, rounding: 'down' }, cache: { parser: { maxEntries: 2, maxBytes: 4096 } } });
 			const a = new Q('2 m2'), b = new Q('3 m2');
@@ -167,7 +180,7 @@ it('invalidates configured Regex caches when shared patterns are rebuilt', () =>
 // Utilities owns the exhaustive configuration-validation matrix. Keep one wiring
 // check per parser to ensure invalid nested options reach the shared validators.
 it('passes parser and nested cache options to validation', () => {
-	for (const Parser of [NearleyParser, RegexParser]) {
+	for (const Parser of [NearleyParser, RegexParser, PrattParser]) {
 		expect(() => new Parser({ unknown: true })).toThrow(/Unknown parser option/);
 		expect(() => new Parser({ cache: { maxBytes: -1 } })).toThrow(/parser cache maxBytes/);
 		expect(() => new Parser({ cache: { maxByte: 1024 } })).toThrow(/Unknown parser cache option/);

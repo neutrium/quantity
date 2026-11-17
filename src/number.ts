@@ -1,10 +1,9 @@
 import { createQuantityClass } from './factory.js';
-import { NumberAdapter } from '@neutrium/utilities/number';
-const numberAdapter = new NumberAdapter();
-import { NearleyParser } from './parsers/NearleyParser.js';
+import { NumberAdapter } from '@neutrium/math/adapters/number';
+import { PrattParser } from './parsers/PrattParser.js';
 
 /**
- * JavaScript number scalars with Nearley parsing; no Decimal runtime dependency.
+ * JavaScript number scalars with the default Pratt expression parser.
  * Use `withConfig` for Quantity settings or `createQuantityClass` to select another backend/parser.
  * @example
  * ```ts
@@ -12,7 +11,11 @@ import { NearleyParser } from './parsers/NearleyParser.js';
  * new Quantity('2 km').to('m').scalar; // 2000
  * ```
  */
-export const Quantity = createQuantityClass({ numeric: numberAdapter, parser: config => new NearleyParser(config) });
+export const Quantity = createQuantityClass({
+	numeric: Object.freeze(new NumberAdapter()),
+	parser: config => new PrattParser(config),
+});
 /** Instance type with JavaScript number scalars. */
 export type Quantity = InstanceType<typeof Quantity>;
 export type { QuantityConfigInput, QuantityConfig, QuantityCacheInput, QuantityCacheConfig } from './QuantityConfig.js';
+export type { RationalExponent, UnitExponent } from './QuantityDefinition.js';

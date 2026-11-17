@@ -1,4 +1,4 @@
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const testNumeric = new DecimalScientificAdapter();
 import { describe, expect, it } from 'vitest';
 import { parseExpression } from '../helpers/nearley.js';
@@ -66,7 +66,7 @@ describe('Nearley reciprocal quantities and bare groups', () => {
 		expect(quantity.clone().to('(hour*cm)^-1').eq(quantity)).toBe(true);
 	});
 
-	it.each(['2/', '2//s', '2/ /s', '2/*s', '2/.s', '()', '( )', '(m', 'm)', 'm/()', '(m/)', '(m//s)', '2/(m*s', '2/(m*s))', '(unknown)^0', '(m/s)^', '(m/s)^0.5', '(m/s)^9007199254740992'])
+	it.each(['2/', '2//s', '2/ /s', '2/*s', '2/.s', '()', '( )', '(m', 'm)', 'm/()', '(m/)', '(m//s)', '2/(m*s', '2/(m*s))', '(unknown)^0', '(m/s)^', '(m/s)^(1/0)', '(m/s)^9007199254740992'])
 		('rejects malformed expression %j and recovers', input => {
 			expect(() => parser.parse(input, testNumeric)).toThrow();
 			expect(new Quantity(parser.parse('2/(m*s)', testNumeric)).units()).toBe('1/m.s');

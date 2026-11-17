@@ -2,11 +2,33 @@ import { overrideAdapter } from './helpers/numeric.js';
 import { add as addQuantity, sub as subtractQuantity } from '../dist/operations/arithmetic.js';
 import { describe, it, expect, vi } from 'vitest';
 import { createQuantityClass } from '../dist/factory.js';
-import { NumberAdapter } from '@neutrium/utilities/number';
+import { NumberAdapter } from '@neutrium/math/adapters/number';
 const numberAdapter = new NumberAdapter();
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 const decimalAdapter = new DecimalScientificAdapter();
 import { NearleyParser } from '../dist/parsers/NearleyParser.js';
+
+it('rejects overflowing powered dimensions before evaluating the scalar', () => {
+	const powInteger = vi.fn((value, power) => numberAdapter.powInteger(value, power));
+	const Q = createQuantityClass({ numeric: overrideAdapter(numberAdapter, { powInteger }), parser: c => new NearleyParser(c) });
+	const force = new Q('-1 N');
+	for (const exponent of [2 ** 52, -(2 ** 52), { numerator: 9007199254740993n, denominator: 2n }])
+		expect(() => force.pow(exponent)).toThrow(/Unit exponent/);
+	expect(powInteger).not.toHaveBeenCalled();
+	expect(force.pow(2).scalar).toBe(1);
+	expect(powInteger).toHaveBeenCalledOnce();
+});
+
+it('rejects overflowing product and quotient dimensions before invoking the numeric adapter', () => {
+	const mul = vi.fn(), div = vi.fn();
+	const Q = createQuantityClass({ numeric: overrideAdapter(numberAdapter, { mul, div }), parser: c => new NearleyParser(c) });
+	const force = new Q(1, 'N4503599627370495');
+	const seconds = new Q(0, 's2'), frequency = new Q(1, '/s2');
+	expect(() => force.div(seconds)).toThrow(/Unit exponent/);
+	expect(() => force.mul(frequency)).toThrow(/Unit exponent/);
+	expect(div).not.toHaveBeenCalled();
+	expect(mul).not.toHaveBeenCalled();
+});
 
 for (const numeric of [numberAdapter, decimalAdapter])
 {

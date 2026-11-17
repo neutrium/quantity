@@ -2,6 +2,8 @@
 
 Version 6 changes the factory, parser and configuration interfaces. The default remains scientific Decimal with Nearley, and Node.js 24 or newer is still required. The counted-unit format introduced in [version 5](migrating-v5.md) is unchanged.
 
+The imports below target Quantity 6. For current adapter imports and fractional unit records, see [Migrating to version 7](migrating-v7.md).
+
 ## Factory and numeric backends
 
 Replace the `/core` entry point with `/factory`. The factory now accepts an object containing a utilities numeric adapter and a parser factory, instead of a parser factory alone:

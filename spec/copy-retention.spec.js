@@ -5,7 +5,7 @@ import { Quantity as RegexQuantity } from '../dist/regex.js';
 
 for (const Constructor of [Quantity, RegexQuantity])
 {
-	describe(`copy input retention with ${Constructor === Quantity ? 'Nearley' : 'Regex'}`, () => {
+	describe(`copy input retention with ${Constructor === Quantity ? 'Pratt' : 'Regex'}`, () => {
 		it('keeps a value snapshot instead of retaining the previous quantity', () => {
 			class Custom extends Constructor {}
 			let previous = new Custom('2 km');

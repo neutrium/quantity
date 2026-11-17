@@ -6,8 +6,11 @@ describe('Quantity demo', () => {
 	it.each([
 		['1 unknownunit', 'to', 'ft', 'value', 'Quantity, column'],
 		['1 m', 'to', 'unknownunit', 'operand', 'Target units, column'],
+		['1 m', 'isCompatible', 'unknownunit', 'operand', 'Target units, column'],
+		['1 m', 'isCompatible', ' ', 'operand', 'Enter target units'],
 		['1 m', 'add', '2 unknownunit', 'operand', 'Second quantity, column'],
 		['1 m/', 'to', 'ft', 'value', 'Quantity, column'],
+		['m^9007199254740992', 'toBase', '', 'value', 'safe integer'],
 		['1 m', 'mul', '2 (', 'operand', 'Second quantity, column'],
 	])('explains invalid expression %s %s %s without parser diagnostics', (value, operation, operand, field, message) => {
 		let error;
@@ -38,13 +41,6 @@ describe('Quantity demo', () => {
 		expect(() => calculate({ value: '1 m', operation: 'to', operand: 'cm', precision: 0 })).toThrow('significant digits');
 	});
 
-	it('uses structured parse error codes for arithmetic and exponent failures', () => {
-		for (const [value, message] of [['1/0 m', 'divide by zero'], ['m^9007199254740992', 'safe integers']]) {
-			try { calculate({ value, operation: 'toBase', operand: '' }); throw new Error('Expected failure'); }
-			catch (error) { expect(errorMessage(error)).toContain(message); }
-		}
-	});
-
 	it.each(presets)('$label produces runnable code matching the displayed result', preset => {
 		const calculation = calculate(preset);
 		const run = new Function('Quantity', calculation.code.replace(/^import[^\n]+\n/, '') + '\nreturn result;');
@@ -59,6 +55,7 @@ describe('Quantity demo', () => {
 		['1 m', 'add', '25 cm', '1.25 m'],
 		['150 km', 'div', '2 h', '75 km/h'],
 		['3 m', 'pow', '2', '9 m2'],
+		['4 m', 'pow', '0.5', '2 m^(1/2)'],
 		['1 m', 'inverse', '', '1/m'],
 		['2 s', 'inverse', '', '0.5/s'],
 		['0.5 m', 'inverse', '', '2/m'],
@@ -68,10 +65,13 @@ describe('Quantity demo', () => {
 		['1000 cm', 'to', '2 m', '10 m'],
 		['0 tempC', 'to', '-300 tempC', '0 tempC'],
 		['1/2 m', 'to', 'cm', '50 cm'],
+		['1/0 m', 'toBase', '', 'Infinity m'],
 		['2 kg/(m*s)', 'toBase', '', '2 kg/m.s'],
 		['1 m', 'pow', '13', '1 m13'],
 		['1 m', 'eq', '2 m', 'false'],
 		['1 m', 'isCompatible', '2 s', 'false'],
+		['1 m', 'isCompatible', '1/0 m', 'true'],
+		['1 degK', 'isCompatible', '-300 tempC', 'true'],
 	])('calculates %s %s %s', (value, operation, operand, output) => {
 		expect(calculate({ value, operation, operand }).output).toBe(output);
 	});
@@ -87,11 +87,22 @@ describe('Quantity demo', () => {
 	});
 
 	it.each([
+		['10 tempC', 'Absolute temperature'],
+		['1000 mdegC', 'Temperature interval'],
+		['1 degC*m/m', 'Temperature interval'],
+		['1 m/m', 'Dimensionless'],
+		['1 cm/m', 'Dimensionless'],
+		['1 degC/m', 'Physical quantity'],
+	])('classifies %s by its dimensions', (value, type) => {
+		expect(calculate({ value, operation: 'mul', operand: '1' }).type).toBe(type);
+	});
+
+	it.each([
 		['', 'to', 'm'],
 		['1 m', 'to', ''],
 		['1 m', 'to', 's'],
 		['100 tempC', 'add', '50 tempC'],
-		['1 m', 'pow', '0.5'],
+		['-1 m', 'pow', '0.5'],
 		['1 m', 'pow', '9007199254740992'],
 		['1 m', 'pow', 'NaN'],
 	])('rejects invalid calculation %s %s %s', (value, operation, operand) => {

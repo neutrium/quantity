@@ -1,7 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
+import { BigIntAdapter } from '@neutrium/math/adapters/bigint';
 import { createQuantityClass } from '../dist/factory.js';
 import { NearleyParser } from '../dist/parsers/NearleyParser.js';
+
+it('cancels a bounded conversion factor using only represented operands', () => {
+	class EvenIntegers extends BigIntAdapter {
+		from(input) {
+			const value = super.from(input);
+			if (value % 2n !== 0n) throw new RangeError('Expected an even integer');
+			return value;
+		}
+	}
+	const Q = createQuantityClass({ numeric: new EvenIntegers(), parser: c => new NearleyParser(c) });
+	const inches = new Q(2n * 12n ** 4100n, 'in^4100');
+	const feet = new Q(2n, 'ft^4100');
+	expect(inches.sub(feet).scalar).toBe(0n);
+});
 
 // Equivalent finite values with fractional denominators exercise the public
 // rational contract independently of Decimal's usual denominator-one encoding.
@@ -56,9 +71,12 @@ for (const cache of [true, false])
 		});
 
 		it('retains both denominators in products, quotients and sums with bounded factors', () => {
-			for (const power of [1, 5000]) {
-				for (const op of ['add', 'sub', 'mul', 'div']) {
-					for (const sign of ['', '-']) {
+			for (const power of [1, 5000])
+			{
+				for (const op of ['add', 'sub', 'mul', 'div'])
+				{
+					for (const sign of ['', '-'])
+					{
 						const left = `0.25 m^${power}`, right = `${sign}0.5 ft^${power}`;
 						const expected = new Reference(left)[op](right);
 						const actual = new Q(left)[op](right);

@@ -6,7 +6,7 @@ const exponent = 4000000000000000;
 
 for (const Constructor of [Quantity, RegexQuantity])
 {
-	describe(`range-safe values with ${Constructor === Quantity ? 'Nearley' : 'Regex'}`, () => {
+	describe(`range-safe values with ${Constructor === Quantity ? 'Pratt' : 'Regex'}`, () => {
 		it('compares extreme magnitudes without conflating overflow or underflow', () => {
 			for (const unit of ['km', 'mm'])
 			{

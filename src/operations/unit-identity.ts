@@ -1,3 +1,4 @@
+import { exponentKey } from './exponents.js';
 import { CacheScope, defaultCacheScope } from '../utils/CacheScope.js';
 import type { UnitStructure, UnitPower } from '../QuantityDefinition.js';
 
@@ -43,7 +44,7 @@ function sideKey(units: readonly UnitPower[], sideKeys: WeakMap<readonly UnitPow
 
 	if (key === undefined)
 	{
-		key = JSON.stringify(units.map(({ unit, prefix, exponent }) => [unit, prefix ?? null, exponent]));
+		key = JSON.stringify(units.map(({ unit, prefix, exponent }) => [unit, prefix ?? null, typeof exponent === 'number' ? exponent : exponentKey(exponent)]));
 		sideKeys?.set(units, key);
 	}
 
@@ -62,6 +63,7 @@ export function conversionKey(source: UnitStructure, target: UnitStructure | und
 {
 	const from = identity(source, scope), to = target ? identity(target, scope) : baseIdentity;
 	const recent = from.recent;
+
 	if (recent && recent.reciprocal === reciprocal && recent.target.deref() === to)
 	{
 		return recent.key;
@@ -102,24 +104,73 @@ export function sameUnits(a: UnitStructure, b: UnitStructure, scope: CacheScope 
 	const sideKeys = scope.get('metadata', sideKeysKey, () => new WeakMap<readonly UnitPower[], string>());
 	if (!sideKeys)
 	{
-		return (sameNumerator || equalPowers(a.numerator, b.numerator)) &&
-		(sameDenominator || equalPowers(a.denominator, b.denominator));
+		return (sameNumerator || comparePowers(a.numerator, b.numerator) === 0) &&
+			(sameDenominator || comparePowers(a.denominator, b.denominator) === 0);
 	}
 
 	return (sameNumerator || sideKey(a.numerator, sideKeys) === sideKey(b.numerator, sideKeys)) &&
 		(sameDenominator || sideKey(a.denominator, sideKeys) === sideKey(b.denominator, sideKeys));
 }
 
-/** Compare equal-length normalized sides in order, keeping prefixes distinct. */
-function equalPowers(a: readonly UnitPower[], b: readonly UnitPower[]): boolean
+/** Stable choice of comparison units independent of scalars, cache settings and operand order. */
+export function compareUnitOrder(a: UnitStructure, b: UnitStructure): number
 {
+	return comparePowers(a.numerator, b.numerator) || comparePowers(a.denominator, b.denominator);
+}
+
+function comparePowers(a: readonly UnitPower[], b: readonly UnitPower[]): number
+{
+	if (a === b)
+	{
+		return 0;
+	}
+
+	if (a.length !== b.length)
+	{
+		return a.length - b.length;
+	}
+
 	for (let i = 0; i < a.length; i++)
 	{
 		const left = a[i], right = b[i];
-		if (left.unit !== right.unit || left.prefix !== right.prefix || left.exponent !== right.exponent)
+
+		if (left.unit !== right.unit)
 		{
-			return false;
+			return left.unit < right.unit ? -1 : 1;
+		}
+
+		if (left.prefix !== right.prefix)
+		{
+			return (left.prefix ?? '') < (right.prefix ?? '') ? -1 : 1;
+		}
+
+		const x = left.exponent, y = right.exponent;
+
+		if (x === y)
+		{
+			continue;
+		}
+
+		if (typeof x === 'number')
+		{
+			return typeof y === 'number' ? x - y : -1;
+		}
+
+		if (typeof y === 'number')
+		{
+			return 1;
+		}
+
+		if (x.numerator !== y.numerator)
+		{
+			return x.numerator < y.numerator ? -1 : 1;
+		}
+
+		if (x.denominator !== y.denominator)
+		{
+			return x.denominator < y.denominator ? -1 : 1;
 		}
 	}
-	return true;
+
+	return 0;
 }

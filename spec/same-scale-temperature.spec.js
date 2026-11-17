@@ -1,11 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createQuantityClass } from '../dist/factory.js';
-import { DecimalArithmeticAdapter } from '@neutrium/utilities/decimal/arithmetic';
-import { DecimalScientificAdapter } from '@neutrium/utilities/decimal/scientific';
+import { DecimalArithmeticAdapter } from '@neutrium/math/adapters/decimal/arithmetic';
+import { DecimalScientificAdapter } from '@neutrium/math/adapters/decimal/scientific';
 import { RegexParser } from '../dist/parsers/RegexParser.js';
 
 const configure = (numeric, cache) => createQuantityClass({ numeric, parser: c => new RegexParser(c), config: { cache } });
 const scales = ['C', 'F', 'K', 'R'];
+
+it.each(['half-up', 'floor'])('delegates the sign of zero in temperature shifts with %s rounding', rounding => {
+	const n = new DecimalScientificAdapter({ rounding }), Q = configure(n, false);
+	for (const scale of scales) for (const a of ['-0', '0']) for (const b of ['-0', '0']) {
+		const point = new Q(a, 'temp' + scale);
+		for (const unit of ['deg' + scale, 'mdegF']) {
+			const interval = new Q(b, unit);
+			expect(point.add(interval).scalar.isNeg()).toBe(n.add(point.scalar, interval.scalar).isNeg());
+			expect(interval.add(point).scalar.isNeg()).toBe(n.add(interval.scalar, point.scalar).isNeg());
+			expect(point.sub(interval).scalar.isNeg()).toBe(n.sub(point.scalar, interval.scalar).isNeg());
+		}
+	}
+});
 
 describe('same-scale rational temperature subtraction', () => {
 
@@ -31,7 +44,7 @@ describe('same-scale rational temperature subtraction', () => {
 		});
 	}
 
-	it('does not extract temperature offsets for matching contexts and scales', () => {
+	it('subtracts directly without extracting rational terms for matching contexts and scales', () => {
 		const numeric = new DecimalScientificAdapter(), Q = configure(numeric, false);
 
 		for (const scale of scales)
@@ -40,7 +53,7 @@ describe('same-scale rational temperature subtraction', () => {
 			const extract = vi.spyOn(numeric, 'toRationalTerm');
 			const result = a.sub(b);
 			expect(result.scalar.eq(10)).toBe(true);
-			expect(extract.mock.calls.map(([scalar]) => scalar)).toEqual([a.scalar, b.scalar]);
+			expect(extract).not.toHaveBeenCalled();
 			extract.mockRestore();
 		}
 	});

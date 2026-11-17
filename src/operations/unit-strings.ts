@@ -1,3 +1,4 @@
+import { exponentKey } from './exponents.js';
 import { CacheScope, defaultCacheScope } from '../utils/CacheScope.js';
 import type { UnitPower, UnitStructure } from '../QuantityDefinition.js';
 import { UnitTokenManager } from '../UnitTokenManager.js';
@@ -52,5 +53,5 @@ export function stringifyUnits(units: readonly UnitPower[], separator = '*', sco
 	const tm = UnitTokenManager.instance;
 
 	return units.map(({ unit, prefix, exponent }) =>
-		tm.getUnitOutput(unit, prefix, scope) + (exponent === 1 ? '' : exponent)).join(separator);
+		tm.getUnitOutput(unit, prefix, scope) + (exponent === 1 ? '' : typeof exponent === 'number' ? exponent : `^(${exponentKey(exponent)})`)).join(separator);
 }

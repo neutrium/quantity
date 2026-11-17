@@ -7,7 +7,7 @@ Represent measured values with Decimal, JavaScript numbers or custom scalars, co
 ## Getting Started
 
 ```sh
-npm install @neutrium/quantity
+pnpm add @neutrium/quantity
 ```
 
 ```ts
@@ -28,7 +28,8 @@ speed.units(); // "km/h"
 - [Numeric backends](numeric-backends.md): Decimal, JavaScript doubles, custom adapters and tree shaking.
 - [Temperatures](temperatures.md): absolute temperatures, intervals, and permitted operations.
 - [Parsers and definitions](parsers.md): choosing a parser, adapting input, and checking results.
-- [Migrating to version 6](migrating-v6.md): utilities adapters, parser interfaces and nested configuration.
+- [Migrating to version 7](migrating-v7.md) covers the default Pratt parser, fractional unit records and the move to Math adapters.
+- [Migrating to version 6](migrating-v6.md) covers factory and parser interfaces and nested configuration.
 - [Migrating from version 4 to version 5](migrating-v5.md): counted definitions and changed runtime contracts.
 - [Benchmarks](benchmarks.md): workloads, measurements, and reproduction commands.
 
@@ -36,13 +37,14 @@ speed.units(); // "km/h"
 
 | Import | Exports | Purpose |
 | --- | --- | --- |
-| `@neutrium/quantity` | {@link Quantity.Quantity | Quantity} | Construct, convert, and calculate quantities. |
-| `@neutrium/quantity/number` | {@link number.Quantity | Quantity} | JavaScript doubles with Nearley; excludes Decimal from runtime bundles. |
-| `@neutrium/quantity/regex` | {@link regex.Quantity | Quantity} | Construct quantities with Regex and exclude Nearley from bundles. |
-| `@neutrium/quantity/factory` | {@link factory.Quantity | Quantity}, {@link factory.createQuantityClass | createQuantityClass}, supporting types | Select a utilities numeric adapter and parser. |
-| `@neutrium/quantity/parsers/nearley` | {@link parsers.NearleyParser | NearleyParser}, {@link parsers.QuantityParseError | QuantityParseError}, error/result and configuration types | Rich expressions and structured diagnostics. |
+| `@neutrium/quantity` | {@link Quantity.Quantity | Quantity} | Construct Decimal quantities with Pratt. |
+| `@neutrium/quantity/number` | {@link number.Quantity | Quantity} | Construct JavaScript double quantities with Pratt. |
+| `@neutrium/quantity/regex` | {@link regex.Quantity | Quantity} | Construct Decimal quantities with a smaller Regex-only parser bundle. |
+| `@neutrium/quantity/factory` | {@link factory.Quantity | Quantity}, {@link factory.createQuantityClass | createQuantityClass}, supporting types | Select a math numeric adapter and parser. |
+| `@neutrium/quantity/parsers/pratt` | {@link parsers.PrattParser | PrattParser}, {@link parsers.QuantityParseError | QuantityParseError}, error/result and configuration types | Use the default expression parser directly. |
+| `@neutrium/quantity/parsers/nearley` | {@link parsers.NearleyParser | NearleyParser}, {@link parsers.QuantityParseError | QuantityParseError}, error/result and configuration types | Select Nearley explicitly for expression parsing. |
 | `@neutrium/quantity/parsers/regex` | {@link parsers.RegexParser | RegexParser}, configuration types | Direct Regex import without Nearley. |
-| `@neutrium/quantity/parsers.js` | {@link parsers.NearleyParser | NearleyParser}, {@link parsers.RegexParser | RegexParser} | Parse scalar and unit expressions. |
+| `@neutrium/quantity/parsers.js` | {@link parsers.PrattParser | PrattParser}, {@link parsers.NearleyParser | NearleyParser}, {@link parsers.RegexParser | RegexParser} | Access all three parsers. |
 | `@neutrium/quantity/guards.js` | {@link guards.isQuantity | isQuantity}, {@link guards.isQuantityDefinition | isQuantityDefinition} | Inspect quantities and validate definitions. |
 
 {@link QuantityDefinition.QuantityDefinition | QuantityDefinition}, {@link QuantityDefinition.UnitPower | UnitPower}, {@link factory.QuantityInput | QuantityInput}, and {@link "parsers/Parser".Parser | Parser} are exported as types from `@neutrium/quantity/factory`. See [Migrating to version 5](./migrating-v5.md) for the counted definition format.

@@ -1,5 +1,5 @@
 import type { CacheScope } from '../utils/CacheScope.js';
-import type { ArithmeticAdapter } from '@neutrium/utilities/numeric/arithmetic';
+import type { ArithmeticAdapter } from '@neutrium/math/numeric/arithmetic';
 import type { QuantityDefinition } from '../QuantityDefinition.js';
 import type { ParserConfig } from './ParserConfig.js';
 
@@ -28,6 +28,8 @@ export interface Parser<T>
 	 * @param numeric - Destination backend; do not capture a different adapter in the parser.
 	 * @param scope - Quantity's optional cache scope. Forward it unchanged when
 	 * delegating to a bundled parser so disabled-cache settings are respected.
+	 * @param scalar - When supplied, only the units are needed. A parser can use this
+	 * scalar directly and skip evaluating the scalar expression.
 	 */
-	parse(text: string, numeric: ArithmeticAdapter<T>, scope?: CacheScope): QuantityDefinition<T>;
+	parse(text: string, numeric: ArithmeticAdapter<T>, scope?: CacheScope, scalar?: T): QuantityDefinition<T>;
 }

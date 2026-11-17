@@ -1,5 +1,8 @@
 import { Quantity } from '@neutrium/quantity';
-import { QuantityParseError } from '@neutrium/quantity/parsers/nearley';
+import { QuantityParseError } from '@neutrium/quantity/parsers/pratt';
+
+const kelvinInterval = new Quantity('degK');
+const dimensionless = new Quantity(1);
 
 export const operations = {
 	to: 'Convert units',
@@ -43,7 +46,9 @@ const operationErrors: Record<string, string> = {
 	'Cannot subtract a temperature from a differential degree unit': 'An absolute temperature cannot be subtracted from a temperature interval.',
 	'Cannot multiply by temperatures': 'Absolute temperatures can only be multiplied by a unitless scalar.',
 	'Cannot divide with temperatures': 'Absolute temperatures can only be divided by a unitless scalar and cannot be used as divisors.',
-	'Raising quantities to a fractional power not currently supported': 'Enter a safe integer power; fractional powers are not supported.',
+	'Even roots of negative values are not real': 'An even root needs a nonnegative quantity.',
+	'Cannot raise absolute temperatures to powers': 'Absolute temperatures only support powers of zero or one.',
+	'Invalid exponent': 'Enter an integer, decimal, or fraction such as 1/3.',
 	'Divide by zero': 'Cannot divide by zero. Use a nonzero quantity.',
 };
 
@@ -67,7 +72,8 @@ function inputError(cause: unknown, field: 'value' | 'operand', targetUnits = fa
 			UNKNOWN_UNIT: 'Unit not recognised. Check its spelling.',
 			UNEXPECTED_TOKEN: 'Check the operators and parentheses.',
 			UNEXPECTED_END: 'Expression is incomplete. Check for a missing unit or closing parenthesis.',
-			INVALID_EXPONENT: 'Unit powers must be safe integers.',
+			LIMIT_EXCEEDED: 'Shorten the expression or use fewer nested groups.',
+			INVALID_EXPONENT: 'Use a valid integer, decimal, or fraction power within the safe integer magnitude range.',
 			DIVISION_BY_ZERO: 'Cannot divide by zero inside an expression.',
 			INVALID_SCALAR: 'Enter a valid scalar value.',
 			INVALID_INPUT: 'Enter a quantity expression.',
@@ -94,7 +100,7 @@ export const presets: (Calculation & { label: string; note: string })[] = [
 	{ label: 'Mixed units', value: '1 m', operation: 'add', operand: '25 cm', note: 'Addition converts the second quantity into the first quantity’s units before combining the scalars.' },
 	{ label: 'Distance ÷ time', value: '150 km', operation: 'div', operand: '2 h', note: 'Arithmetic tracks units as well as values. Dividing distance by time gives a speed.' },
 	{ label: 'Area', value: '3 m', operation: 'pow', operand: '2', note: 'Integer powers apply to both the scalar and the units: squaring a length produces an area.' },
-	{ label: 'Compound units', value: '1 kg*(m/s)^2', operation: 'to', operand: 'J', note: 'The default parser supports parentheses, multiplication, division, and integer powers.' },
+	{ label: 'Compound units', value: '1 kg*(m/s)^2', operation: 'to', operand: 'J', note: 'The default parser supports parentheses, multiplication, division, and rational powers.' },
 	{ label: 'Scalar expression', value: '1/2 m', operation: 'to', operand: 'cm', note: 'The default parser evaluates scalar multiplication and division. Use parentheses when grouping is important.' },
 	{ label: 'Grouped denominator', value: '2 kg/(m*s)', operation: 'toBase', operand: '', note: 'Groups no longer need an explicit power. Compound denominators are displayed with tightly coupled dots: kg/m.s.' },
 	{ label: 'Target units only', value: '1000 cm', operation: 'to', operand: '2 m', note: 'Conversion uses only the target units, ignoring its scalar. To calculate how many 2 m lengths fit, divide by 2 m instead.' },
@@ -134,7 +140,7 @@ export function calculate({ value, operation, operand, precision = 20, rounding 
 	{
 		if (!operand.trim())
 		{
-			throw new CalculationError('Enter a safe integer power.', 'operand');
+			throw new CalculationError('Enter a power, such as 2, 0.5, or 1/3.', 'operand');
 		}
 
 		try
@@ -143,8 +149,8 @@ export function calculate({ value, operation, operand, precision = 20, rounding 
 		}
 		catch (cause)
 		{
-			throw new CalculationError(cause instanceof RangeError
-				? 'The power or resulting dimensions exceed the safe integer range.'
+			throw new CalculationError(cause instanceof RangeError && /safe integer|expansion limit/.test(cause.message)
+				? 'The power or resulting dimensions exceed the supported range.'
 				: errorMessage(cause), 'operand', cause);
 		}
 	}
@@ -152,7 +158,7 @@ export function calculate({ value, operation, operand, precision = 20, rounding 
 	{
 		result = input[operation]();
 	}
-	else if (operation === 'to')
+	else if (operation === 'to' || operation === 'isCompatible')
 	{
 		if (!operand.trim())
 		{
@@ -161,7 +167,7 @@ export function calculate({ value, operation, operand, precision = 20, rounding 
 
 		try
 		{
-			result = input.to(operand);
+			result = input[operation](operand);
 		}
 		catch (cause)
 		{
@@ -193,7 +199,9 @@ export function calculate({ value, operation, operand, precision = 20, rounding 
 		code,
 		base: formatQuantity(quantity.toBase()),
 		units: quantity.units() || 'Unitless',
-		type: quantity.isTemperature() ? 'Absolute temperature' : quantity.isDegrees() ? 'Temperature interval' : quantity.isUnitless() ? 'Dimensionless' : 'Physical quantity',
+		type: quantity.isTemperature() ? 'Absolute temperature'
+			: quantity.isCompatible(kelvinInterval) ? 'Temperature interval'
+			: quantity.isCompatible(dimensionless) ? 'Dimensionless' : 'Physical quantity',
 		comparison: typeof result === 'boolean',
 	};
 }
