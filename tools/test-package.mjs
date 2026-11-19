@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { cp, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -31,6 +31,15 @@ try
 
 	// The fixtures import Math and Decimal directly, so declare both as consumer dependencies.
 	const project = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+	// Exercise unpublished sibling Math changes using the exact packed artifact.
+	const mathPackage = process.env.NEUTRIUM_MATH_PACKAGE;
+
+	if (mathPackage)
+	{
+		await writeFile(join(directory, 'pnpm-workspace.yaml'),
+			'overrides:\n  "@neutrium/math": ' + JSON.stringify('file:' + resolve(mathPackage)) + '\n');
+	}
+
 	await writeFile(join(directory, 'package.json'), JSON.stringify({
 		private: true,
 		type: 'module',
@@ -42,6 +51,8 @@ try
 		},
 	}));
 	run('pnpm', ['install', '--no-frozen-lockfile', '--ignore-scripts', '--prefer-offline']);
+	const math = JSON.parse(await readFile(join(directory, 'node_modules/@neutrium/math/package.json'), 'utf8'));
+	assert.equal(math.version, project.dependencies['@neutrium/math'], 'The tested Math artifact must match the declared version');
 	const installed = join(directory, 'node_modules/@neutrium/quantity');
 	const manifest = JSON.parse(await readFile(join(installed, 'package.json'), 'utf8'));
 

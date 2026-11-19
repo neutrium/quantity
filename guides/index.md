@@ -25,6 +25,7 @@ speed.units(); // "km/h"
 ## Feature Guides
 
 - [Working with quantities](usage.md): inputs, scalar values, conversions, arithmetic, and comparisons.
+- [Expression evaluator](expressions.md): full unit arithmetic, variables, functions and reusable calculations.
 - [Numeric backends](numeric-backends.md): Decimal, JavaScript doubles, custom adapters and tree shaking.
 - [Temperatures](temperatures.md): absolute temperatures, intervals, and permitted operations.
 - [Parsers and definitions](parsers.md): choosing a parser, adapting input, and checking results.
@@ -40,6 +41,7 @@ speed.units(); // "km/h"
 | `@neutrium/quantity` | {@link Quantity.Quantity | Quantity} | Construct Decimal quantities with Pratt. |
 | `@neutrium/quantity/number` | {@link number.Quantity | Quantity} | Construct JavaScript double quantities with Pratt. |
 | `@neutrium/quantity/regex` | {@link regex.Quantity | Quantity} | Construct Decimal quantities with a smaller Regex-only parser bundle. |
+| `@neutrium/quantity/expressions` | {@link expressions.createQuantityEvaluator | createQuantityEvaluator} | Evaluate full mathematical expressions with units. |
 | `@neutrium/quantity/factory` | {@link factory.Quantity | Quantity}, {@link factory.createQuantityClass | createQuantityClass}, supporting types | Select a math numeric adapter and parser. |
 | `@neutrium/quantity/parsers/pratt` | {@link parsers.PrattParser | PrattParser}, {@link parsers.QuantityParseError | QuantityParseError}, error/result and configuration types | Use the default expression parser directly. |
 | `@neutrium/quantity/parsers/nearley` | {@link parsers.NearleyParser | NearleyParser}, {@link parsers.QuantityParseError | QuantityParseError}, error/result and configuration types | Select Nearley explicitly for expression parsing. |

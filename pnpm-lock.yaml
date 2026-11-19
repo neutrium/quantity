@@ -12,8 +12,8 @@ importers:
         specifier: ^2.3.0
         version: 2.3.0
       '@neutrium/math':
-        specifier: 2.1.0
-        version: 2.1.0
+        specifier: 2.2.0
+        version: 2.2.0
       '@neutrium/utilities':
         specifier: 5.0.0
         version: 5.0.0
@@ -62,8 +62,8 @@ packages:
     resolution: {integrity: sha512-Mhp8m9dDA6xI50a41UEAp9552kYXKfYK8aQH8v5Q6MBBuPnyfv5tdOFQSfbSFtluOnEk0T+Z+DzdyynPbYFFRQ==}
     engines: {node: '>=20.19.0'}
 
-  '@neutrium/math@2.1.0':
-    resolution: {integrity: sha512-U80PzNf9b+xLRhkFqtO5kZtMcdb7Uk0z0SiLvNT672T2Lkddsu0j8emEsN/JfqtwdpmQ2Qfk8lyzDqJENLgH+w==}
+  '@neutrium/math@2.2.0':
+    resolution: {integrity: sha512-mRsz5a3RcoZXJyhkF75sCU7z3SykuEFu2GO79ZrPH9spvLchAQ5LrkDv8hQmRjY1vPxLab7mdS3dlV4hSNx+gw==}
     engines: {node: '>=24.0.0'}
 
   '@neutrium/utilities@5.0.0':
@@ -575,7 +575,7 @@ snapshots:
 
   '@neutrium/decimal@2.3.0': {}
 
-  '@neutrium/math@2.1.0':
+  '@neutrium/math@2.2.0':
     dependencies:
       '@neutrium/decimal': 2.3.0
       '@neutrium/utilities': 5.0.0

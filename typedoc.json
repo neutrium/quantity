@@ -8,7 +8,8 @@
 		"./src/parsers/Parser.ts",
 		"./src/regex.ts",
 		"./src/factory.ts",
-		"./src/number.ts"
+		"./src/number.ts",
+		"./src/expressions.ts"
 	],
 	"tsconfig": "./tsconfig.json",
 	"out": "./docs",
@@ -20,6 +21,7 @@
 		"./guides/usage.md",
 		"./guides/temperatures.md",
 		"./guides/parsers.md",
+		"./guides/expressions.md",
 		"./guides/migrating-v5.md",
 		"./guides/migrating-v6.md",
 		"./guides/migrating-v7.md",

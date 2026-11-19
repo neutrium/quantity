@@ -1,6 +1,6 @@
 {
 	"name": "@neutrium/quantity",
-	"version": "7.0.0",
+	"version": "7.1.0",
 	"packageManager": "pnpm@11.5.0",
 	"type": "module",
 	"exports": {
@@ -31,6 +31,10 @@
 		"./parsers/regex": {
 			"types": "./dist/parsers/RegexParser.d.ts",
 			"import": "./dist/parsers/RegexParser.js"
+		},
+		"./expressions": {
+			"types": "./dist/expressions.d.ts",
+			"import": "./dist/expressions.js"
 		},
 		"./factory": {
 			"types": "./dist/factory.d.ts",
@@ -63,7 +67,7 @@
 	"homepage": "https://neutrium.github.io/quantity/",
 	"dependencies": {
 		"@neutrium/decimal": "^2.3.0",
-		"@neutrium/math": "2.1.0",
+		"@neutrium/math": "2.2.0",
 		"@neutrium/utilities": "5.0.0",
 		"moo": "^0.5.3",
 		"nearley": "^2.20.1"

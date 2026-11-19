@@ -46,3 +46,13 @@ const { PrattParser: DirectPratt, QuantityParseError } = await import('@neutrium
 assert.equal(DirectPratt, PrattParser);
 assert(new DirectPratt().tryParse('m/', numberAdapter).error instanceof QuantityParseError);
 console.log('Packed consumer runtime passed');
+
+const { createQuantityEvaluator } = await import('@neutrium/quantity/expressions');
+
+for (const Q of [Quantity, DoubleQuantity])
+{
+	const evaluator = createQuantityEvaluator({ Quantity: Q });
+	assert(evaluator.evaluate('2 m/s * 1 kg + 4 kg.m/s').eq('6 kg*m/s'));
+	assert(evaluator.evaluate('sqrt(4 m2)').eq('2 m'));
+	assert.equal(evaluator.tryEvaluate('2 m + 3 s').error.code, 'DOMAIN_ERROR');
+}

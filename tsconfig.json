@@ -20,6 +20,7 @@
 		"./src/regex.ts",
 		"./src/factory.ts",
 		"./src/number.ts",
-		"./src/guards.ts"
+		"./src/guards.ts",
+		"./src/expressions.ts"
 	]
 }

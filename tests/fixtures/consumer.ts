@@ -14,6 +14,7 @@ const numberAdapter = new NumberAdapter();
 import type { ArithmeticAdapter } from '@neutrium/math/numeric/arithmetic';
 import { fraction, type RationalFraction } from '@neutrium/math/numeric/fractions';
 import type { Decimal } from '@neutrium/decimal';
+import { createQuantityEvaluator } from '@neutrium/quantity/expressions';
 
 const decimal: Decimal = new Quantity('1 km').to('m').scalar;
 const native: number = new DoubleQuantity('1 km').to('m').scalar;
@@ -218,3 +219,12 @@ else
 {
 	const error: QuantityParseError = prattResult.error;
 }
+
+const numberEvaluator = createQuantityEvaluator({ Quantity: DoubleQuantity });
+const evaluatedNumber: number = numberEvaluator.evaluate('2 m + 30 cm').scalar;
+const decimalEvaluator = createQuantityEvaluator({ Quantity });
+const evaluatedDecimal: Decimal = decimalEvaluator.evaluate('2 m + 30 cm').scalar;
+const compiledQuantity = decimalEvaluator.compile('mass * velocity');
+compiledQuantity.evaluate({ mass: new Quantity('1 kg'), velocity: new Quantity('2 m/s') });
+// @ts-expect-error Boolean bindings are not quantities or numeric inputs.
+compiledQuantity.evaluate({ mass: true });

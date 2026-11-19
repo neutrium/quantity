@@ -42,6 +42,26 @@ For the parser change, adapter imports and unit exponent type, see [Migrating to
 See the [numeric backends guide](https://neutrium.github.io/quantity/documents/numeric-backends.html) for configuration, custom adapters and tree shaking.
 
 
+## Evaluating mathematical expressions
+
+```ts
+import { Quantity } from '@neutrium/quantity';
+import { createQuantityEvaluator } from '@neutrium/quantity/expressions';
+
+const evaluator = createQuantityEvaluator({ Quantity });
+const result = evaluator.evaluate('2 m/s * 1 kg + 4 kg.m/s');
+result.to('kg*m/s').scalar.toString(); // "6"
+
+const momentum = evaluator.compile('mass * velocity + offset');
+
+momentum.evaluate({
+    mass: new Quantity('1 kg'), velocity: new Quantity('2 m/s'),
+    offset: new Quantity('4 kg*m/s'),
+});
+```
+
+The optional `/expressions` entry supports addition, subtraction, products, division, remainder, powers, grouping, variables, and registered functions. It uses the supplied Quantity class for precision, conversions, dimensions and temperature rules. The Number preset works too. See the [expression guide](https://neutrium.github.io/quantity/documents/expressions.html) for precedence, built-in functions and structured errors.
+
 ## Unit Syntax
 
 ### Overview
@@ -57,7 +77,7 @@ a dimensionless quantity. An empty or whitespace-only expression is invalid.
 
 Numeric literals include integers, decimal fractions, and scientific notation,
 for example `1`, `1.4`, `1e3`, and `-1e-3`. Pratt and Nearley also evaluate scalar products,
-division, and powers inside expressions. Use `add()` and `sub()` for addition and subtraction.
+division, and powers inside expressions. Use `add()` and `sub()` for addition and subtraction, or the full expression evaluator below.
 See the [parser guide](https://neutrium.github.io/quantity/documents/parsers.html) for the complete grammar.
 
 If creating a quantity using a separate scalar parameter (e.g. new Quantity(1, 'm')) the scalar may be provided as a numeric string, a number, a [Decimal](https://github.com/neutrium/decimal) object, or an object whose `toString()` returns a numeric literal. Omitting units creates a dimensionless quantity: `new Quantity(2)`, `new Quantity('2')`, and `new Quantity(new Decimal(2))` are equivalent.
@@ -376,6 +396,7 @@ The version 7 migration guide covers the default parser and its nesting limit. T
 | 5.0.0   | Counted unit API, bounded allocation for large powers, immutable unit records, and collision-free dimensional signatures |
 | 6.0.0   | Utilities numeric adapters, Decimal and native-number backends, renamed parser classes, and nested numeric/cache configuration with optional caching |
 | 7.0.0   | Pratt is the default expression parser for Decimal and JavaScript numbers. Adds fractional unit exponents, quantity powers and roots. Numeric adapters move to Math 2.1.0 and caches use Utilities 5.0.0. |
+| 7.1.0   | Adds `createQuantityEvaluator` for full mathematical expressions with units, variables, functions, and structured errors. Preserves scalar fraction conventions and uses Math 2.2.0. |
 
 ## License
 
